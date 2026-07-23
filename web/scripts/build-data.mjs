@@ -1,7 +1,8 @@
 // IDS(cjkvi-ids) + KANJIDIC2 -> public/data/kanji-data.json
 // 候補集合 = KANJIDIC2 収録字(JIS X 0208/0212/0213, 約13k字)
 // parts = 候補字から再帰的に到達できる全部品の分解マップ
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -12,7 +13,11 @@ const outDirs = [join(here, "..", "public", "data"), join(here, "..", "..", "cor
 for (const d of outDirs) mkdirSync(d, { recursive: true });
 
 // ---- KANJIDIC2 ----
-const xml = readFileSync(join(dataSrc, "kanjidic2.xml"), "utf8");
+// 展開済み xml は 15MB あってリポジトリに入れていないので、無ければ .gz から読む
+const xmlPath = join(dataSrc, "kanjidic2.xml");
+const xml = existsSync(xmlPath)
+  ? readFileSync(xmlPath, "utf8")
+  : gunzipSync(readFileSync(xmlPath + ".gz")).toString("utf8");
 const kd = new Map(); // char -> {grade, freq, on[], kun[]}
 for (const block of xml.split("</character>")) {
   const lit = block.match(/<literal>(.+?)<\/literal>/);

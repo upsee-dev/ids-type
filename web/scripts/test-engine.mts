@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { Engine } from "../src/lib/engine.ts";
+import { Engine } from "../../core/engine.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const raw = JSON.parse(readFileSync(join(here, "..", "public", "data", "kanji-data.json"), "utf8"));
+const raw = JSON.parse(readFileSync(join(here, "..", "..", "core", "kanji-data.json"), "utf8"));
 const e = new Engine(raw);
 console.log("engine chars:", e.size);
 
