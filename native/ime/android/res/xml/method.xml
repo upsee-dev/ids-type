@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  入力方式(IME)の宣言。設定 > 言語と入力 > 画面キーボード にこの名前で出る。
+  subtype の imeSubtypeMode="keyboard" が無いと一覧に出てこない。
+-->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.upsee.idskanjitype.MainActivity"
+    android:supportsSwitchingToNextInputMethod="true">
+    <subtype
+        android:label="@string/katachi_ime_label"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeLocale="ja_JP"
+        android:isAsciiCapable="false" />
+</input-method>

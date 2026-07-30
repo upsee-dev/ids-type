@@ -48,7 +48,22 @@ textarea {
   font-size: max(16px, 1em);
 }
 
+/*
+ * 部品パレット用のサブセットフォント（Plangothic P1/P2 から541字ぶんだけ抜いたもの・
+ * SIL OFL 1.1・public/fonts/OFL.txt）。拡張B〜Hの部品は端末の標準フォントに
+ * 入っておらず、そのままだと □ が並んで「見て選ぶ」画面が成立しない。
+ * 29KB。持っていない字はブラウザが次のフォントへ自動でフォールバックするので、
+ * スタックの先頭に置いてよい。scripts/build-font-subset.py で作り直せる。
+ */
+@font-face {
+  font-family: "KatachiParts";
+  src: url("/fonts/KatachiParts.woff2") format("woff2");
+  font-display: swap;
+  /* 収録している範囲だけを担当させる（BMPの常用字はOSのフォントに任せる） */
+  unicode-range: U+2E80-2FFF, U+3400-4DBF, U+20000-3FFFF;
+}
+
 .kanji {
-  font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP",
-    "Hiragino Sans", "Noto Sans CJK JP", serif;
+  font-family: "KatachiParts", "Hiragino Mincho ProN", "Yu Mincho",
+    "Noto Serif JP", "Hiragino Sans", "Noto Sans CJK JP", serif;
 }

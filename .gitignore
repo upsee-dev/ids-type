@@ -13,9 +13,13 @@ native/ios/
 native/.expo/
 native/src/core/
 
-# 元データ（kanjidic2.xml は 15MB。gz と ids.txt から再生成できる）
-data-src/kanjidic2.xml
+# 元データ（kanjidic2.xml は 15MB。data-src/fetch.mjs で取り直せる）
+data-src/kanjidic2/kanjidic2.xml
 
 # ログ・一時ファイル
 *.log
 *.tsbuildinfo
+
+# サブセットの元フォント（32MB）。scripts/build-font-subset.py の実行時だけ要る。
+# 配布物は web/public/fonts/ と native/assets/fonts/ のサブセット(計100KB弱)のほう
+assets-archive/fonts/Plangothic*.ttf

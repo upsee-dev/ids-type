@@ -1,165 +1,18 @@
-// カタチ入力エンジン: IDS(空間関係)コード + 部品 → 漢字候補
-// zi.tools (https://zi.tools/?secondary=ids) の入力方式を日本語向けに実装
-
-// ---- 操作子コード <-> IDC (Ideographic Description Characters) ----
-// zi.tools の2文字コード体系に準拠
-export const OPERATORS: { code: string; idc: string; arity: number; label: string }[] = [
-  { code: "LR", idc: "⿰", arity: 2, label: "左右" },
-  { code: "LL", idc: "⿲", arity: 3, label: "左中右" },
-  { code: "UD", idc: "⿱", arity: 2, label: "上下" },
-  { code: "UU", idc: "⿳", arity: 3, label: "上中下" },
-  { code: "RD", idc: "⿸", arity: 2, label: "左上かこみ" },
-  { code: "RU", idc: "⿺", arity: 2, label: "左下かこみ" },
-  { code: "LD", idc: "⿹", arity: 2, label: "右上かこみ" },
-  { code: "LU", idc: "⿽", arity: 2, label: "右下かこみ" },
-  { code: "OD", idc: "⿵", arity: 2, label: "上かこみ" },
-  { code: "OR", idc: "⿷", arity: 2, label: "左かこみ" },
-  { code: "OU", idc: "⿶", arity: 2, label: "下かこみ" },
-  { code: "OL", idc: "⿼", arity: 2, label: "右かこみ" },
-  { code: "OC", idc: "⿴", arity: 2, label: "全かこみ" },
-  { code: "XX", idc: "⿻", arity: 2, label: "重なり" },
-  { code: "MI", idc: "⿾", arity: 1, label: "鏡映" },
-  { code: "RO", idc: "⿿", arity: 1, label: "回転" },
-  { code: "SU", idc: "㇯", arity: 2, label: "除去" },
-];
-
-const CODE2IDC = new Map(OPERATORS.map(o => [o.code, o.idc]));
-const IDC_ARITY = new Map(OPERATORS.map(o => [o.idc, o.arity]));
-
-// よく使う操作子(スマホの1画面目に出す)。残りは「その他」に格納
-export const PRIMARY_CODES = ["LR", "UD", "OC", "RD", "RU", "LD", "OD", "OU", "LL", "UU", "OR", "XX"];
-
-// 操作子アイコンの図形定義(0..1座標)。Web=div, RN=View で同じ絵を描くための共有仕様。
-// role 1/2/3 = 第1/第2/第3要素。複数の矩形で1つの要素(かこみのL字など)を表す。
-export interface IconRect { x: number; y: number; w: number; h: number; role: 1 | 2 | 3 }
-
-export const OPERATOR_ICON: Record<string, { rects?: IconRect[]; symbol?: string }> = {
-  LR: { rects: [r(0, 0, 0.46, 1, 1), r(0.54, 0, 0.46, 1, 2)] },
-  LL: { rects: [r(0, 0, 0.29, 1, 1), r(0.355, 0, 0.29, 1, 2), r(0.71, 0, 0.29, 1, 3)] },
-  UD: { rects: [r(0, 0, 1, 0.46, 1), r(0, 0.54, 1, 0.46, 2)] },
-  UU: { rects: [r(0, 0, 1, 0.29, 1), r(0, 0.355, 1, 0.29, 2), r(0, 0.71, 1, 0.29, 3)] },
-  RD: { rects: [r(0, 0, 1, 0.28, 1), r(0, 0, 0.28, 1, 1), r(0.38, 0.38, 0.62, 0.62, 2)] },
-  RU: { rects: [r(0, 0, 0.28, 1, 1), r(0, 0.72, 1, 0.28, 1), r(0.38, 0, 0.62, 0.62, 2)] },
-  LD: { rects: [r(0, 0, 1, 0.28, 1), r(0.72, 0, 0.28, 1, 1), r(0, 0.38, 0.62, 0.62, 2)] },
-  LU: { rects: [r(0.72, 0, 0.28, 1, 1), r(0, 0.72, 1, 0.28, 1), r(0, 0, 0.62, 0.62, 2)] },
-  OD: { rects: [r(0, 0, 1, 0.26, 1), r(0, 0, 0.26, 1, 1), r(0.74, 0, 0.26, 1, 1), r(0.34, 0.36, 0.32, 0.64, 2)] },
-  OR: { rects: [r(0, 0, 0.26, 1, 1), r(0, 0, 1, 0.26, 1), r(0, 0.74, 1, 0.26, 1), r(0.36, 0.34, 0.64, 0.32, 2)] },
-  OU: { rects: [r(0, 0.74, 1, 0.26, 1), r(0, 0, 0.26, 1, 1), r(0.74, 0, 0.26, 1, 1), r(0.34, 0, 0.32, 0.64, 2)] },
-  OL: { rects: [r(0.74, 0, 0.26, 1, 1), r(0, 0, 1, 0.26, 1), r(0, 0.74, 1, 0.26, 1), r(0, 0.34, 0.64, 0.32, 2)] },
-  OC: {
-    rects: [
-      r(0, 0, 1, 0.24, 1), r(0, 0.76, 1, 0.24, 1), r(0, 0, 0.24, 1, 1), r(0.76, 0, 0.24, 1, 1),
-      r(0.34, 0.34, 0.32, 0.32, 2),
-    ],
-  },
-  XX: { rects: [r(0, 0.06, 0.7, 0.7, 1), r(0.3, 0.24, 0.7, 0.7, 2)] },
-  MI: { symbol: "⇄" },
-  RO: { symbol: "↻" },
-  SU: { symbol: "−" },
-};
-
-function r(x: number, y: number, w: number, h: number, role: 1 | 2 | 3): IconRect {
-  return { x, y, w, h, role };
-}
-
-// キーボードで打ちにくい部品(偏旁・冠・脚など単体では変換しにくいもの)
-export const RADICAL_PALETTE = [
-  "亻", "彳", "氵", "冫", "扌", "忄", "犭", "阝", "艹", "宀", "冖", "亠",
-  "广", "疒", "辶", "廴", "勹", "匚", "凵", "冂", "卩", "厶", "又", "夂",
-  "攵", "殳", "灬", "罒", "爫", "⺌", "衤", "礻", "癶", "疋", "隹", "頁",
-  "臼", "屮", "幺", "廾", "弋", "彡", "彑", "巛", "尢", "无", "刂", "钅",
-  "糹", "訁", "飠", "⺼", "斤", "皿", "缶", "耒", "聿", "虍", "豸", "赤",
-  // 単独の筆画(IMEでは出せない)
-  "丬", "丿", "乚", "亅", "乛", "丨", "㇉", "⺮", "几", "𠃌", "𠃍", "𠄌", "𠄎",
-];
-
-export function isIDC(c: string): boolean {
-  return IDC_ARITY.has(c);
-}
-
-const IDC2LABEL = new Map(OPERATORS.map(o => [o.idc, o.label]));
-
-/**
- * 分解の表示用。IDC文字(⿰⿱⿴…)はAndroid標準フォントなどでは豆腐(□)になるため、
- * 〈左右〉のような日本語ラベルに置き換える。
- */
-export function readableIds(ids: string): string {
-  return [...ids].map(c => (IDC2LABEL.has(c) ? `〈${IDC2LABEL.get(c)}〉` : c)).join("");
-}
-
-// ---- 字形バリアント正規化(強い同一視: 符号位置違いの同形部品) ----
-const NORM = new Map(Object.entries({
-  "⺼": "月", "⺾": "艹", "⻌": "辶", "⻍": "辶", "⻏": "阝", "⻖": "阝",
-  "靑": "青", "飠": "食", "𩙿": "食", "訁": "言", "釒": "金", "糹": "糸",
-  "⺬": "礻", "⺭": "礻", "⺿": "艹", "⻂": "衤", "⺡": "氵", "⺘": "扌",
-  "⺖": "忄", "⺨": "犭", "⺣": "灬", "⻊": "足", "𤴔": "疋",
-}));
-
-// ---- 弱い同一視(独立字とその偏旁形): 閉包に正字も追加して両方でヒットさせる ----
-const SOFT = new Map(Object.entries({
-  "氵": "水", "扌": "手", "忄": "心", "犭": "犬", "灬": "火", "氺": "水",
-  "礻": "示", "衤": "衣", "⺩": "玉", "王": "玉", "罒": "网", "⺌": "小",
-  "亻": "人", "刂": "刀", "阝": "阜", "㣺": "心", "月": "肉",
-}));
-
-export function norm(c: string): string {
-  return NORM.get(c) ?? c;
-}
-
-// 未符号化部品(CDP外字)のプレースホルダ ①②③… は検索キーにできない
-const PLACEHOLDER = /[①-⓿]/;
-
-// ---- IDS 構文木 ----
-export type Node = string | { op: string; kids: Node[] }; // string "＊" = ワイルドカード
-export const WILD = "＊";
-
-function toTokens(s: string): string[] {
-  return [...s];
-}
-
-function parseNodes(tokens: string[]): Node[] {
-  let i = 0;
-  const readNode = (): Node => {
-    if (i >= tokens.length) return WILD;
-    const t = tokens[i++];
-    if (isIDC(t)) {
-      const n = IDC_ARITY.get(t)!;
-      const kids: Node[] = [];
-      for (let k = 0; k < n; k++) kids.push(readNode());
-      return canon({ op: t, kids });
-    }
-    return norm(t);
-  };
-  const nodes: Node[] = [];
-  while (i < tokens.length) nodes.push(readNode());
-  return nodes;
-}
-
-// ⿲abc → ⿰a⿰bc / ⿳abc → ⿱a⿱bc に正規化(構造の揺れを吸収)
-function canon(n: { op: string; kids: Node[] }): Node {
-  if (n.op === "⿲") return { op: "⿰", kids: [n.kids[0], { op: "⿰", kids: [n.kids[1], n.kids[2]] }] };
-  if (n.op === "⿳") return { op: "⿱", kids: [n.kids[0], { op: "⿱", kids: [n.kids[1], n.kids[2]] }] };
-  return n;
-}
-
-export interface CharMeta {
-  ids: string;
-  grade: number;
-  freq: number;
-  on: string;
-  kun: string;
-}
-
-export interface Result {
-  ch: string;
-  exact: boolean;
-  meta: CharMeta;
-}
-
-export interface RawData {
-  chars: Record<string, [string, number, number, string, string]>;
-  parts: Record<string, string>;
-}
+// カタチ入力の検索エンジン。
+// 入力(かたちコード＋部品) → 候補漢字。辞書の持ち方と検索アルゴリズムだけを置く。
+// 操作子の定義・字形の正規化・IDSの構文解析は core/ids/、
+// ブロック表と部品パレットは core/data/ に分けてある。
+import { CODE2IDC, isIDC, readableIds } from "./ids/operators.ts";
+import { norm, PLACEHOLDER, SOFT } from "./ids/normalize.ts";
+import { parseNodes, toTokens, WILD, type Node } from "./ids/parse.ts";
+import { ALL_BLOCKS, blockOf, type Block } from "./data/blocks.ts";
+import type {
+  CharMeta,
+  ListPage,
+  ListQuery,
+  RawData,
+  Result,
+} from "./data/types.ts";
 
 export class Engine {
   private chars = new Map<string, CharMeta>();
@@ -169,16 +22,30 @@ export class Engine {
 
   constructor(raw: RawData) {
     for (const [ch, [ids, grade, freq, on, kun]] of Object.entries(raw.chars)) {
-      this.chars.set(ch, { ids, grade, freq, on, kun });
+      this.chars.set(ch, { ids, grade, freq, on, kun, ext: false });
       if (ids) this.decompMap.set(ch, ids);
     }
-    for (const [ch, ids] of Object.entries(raw.parts)) this.decompMap.set(ch, ids);
+    // ext も検索候補。chars のあとに入れるので、同点のときは KANJIDIC2 側が先に並ぶ
+    for (const [ch, ids] of Object.entries(raw.ext ?? {})) {
+      if (this.chars.has(ch)) continue;
+      this.chars.set(ch, {
+        ids,
+        grade: 0,
+        freq: 0,
+        on: "",
+        kun: "",
+        ext: true,
+      });
+      if (ids) this.decompMap.set(ch, ids);
+    }
+    for (const [ch, ids] of Object.entries(raw.parts))
+      this.decompMap.set(ch, ids);
   }
 
   tree(ch: string): Node | null {
     if (this.treeCache.has(ch)) return this.treeCache.get(ch)!;
     const ids = this.decompMap.get(ch);
-    const t = ids ? parseNodes(toTokens(ids))[0] ?? null : null;
+    const t = ids ? (parseNodes(toTokens(ids))[0] ?? null) : null;
     this.treeCache.set(ch, t);
     return t;
   }
@@ -259,7 +126,14 @@ export class Engine {
     for (let i = 0; i < cs.length; i++) {
       const c = cs[i];
       if (/\s/.test(c)) continue;
-      if (c === "?" || c === "？" || c === "_" || c === "＿" || c === "＊" || c === "*") {
+      if (
+        c === "?" ||
+        c === "？" ||
+        c === "_" ||
+        c === "＿" ||
+        c === "＊" ||
+        c === "*"
+      ) {
         out += WILD;
         continue;
       }
@@ -299,12 +173,15 @@ export class Engine {
     }
 
     // 部品包含検索(操作子なし)
-    const tokens = nodes.filter(n => typeof n === "string" && n !== WILD) as string[];
+    const tokens = nodes.filter(
+      (n) => typeof n === "string" && n !== WILD,
+    ) as string[];
     if (!tokens.length) return { results: [], mode: "empty" };
     for (const [ch, meta] of this.chars) {
       if (tokens.length === 1 && ch === tokens[0]) continue; // 自分自身は除外
       const cl = this.closure(ch);
-      if (tokens.every(t => cl.has(t))) results.push({ ch, exact: false, meta });
+      if (tokens.every((t) => cl.has(t)))
+        results.push({ ch, exact: false, meta });
     }
     results.sort((a, b) => this.score(a) - this.score(b));
     return { results: results.slice(0, limit), mode: "parts" };
@@ -313,8 +190,13 @@ export class Engine {
   private score(r: Result): number {
     let s = r.exact ? 0 : 500000;
     const g = r.meta.grade;
-    s += (g >= 1 && g <= 6 ? g : g === 8 ? 7 : g === 9 || g === 10 ? 8 : 10) * 30000;
+    s +=
+      (g >= 1 && g <= 6 ? g : g === 8 ? 7 : g === 9 || g === 10 ? 8 : 10) *
+      30000;
     s += r.meta.freq ? r.meta.freq * 10 : 27000;
+    // 日本語入力なので、KANJIDIC2 に無い字(拡張A〜J ほか9万字)は必ず日本の漢字の後ろへ。
+    // 素点の最大(500000+300000+27000)より大きい下駄を履かせて確実に分離する
+    if (r.meta.ext) s += 2000000;
     return s;
   }
 
@@ -324,11 +206,13 @@ export class Engine {
 
   // 辞書内で「何字の構成要素になっているか」の多い順に部品を返す。
   // スマホのオンスクリーン部品パレット用(OSキーボードで打てない部品もここから入る)。
+  // 数えるのは KANJIDIC2 収録字だけ。拡張漢字9万字まで数えると簡体字の部品が
+  // 上位を占めてしまい、日本語入力のパレットとして使いものにならなくなる。
   commonParts(limit = 150): string[] {
     if (!this.commonPartsCache) {
       const count = new Map<string, number>();
       for (const [ch, meta] of this.chars) {
-        if (!meta.ids) continue;
+        if (!meta.ids || meta.ext) continue;
         for (const t of toTokens(meta.ids)) {
           if (isIDC(t) || t === ch || PLACEHOLDER.test(t)) continue;
           count.set(t, (count.get(t) ?? 0) + 1);
@@ -365,4 +249,112 @@ export class Engine {
   get size(): number {
     return this.chars.size;
   }
+
+  // ---- 収録字の一覧・絞り込み ----
+
+  /** 収録字をコードポイント順に並べた配列(一覧表示の土台。初回だけ作る) */
+  private orderCache: string[] | null = null;
+  private order(): string[] {
+    if (!this.orderCache) {
+      this.orderCache = [...this.chars.keys()].sort(
+        (a, b) => a.codePointAt(0)! - b.codePointAt(0)!,
+      );
+    }
+    return this.orderCache;
+  }
+
+  /** ブロックごとの収録字数(一覧のタブに出す) */
+  blockCounts(): { block: Block; count: number }[] {
+    if (!this.blockCountCache) {
+      const n = new Map<string, number>();
+      for (const ch of this.chars.keys()) {
+        const b = blockOf(ch);
+        if (b) n.set(b.key, (n.get(b.key) ?? 0) + 1);
+      }
+      this.blockCountCache = ALL_BLOCKS.map((block) => ({
+        block,
+        count: n.get(block.key) ?? 0,
+      })).filter((x) => x.count > 0);
+    }
+    return this.blockCountCache;
+  }
+  private blockCountCache: { block: Block; count: number }[] | null = null;
+
+  /**
+   * 一覧の絞り込み。query は入力欄と同じ書き方(LR木木 / 木 / ?)に加えて、
+   * かな(読み)と U+XXXX・16進(コードポイント)も受け付ける。
+   */
+  list(q: ListQuery = {}): ListPage {
+    const { block, jaOnly = false, offset = 0, limit = 200 } = q;
+    const query = (q.query ?? "").trim();
+
+    let pool: string[];
+    let mode = "all";
+    if (query) {
+      const kind = queryKind(query);
+      mode = kind;
+      if (kind === "code") {
+        const cp = parseInt(query.replace(/^u\+/i, ""), 16);
+        const ch = Number.isFinite(cp) ? safeFromCodePoint(cp) : "";
+        pool = ch && this.chars.has(ch) ? [ch] : [];
+      } else if (kind === "reading") {
+        const kana = toHiragana(query);
+        pool = this.order().filter((ch) => {
+          const m = this.chars.get(ch)!;
+          if (!m.on && !m.kun) return false;
+          return toHiragana(`${m.on} ${m.kun}`.replace(/[.\-]/g, "")).includes(
+            kana,
+          );
+        });
+      } else {
+        // 構造・部品検索は search() をそのまま使う(スコア順が保たれる)
+        pool = this.search(query, Number.MAX_SAFE_INTEGER).results.map(
+          (r) => r.ch,
+        );
+      }
+    } else {
+      pool = this.order();
+    }
+
+    const b = block ? ALL_BLOCKS.find((x) => x.key === block) : undefined;
+    const filtered = pool.filter((ch) => {
+      const m = this.chars.get(ch)!;
+      if (jaOnly && m.ext) return false;
+      if (b) {
+        const cp = ch.codePointAt(0)!;
+        if (cp < b.lo || cp > b.hi) return false;
+      }
+      return true;
+    });
+
+    return {
+      total: filtered.length,
+      mode,
+      items: filtered
+        .slice(offset, offset + limit)
+        .map((ch) => ({ ch, meta: this.chars.get(ch)! })),
+    };
+  }
+}
+
+const KANA = /^[ぁ-ゖァ-ヺーｰ゙-゜\s]+$/;
+const CODE = /^(?:u\+)?[0-9a-f]{4,6}$/i;
+
+function queryKind(q: string): string {
+  if (CODE.test(q)) return "code";
+  if (KANA.test(q)) return "reading";
+  return Engine.compile(q).length && [...Engine.compile(q)].some(isIDC)
+    ? "structure"
+    : "parts";
+}
+
+/** カタカナ→ひらがな。音(カタカナ)と訓(ひらがな)をまとめて引けるようにする */
+function toHiragana(s: string): string {
+  return s.replace(/[ァ-ヶ]/g, (c) =>
+    String.fromCharCode(c.charCodeAt(0) - 0x60),
+  );
+}
+
+function safeFromCodePoint(cp: number): string {
+  return cp >= 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : "";
 }

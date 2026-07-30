@@ -1,22 +1,25 @@
 {
   "expo": {
     "name": "カタチ入力",
-    "slug": "katachi-ime",
+    "slug": "ids-kanji-type",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "katachi",
+    "scheme": "ids-kanji-type",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "backgroundColor": "#FBFBF9",
+    "primaryColor": "#4437D1",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.upsee.katachiime"
+      "bundleIdentifier": "com.upsee.idskanjitype",
+      "appleTeamId": "W8P3V5NG4R"
     },
     "android": {
-      "package": "com.upsee.katachiime",
+      "package": "com.upsee.idskanjitype",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FBFBF9",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -25,6 +28,23 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "@bacons/apple-targets",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "backgroundColor": "#FBFBF9",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0C0A09"
+          }
+        }
+      ],
+      "expo-font",
+      "./plugins/withKatachiIme"
+    ]
   }
 }

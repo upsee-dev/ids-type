@@ -1,248 +1,757 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-<head>
-<meta charset="utf-8">
-<title>カタチ入力 事業戦略ドキュメント</title>
-<style>
-  @page { size: A4; margin: 0; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif; color: #1c1917; font-size: 10.5pt; line-height: 1.75; }
-  .page { width: 210mm; height: 297mm; padding: 20mm 18mm; page-break-after: always; position: relative; overflow: hidden; }
-  .page:last-child { page-break-after: auto; }
-  .pageno { position: absolute; bottom: 9mm; right: 18mm; font-size: 8pt; color: #a8a29e; }
-  .doctag { position: absolute; bottom: 9mm; left: 18mm; font-size: 8pt; color: #a8a29e; }
-  h1 { font-size: 23pt; line-height: 1.35; letter-spacing: .02em; }
-  h2 { font-size: 14pt; border-left: 4px solid #4f46e5; padding-left: 9px; margin: 0 0 5mm; letter-spacing: .04em; }
-  h3 { font-size: 11pt; color: #4f46e5; margin: 5mm 0 1.5mm; }
-  p { margin-bottom: 2.5mm; text-align: justify; }
-  .lead { font-size: 11.5pt; color: #44403c; }
-  .accent { color: #4f46e5; }
-  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; line-height: 1.5; margin: 2mm 0 4mm; }
-  th, td { border: 1px solid #d6d3d1; padding: 1.6mm 2mm; text-align: left; vertical-align: top; }
-  th { background: #eef2ff; font-weight: 600; }
-  td.c { text-align: center; }
-  .good { color: #059669; font-weight: 600; }
-  .bad { color: #dc2626; }
-  .mid { color: #d97706; }
-  ul, ol { margin: 0 0 3mm 5.5mm; }
-  li { margin-bottom: 1.2mm; }
-  .box { background: #f5f5f4; border-radius: 3mm; padding: 4mm 5mm; margin: 3mm 0; }
-  .box-accent { background: #eef2ff; border-radius: 3mm; padding: 4mm 5mm; margin: 3mm 0; }
-  .kv { display: flex; gap: 4mm; margin: 3mm 0; }
-  .kv > div { flex: 1; background: #f5f5f4; border-radius: 3mm; padding: 3.5mm 4mm; }
-  .kv h4 { font-size: 9.5pt; color: #4f46e5; margin-bottom: 1mm; }
-  .kv p { font-size: 8.8pt; margin: 0; }
-  .small { font-size: 8.5pt; color: #78716c; }
-  .big-sample { font-size: 15pt; letter-spacing: .05em; }
-  .posmap { position: relative; width: 100%; height: 62mm; border-left: 2px solid #57534e; border-bottom: 2px solid #57534e; margin: 7mm 0 9mm 0; }
-  .posmap .xl { position: absolute; bottom: -7mm; left: 0; font-size: 8pt; color: #57534e; }
-  .posmap .xr { position: absolute; bottom: -7mm; right: 0; font-size: 8pt; color: #57534e; }
-  .posmap .yt { position: absolute; top: -6mm; left: 2mm; font-size: 8pt; color: #57534e; }
-  .posmap .dot { position: absolute; font-size: 8.5pt; background: #e7e5e4; border-radius: 2mm; padding: 1mm 2.5mm; white-space: nowrap; transform: translate(-50%, 50%); }
-  .posmap .me { background: #4f46e5; color: #fff; font-weight: 700; font-size: 9.5pt; }
-</style>
-</head>
-<body>
+  <head>
+    <meta charset="utf-8" />
+    <title>カタチ入力 事業戦略ドキュメント</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 0;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+        color: #1c1917;
+        font-size: 10.5pt;
+        line-height: 1.75;
+      }
+      .page {
+        width: 210mm;
+        height: 297mm;
+        padding: 20mm 18mm;
+        page-break-after: always;
+        position: relative;
+        overflow: hidden;
+      }
+      .page:last-child {
+        page-break-after: auto;
+      }
+      .pageno {
+        position: absolute;
+        bottom: 9mm;
+        right: 18mm;
+        font-size: 8pt;
+        color: #a8a29e;
+      }
+      .doctag {
+        position: absolute;
+        bottom: 9mm;
+        left: 18mm;
+        font-size: 8pt;
+        color: #a8a29e;
+      }
+      h1 {
+        font-size: 23pt;
+        line-height: 1.35;
+        letter-spacing: 0.02em;
+      }
+      h2 {
+        font-size: 14pt;
+        border-left: 4px solid #4f46e5;
+        padding-left: 9px;
+        margin: 0 0 5mm;
+        letter-spacing: 0.04em;
+      }
+      h3 {
+        font-size: 11pt;
+        color: #4f46e5;
+        margin: 5mm 0 1.5mm;
+      }
+      p {
+        margin-bottom: 2.5mm;
+        text-align: justify;
+      }
+      .lead {
+        font-size: 11.5pt;
+        color: #44403c;
+      }
+      .accent {
+        color: #4f46e5;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 8.5pt;
+        line-height: 1.5;
+        margin: 2mm 0 4mm;
+      }
+      th,
+      td {
+        border: 1px solid #d6d3d1;
+        padding: 1.6mm 2mm;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #eef2ff;
+        font-weight: 600;
+      }
+      td.c {
+        text-align: center;
+      }
+      .good {
+        color: #059669;
+        font-weight: 600;
+      }
+      .bad {
+        color: #dc2626;
+      }
+      .mid {
+        color: #d97706;
+      }
+      ul,
+      ol {
+        margin: 0 0 3mm 5.5mm;
+      }
+      li {
+        margin-bottom: 1.2mm;
+      }
+      .box {
+        background: #f5f5f4;
+        border-radius: 3mm;
+        padding: 4mm 5mm;
+        margin: 3mm 0;
+      }
+      .box-accent {
+        background: #eef2ff;
+        border-radius: 3mm;
+        padding: 4mm 5mm;
+        margin: 3mm 0;
+      }
+      .kv {
+        display: flex;
+        gap: 4mm;
+        margin: 3mm 0;
+      }
+      .kv > div {
+        flex: 1;
+        background: #f5f5f4;
+        border-radius: 3mm;
+        padding: 3.5mm 4mm;
+      }
+      .kv h4 {
+        font-size: 9.5pt;
+        color: #4f46e5;
+        margin-bottom: 1mm;
+      }
+      .kv p {
+        font-size: 8.8pt;
+        margin: 0;
+      }
+      .small {
+        font-size: 8.5pt;
+        color: #78716c;
+      }
+      .big-sample {
+        font-size: 15pt;
+        letter-spacing: 0.05em;
+      }
+      .posmap {
+        position: relative;
+        width: 100%;
+        height: 62mm;
+        border-left: 2px solid #57534e;
+        border-bottom: 2px solid #57534e;
+        margin: 7mm 0 9mm 0;
+      }
+      .posmap .xl {
+        position: absolute;
+        bottom: -7mm;
+        left: 0;
+        font-size: 8pt;
+        color: #57534e;
+      }
+      .posmap .xr {
+        position: absolute;
+        bottom: -7mm;
+        right: 0;
+        font-size: 8pt;
+        color: #57534e;
+      }
+      .posmap .yt {
+        position: absolute;
+        top: -6mm;
+        left: 2mm;
+        font-size: 8pt;
+        color: #57534e;
+      }
+      .posmap .dot {
+        position: absolute;
+        font-size: 8.5pt;
+        background: #e7e5e4;
+        border-radius: 2mm;
+        padding: 1mm 2.5mm;
+        white-space: nowrap;
+        transform: translate(-50%, 50%);
+      }
+      .posmap .me {
+        background: #4f46e5;
+        color: #fff;
+        font-weight: 700;
+        font-size: 9.5pt;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ===== P1: 表紙 + サマリー ===== -->
+    <div class="page">
+      <p class="small" style="margin-bottom: 16mm">
+        事業戦略ドキュメント ｜ 2026年7月 ｜ Ver 1.0
+      </p>
+      <h1>
+        カタチ入力<span
+          style="font-size: 11pt; font-weight: normal; color: #78716c"
+          >（プロダクト名仮称）</span
+        ><br />
+        <span class="accent">読めない漢字を、見たまま打てる。</span>
+      </h1>
+      <p class="lead" style="margin-top: 8mm">
+        漢字の<b>見た目の構造</b>（左右・上下・かこみ＝IDS空間関係）と<b>部品</b>の組み合わせで、読みがわからない漢字をその場で入力できる、日本初の「形」から引く日本語キーボード／IME。
+      </p>
+      <p class="small">
+        入力方式は zi.tools の IDS
+        部品入力方式を日本語市場向けに再設計したもの。
+      </p>
 
-<!-- ===== P1: 表紙 + サマリー ===== -->
-<div class="page">
-  <p class="small" style="margin-bottom:16mm">事業戦略ドキュメント ｜ 2026年7月 ｜ Ver 1.0</p>
-  <h1>カタチ入力<span style="font-size:11pt; font-weight:normal; color:#78716c">（プロダクト名仮称）</span><br>
-  <span class="accent">読めない漢字を、見たまま打てる。</span></h1>
-  <p class="lead" style="margin-top:8mm">漢字の<b>見た目の構造</b>（左右・上下・かこみ＝IDS空間関係）と<b>部品</b>の組み合わせで、読みがわからない漢字をその場で入力できる、日本初の「形」から引く日本語キーボード／IME。</p>
-  <p class="small">入力方式は zi.tools の IDS 部品入力方式を日本語市場向けに再設計したもの。</p>
+      <div class="box-accent" style="margin-top: 10mm">
+        <p class="big-sample" style="margin: 0">
+          <b>LR</b> 日 月 → <b>明</b>　／　<b>OC</b> 囗 玉 → <b>国</b>　／　<b
+            >RU</b
+          >
+          辶 刀 → <b>辺</b>
+        </p>
+        <p class="small" style="margin: 1mm 0 0">
+          位置コード17種（LR=左右, UD=上下, OC=全かこみ…）＋部品 →
+          候補漢字。読み・画数・部首の知識は一切不要。
+        </p>
+      </div>
 
-  <div class="box-accent" style="margin-top:10mm">
-    <p class="big-sample" style="margin:0"><b>LR</b> 日 月 → <b>明</b>　／　<b>OC</b> 囗 玉 → <b>国</b>　／　<b>RU</b> 辶 刀 → <b>辺</b></p>
-    <p class="small" style="margin:1mm 0 0">位置コード17種（LR=左右, UD=上下, OC=全かこみ…）＋部品 → 候補漢字。読み・画数・部首の知識は一切不要。</p>
-  </div>
+      <h3 style="margin-top: 10mm">エグゼクティブサマリー</h3>
+      <ol>
+        <li>
+          <b>市場の空白：</b
+          >日本語入力は音系（ローマ字・かな・フリック）が事実上100%。中華圏に存在する「形」からの入力（五筆・倉頡）に相当する手段が、日本語市場には存在しない。
+        </li>
+        <li>
+          <b>残された課題：</b
+          >読めない漢字（人名・地名・古典・異体字・専門文献）は現状、手書き認識・部首索引・画像検索で迂回するしかなく、遅い／不確実／PCではとくに不便。
+        </li>
+        <li>
+          <b>解決策：</b
+          >空間関係コード17個だけを覚えれば、部品は「見たまま」。五筆（字根130〜234暗記）・倉頡（24字母＋取码規則）と異なり学習コストが极めて低い形系入力を実現。
+        </li>
+        <li>
+          <b>戦い方：</b
+          >既存IMEの置き換えではなく「2枚目のキーボード」として共存し、置き換え摩擦をゼロに。文字業務のプロ（行政・出版・研究・翻訳）から深く獲得しB2Bへ展開。
+        </li>
+        <li>
+          <b>現状：</b
+          >Webプロトタイプ完成（13,108字・応答10ms以下）。次フェーズはスマホIME（iOS/Android）→PC
+          IME。
+        </li>
+      </ol>
+      <span class="doctag">カタチ入力 事業戦略</span
+      ><span class="pageno">1 / 6</span>
+    </div>
 
-  <h3 style="margin-top:10mm">エグゼクティブサマリー</h3>
-  <ol>
-    <li><b>市場の空白：</b>日本語入力は音系（ローマ字・かな・フリック）が事実上100%。中華圏に存在する「形」からの入力（五筆・倉頡）に相当する手段が、日本語市場には存在しない。</li>
-    <li><b>残された課題：</b>読めない漢字（人名・地名・古典・異体字・専門文献）は現状、手書き認識・部首索引・画像検索で迂回するしかなく、遅い／不確実／PCではとくに不便。</li>
-    <li><b>解決策：</b>空間関係コード17個だけを覚えれば、部品は「見たまま」。五筆（字根130〜234暗記）・倉頡（24字母＋取码規則）と異なり学習コストが极めて低い形系入力を実現。</li>
-    <li><b>戦い方：</b>既存IMEの置き換えではなく「2枚目のキーボード」として共存し、置き換え摩擦をゼロに。文字業務のプロ（行政・出版・研究・翻訳）から深く獲得しB2Bへ展開。</li>
-    <li><b>現状：</b>Webプロトタイプ完成（13,108字・応答10ms以下）。次フェーズはスマホIME（iOS/Android）→PC IME。</li>
-  </ol>
-  <span class="doctag">カタチ入力 事業戦略</span><span class="pageno">1 / 6</span>
-</div>
+    <!-- ===== P2: 課題と市場の空白 ===== -->
+    <div class="page">
+      <h2>1. 課題 — 「読めない漢字」は今も入力できない</h2>
+      <p>
+        現代の日本語IME（Google日本語入力・ATOK・Simeji等）は「<b>読める漢字を速く打つ</b>」ことに最適化された音系入力であり、読みがわからない字の前では無力になる。競合調査（CJK入力方式リサーチ）が示す通り、CJK入力は「音码（発音）／形码（字形）／音形混合」に大別されるが、<b>日本市場は音系一色</b>であり、形码系の実用手段が存在しない。
+      </p>
 
-<!-- ===== P2: 課題と市場の空白 ===== -->
-<div class="page">
-  <h2>1. 課題 — 「読めない漢字」は今も入力できない</h2>
-  <p>現代の日本語IME（Google日本語入力・ATOK・Simeji等）は「<b>読める漢字を速く打つ</b>」ことに最適化された音系入力であり、読みがわからない字の前では無力になる。競合調査（CJK入力方式リサーチ）が示す通り、CJK入力は「音码（発音）／形码（字形）／音形混合」に大別されるが、<b>日本市場は音系一色</b>であり、形码系の実用手段が存在しない。</p>
+      <h3>読めない漢字に遭遇するシーン</h3>
+      <ul>
+        <li>
+          <b>人名・地名：</b>戸籍・窓口業務、宛名、名刺、旧字体（濵・髙・﨑・栁
+          等）
+        </li>
+        <li>
+          <b>古典・漢文・歴史資料：</b>研究・翻刻・くずし字翻刻後の確定入力
+        </li>
+        <li>
+          <b>専門文献・仏教・医学・法律用語、</b
+          >出版・校正での異体字の同定と入力
+        </li>
+        <li>
+          <b>学習者：</b
+          >非漢字圏の日本語学習者は「読みを知らない字」が日常（読みを知らないと打てない構造的矛盾）
+        </li>
+      </ul>
 
-  <h3>読めない漢字に遭遇するシーン</h3>
-  <ul>
-    <li><b>人名・地名：</b>戸籍・窓口業務、宛名、名刺、旧字体（濵・髙・﨑・栁 等）</li>
-    <li><b>古典・漢文・歴史資料：</b>研究・翻刻・くずし字翻刻後の確定入力</li>
-    <li><b>専門文献・仏教・医学・法律用語、</b>出版・校正での異体字の同定と入力</li>
-    <li><b>学習者：</b>非漢字圏の日本語学習者は「読みを知らない字」が日常（読みを知らないと打てない構造的矛盾）</li>
-  </ul>
+      <h3>現状の迂回手段とその弱点</h3>
+      <table>
+        <tr>
+          <th style="width: 22%">現状手段</th>
+          <th>仕組み</th>
+          <th>弱点</th>
+        </tr>
+        <tr>
+          <td>
+            手書き入力<br /><span class="small">(Gboard・IMEパッド)</span>
+          </td>
+          <td>指・マウスで字形を描き認識</td>
+          <td>
+            崩れた字・うろ覚えの字は認識失敗。<b>PCのマウス手書きは非実用的</b>。書き順・全体形の記憶が必要
+          </td>
+        </tr>
+        <tr>
+          <td>
+            部首・画数索引<br /><span class="small">(IMEパッド・漢和辞典)</span>
+          </td>
+          <td>部首と画数で絞り込み</td>
+          <td>
+            部首の同定自体が専門知識。総画数の数え間違いが頻発。数分単位の作業
+          </td>
+        </tr>
+        <tr>
+          <td>画像検索・OCR</td>
+          <td>撮影・スクショして検索</td>
+          <td>
+            紙・画面外の字は撮れない場面が多い。低品質印刷・手書き原稿に弱い。入力欄への転記に切替が必要
+          </td>
+        </tr>
+        <tr>
+          <td>zi.tools 等の字形検索サイト</td>
+          <td>IDS等で検索するWeb辞書</td>
+          <td>
+            中国語圏向けでUI・字体・候補順が日本語最適でない。<b
+              >IMEでないため入力その場で完結しない</b
+            >
+          </td>
+        </tr>
+      </table>
 
-  <h3>現状の迂回手段とその弱点</h3>
-  <table>
-    <tr><th style="width:22%">現状手段</th><th>仕組み</th><th>弱点</th></tr>
-    <tr><td>手書き入力<br><span class="small">(Gboard・IMEパッド)</span></td><td>指・マウスで字形を描き認識</td><td>崩れた字・うろ覚えの字は認識失敗。<b>PCのマウス手書きは非実用的</b>。書き順・全体形の記憶が必要</td></tr>
-    <tr><td>部首・画数索引<br><span class="small">(IMEパッド・漢和辞典)</span></td><td>部首と画数で絞り込み</td><td>部首の同定自体が専門知識。総画数の数え間違いが頻発。数分単位の作業</td></tr>
-    <tr><td>画像検索・OCR</td><td>撮影・スクショして検索</td><td>紙・画面外の字は撮れない場面が多い。低品質印刷・手書き原稿に弱い。入力欄への転記に切替が必要</td></tr>
-    <tr><td>zi.tools 等の字形検索サイト</td><td>IDS等で検索するWeb辞書</td><td>中国語圏向けでUI・字体・候補順が日本語最適でない。<b>IMEでないため入力その場で完結しない</b></td></tr>
-  </table>
+      <div class="box">
+        <p style="margin: 0">
+          <b>本質的な空白：</b
+          >「字の<b>見た目</b>はわかっているのに入力できない」という状況に対し、見た目の情報をそのまま受け取る入力チャネルが日本語には存在しない。中華圏では五筆・倉頡が形码としてこの役割を担うが、字根暗記の学習コストが高く専門職に残存する形で定着した（調査レポートの通り）。<b>「低学習コストの形码」はCJK全体でも空白地帯</b>であり、IDS（Unicode標準の漢字構造記述）の空間関係はその解になり得る。
+        </p>
+      </div>
 
-  <div class="box">
-    <p style="margin:0"><b>本質的な空白：</b>「字の<b>見た目</b>はわかっているのに入力できない」という状況に対し、見た目の情報をそのまま受け取る入力チャネルが日本語には存在しない。中華圏では五筆・倉頡が形码としてこの役割を担うが、字根暗記の学習コストが高く専門職に残存する形で定着した（調査レポートの通り）。<b>「低学習コストの形码」はCJK全体でも空白地帯</b>であり、IDS（Unicode標準の漢字構造記述）の空間関係はその解になり得る。</p>
-  </div>
+      <h3>なぜ今か</h3>
+      <ul>
+        <li>
+          IDS分解データ（CHISE / CJKVI /
+          BabelStone）が成熟し、9万字規模の構造データベースが利用可能になった
+        </li>
+        <li>
+          Unicode
+          15.1でIDC操作子が17種に拡張され、zi.toolsが「空間関係コード入力」のUXパターンを実証済み
+        </li>
+        <li>
+          インバウンド・国際化で非漢字圏の日本語学習者が増加し、「読めないが見えている字」を打つ需要が拡大
+        </li>
+      </ul>
+      <span class="doctag">カタチ入力 事業戦略</span
+      ><span class="pageno">2 / 6</span>
+    </div>
 
-  <h3>なぜ今か</h3>
-  <ul>
-    <li>IDS分解データ（CHISE / CJKVI / BabelStone）が成熟し、9万字規模の構造データベースが利用可能になった</li>
-    <li>Unicode 15.1でIDC操作子が17種に拡張され、zi.toolsが「空間関係コード入力」のUXパターンを実証済み</li>
-    <li>インバウンド・国際化で非漢字圏の日本語学習者が増加し、「読めないが見えている字」を打つ需要が拡大</li>
-  </ul>
-  <span class="doctag">カタチ入力 事業戦略</span><span class="pageno">2 / 6</span>
-</div>
+    <!-- ===== P3: ソリューションとUSP ===== -->
+    <div class="page">
+      <h2>2. ソリューションと USP・競合優位性</h2>
+      <h3>入力方式（プロトタイプ実装済み）</h3>
+      <ul>
+        <li>
+          <b>位置コード17種</b
+          >＋<b>部品</b>を並べるだけ。部分入力・ワイルドカード（LR氵?）・部品のみ検索（日月→明・盟・朝…）に対応
+        </li>
+        <li>
+          <b>打ちにくい部品はパレットから1タップ</b
+          >（氵扌艹辶宀疒…46種）。構造の揺れ・字形バリアント（⺼=月）・偏旁の同一視（扌≈手）をエンジン側で吸収
+        </li>
+        <li>
+          候補は<b>学年・使用頻度順</b>。選んだ字は読み（音訓）・分解を表示 —
+          「打てた上で、読みもわかる」
+        </li>
+      </ul>
 
-<!-- ===== P3: ソリューションとUSP ===== -->
-<div class="page">
-  <h2>2. ソリューションと USP・競合優位性</h2>
-  <h3>入力方式（プロトタイプ実装済み）</h3>
-  <ul>
-    <li><b>位置コード17種</b>＋<b>部品</b>を並べるだけ。部分入力・ワイルドカード（LR氵?）・部品のみ検索（日月→明・盟・朝…）に対応</li>
-    <li><b>打ちにくい部品はパレットから1タップ</b>（氵扌艹辶宀疒…46種）。構造の揺れ・字形バリアント（⺼=月）・偏旁の同一視（扌≈手）をエンジン側で吸収</li>
-    <li>候補は<b>学年・使用頻度順</b>。選んだ字は読み（音訓）・分解を表示 — 「打てた上で、読みもわかる」</li>
-  </ul>
+      <h3>USP（一言）</h3>
+      <div class="box-accent">
+        <p style="font-size: 13pt; margin: 0">
+          <b
+            >「読めない漢字を、見たまま打てる」—
+            覚えるのは位置コード17個だけ。</b
+          >
+        </p>
+      </div>
 
-  <h3>USP（一言）</h3>
-  <div class="box-accent"><p style="font-size:13pt; margin:0"><b>「読めない漢字を、見たまま打てる」— 覚えるのは位置コード17個だけ。</b></p></div>
+      <h3>競合比較</h3>
+      <table>
+        <tr>
+          <th style="width: 20%"></th>
+          <th>読み不要</th>
+          <th>学習コスト</th>
+          <th>入力がその場で完結</th>
+          <th>PC対応</th>
+          <th>日本語最適化</th>
+        </tr>
+        <tr>
+          <td><b>カタチ入力</b></td>
+          <td class="c good">◎</td>
+          <td class="c good">低（コード17個）</td>
+          <td class="c good">◎（IME化）</td>
+          <td class="c good">◎</td>
+          <td class="c good">◎</td>
+        </tr>
+        <tr>
+          <td>Google日本語入力 / ATOK / Simeji</td>
+          <td class="c bad">×（読み必須）</td>
+          <td class="c good">低</td>
+          <td class="c good">◎</td>
+          <td class="c good">◎</td>
+          <td class="c good">◎</td>
+        </tr>
+        <tr>
+          <td>手書き入力（Gboard等）</td>
+          <td class="c good">◎</td>
+          <td class="c good">低</td>
+          <td class="c good">○</td>
+          <td class="c bad">×（マウス手書き）</td>
+          <td class="c mid">△</td>
+        </tr>
+        <tr>
+          <td>IMEパッド部首・画数検索</td>
+          <td class="c good">◎</td>
+          <td class="c bad">高（部首知識）</td>
+          <td class="c mid">△（遅い）</td>
+          <td class="c good">○</td>
+          <td class="c good">○</td>
+        </tr>
+        <tr>
+          <td>zi.tools（Web字形検索）</td>
+          <td class="c good">◎</td>
+          <td class="c good">低</td>
+          <td class="c bad">×（辞書サイト）</td>
+          <td class="c mid">△（ブラウザのみ）</td>
+          <td class="c bad">×（中国語圏向け）</td>
+        </tr>
+        <tr>
+          <td>倉頡・五筆（中華圏形码IME）</td>
+          <td class="c good">◎</td>
+          <td class="c bad">極高（字根暗記）</td>
+          <td class="c good">◎</td>
+          <td class="c good">○</td>
+          <td class="c bad">×（日本語非対応）</td>
+        </tr>
+      </table>
 
-  <h3>競合比較</h3>
-  <table>
-    <tr><th style="width:20%"></th><th>読み不要</th><th>学習コスト</th><th>入力がその場で完結</th><th>PC対応</th><th>日本語最適化</th></tr>
-    <tr><td><b>カタチ入力</b></td><td class="c good">◎</td><td class="c good">低（コード17個）</td><td class="c good">◎（IME化）</td><td class="c good">◎</td><td class="c good">◎</td></tr>
-    <tr><td>Google日本語入力 / ATOK / Simeji</td><td class="c bad">×（読み必須）</td><td class="c good">低</td><td class="c good">◎</td><td class="c good">◎</td><td class="c good">◎</td></tr>
-    <tr><td>手書き入力（Gboard等）</td><td class="c good">◎</td><td class="c good">低</td><td class="c good">○</td><td class="c bad">×（マウス手書き）</td><td class="c mid">△</td></tr>
-    <tr><td>IMEパッド部首・画数検索</td><td class="c good">◎</td><td class="c bad">高（部首知識）</td><td class="c mid">△（遅い）</td><td class="c good">○</td><td class="c good">○</td></tr>
-    <tr><td>zi.tools（Web字形検索）</td><td class="c good">◎</td><td class="c good">低</td><td class="c bad">×（辞書サイト）</td><td class="c mid">△（ブラウザのみ）</td><td class="c bad">×（中国語圏向け）</td></tr>
-    <tr><td>倉頡・五筆（中華圏形码IME）</td><td class="c good">◎</td><td class="c bad">極高（字根暗記）</td><td class="c good">◎</td><td class="c good">○</td><td class="c bad">×（日本語非対応）</td></tr>
-  </table>
+      <h3>持続的な競合優位（moat）</h3>
+      <div class="kv">
+        <div>
+          <h4>① 日本語最適化データ</h4>
+          <p>
+            日本字体優先のIDS選択・常用/人名用の網羅・学年/頻度ランキング・偏旁同一視辞書は、使うほど磨かれる独自データ資産。
+          </p>
+        </div>
+        <div>
+          <h4>② IME統合のUX</h4>
+          <p>
+            「調べる」でなく「打つ」。辞書サイトやOCRと違いカーソル位置に直接挿入。この体験差は構造的で模倣されにくい。
+          </p>
+        </div>
+        <div>
+          <h4>③ ニッチ深耕の先行者利益</h4>
+          <p>
+            大手IMEには小さすぎる市場で参入誘因が薄い。専門職コミュニティでの標準化が参入障壁になる。
+          </p>
+        </div>
+      </div>
 
-  <h3>持続的な競合優位（moat）</h3>
-  <div class="kv">
-    <div><h4>① 日本語最適化データ</h4><p>日本字体優先のIDS選択・常用/人名用の網羅・学年/頻度ランキング・偏旁同一視辞書は、使うほど磨かれる独自データ資産。</p></div>
-    <div><h4>② IME統合のUX</h4><p>「調べる」でなく「打つ」。辞書サイトやOCRと違いカーソル位置に直接挿入。この体験差は構造的で模倣されにくい。</p></div>
-    <div><h4>③ ニッチ深耕の先行者利益</h4><p>大手IMEには小さすぎる市場で参入誘因が薄い。専門職コミュニティでの標準化が参入障壁になる。</p></div>
-  </div>
+      <div class="box">
+        <p style="margin: 0; font-size: 9pt">
+          <b>調査レポートとの整合：</b
+          >形码はCJK全域で「低重码率だが高学習コスト」ゆえ専門職に残存した（五筆・倉頡）。カタチ入力は<b>盲打・速度を捨て「発見可能性」に全振り</b>して学習コスト問題を回避し、速度競争（音系＋予測）には参入せず音系IMEの<b>補完</b>と位置づける
+          — 調査の推奨「既定は音系＋上級モードとして形系」と同型の構成。
+        </p>
+      </div>
+      <span class="doctag">カタチ入力 事業戦略</span
+      ><span class="pageno">3 / 6</span>
+    </div>
 
-  <div class="box">
-    <p style="margin:0; font-size:9pt"><b>調査レポートとの整合：</b>形码はCJK全域で「低重码率だが高学習コスト」ゆえ専門職に残存した（五筆・倉頡）。カタチ入力は<b>盲打・速度を捨て「発見可能性」に全振り</b>して学習コスト問題を回避し、速度競争（音系＋予測）には参入せず音系IMEの<b>補完</b>と位置づける — 調査の推奨「既定は音系＋上級モードとして形系」と同型の構成。</p>
-  </div>
-  <span class="doctag">カタチ入力 事業戦略</span><span class="pageno">3 / 6</span>
-</div>
+    <!-- ===== P4: ターゲットと提供価値 ===== -->
+    <div class="page">
+      <h2>3. ターゲットと提供価値</h2>
+      <h3>一次ターゲット：文字と向き合う専門職（B2B/B2C prosumer）</h3>
+      <table>
+        <tr>
+          <th style="width: 26%">セグメント</th>
+          <th>具体シーン</th>
+          <th>支払い主体</th>
+        </tr>
+        <tr>
+          <td>行政・戸籍/窓口・法務局・司法書士</td>
+          <td>
+            旧字体・異体字の氏名地名を正確に入力（濵・﨑・栁…）。誤字は法的リスク
+          </td>
+          <td>自治体・法人（B2B）</td>
+        </tr>
+        <tr>
+          <td>出版・校正・組版・フォント制作</td>
+          <td>原稿の異体字同定と入力、外字調査、字体指定</td>
+          <td>出版社・制作会社（B2B）</td>
+        </tr>
+        <tr>
+          <td>研究者（国文・歴史・仏教・中国学）・図書館司書</td>
+          <td>翻刻・目録作成・史料DB入力</td>
+          <td>大学・機関（B2B）／個人</td>
+        </tr>
+        <tr>
+          <td>翻訳者・通訳・中国語/日本語教師</td>
+          <td>未知の固有名詞・専門語の入力</td>
+          <td>個人（B2C）</td>
+        </tr>
+      </table>
+      <h3>二次ターゲット：裾野の拡大（B2C）</h3>
+      <ul>
+        <li>
+          <b>非漢字圏の日本語学習者：</b
+          >「見えているのに読めない字」が毎日発生。打てた瞬間に読みが表示されるため<b>入力ツールがそのまま学習ツール</b>になる（英語UI展開で海外市場へ）
+        </li>
+        <li>
+          <b>一般ユーザー：</b
+          >人名・地名・お品書き・看板・お寺の掲示など、日常の「読めない字」との遭遇（低頻度・高感情価値
+          — 「調べようがない悔しさ」の解消）
+        </li>
+      </ul>
 
-<!-- ===== P4: ターゲットと提供価値 ===== -->
-<div class="page">
-  <h2>3. ターゲットと提供価値</h2>
-  <h3>一次ターゲット：文字と向き合う専門職（B2B/B2C prosumer）</h3>
-  <table>
-    <tr><th style="width:26%">セグメント</th><th>具体シーン</th><th>支払い主体</th></tr>
-    <tr><td>行政・戸籍/窓口・法務局・司法書士</td><td>旧字体・異体字の氏名地名を正確に入力（濵・﨑・栁…）。誤字は法的リスク</td><td>自治体・法人（B2B）</td></tr>
-    <tr><td>出版・校正・組版・フォント制作</td><td>原稿の異体字同定と入力、外字調査、字体指定</td><td>出版社・制作会社（B2B）</td></tr>
-    <tr><td>研究者（国文・歴史・仏教・中国学）・図書館司書</td><td>翻刻・目録作成・史料DB入力</td><td>大学・機関（B2B）／個人</td></tr>
-    <tr><td>翻訳者・通訳・中国語/日本語教師</td><td>未知の固有名詞・専門語の入力</td><td>個人（B2C）</td></tr>
-  </table>
-  <h3>二次ターゲット：裾野の拡大（B2C）</h3>
-  <ul>
-    <li><b>非漢字圏の日本語学習者：</b>「見えているのに読めない字」が毎日発生。打てた瞬間に読みが表示されるため<b>入力ツールがそのまま学習ツール</b>になる（英語UI展開で海外市場へ）</li>
-    <li><b>一般ユーザー：</b>人名・地名・お品書き・看板・お寺の掲示など、日常の「読めない字」との遭遇（低頻度・高感情価値 — 「調べようがない悔しさ」の解消）</li>
-  </ul>
+      <h3>提供価値（Jobs to be Done）</h3>
+      <div class="kv">
+        <div>
+          <h4>機能価値</h4>
+          <p>
+            「目の前の読めない字を、いま書いている文章に、確実に・その場で入れたい」—
+            部首索引の数分 → <b>15秒以内</b>へ。
+          </p>
+        </div>
+        <div>
+          <h4>信頼価値</h4>
+          <p>
+            認識任せの手書きOCRと違い、部品さえ見えれば<b>決定的に辿り着ける</b>。候補に必ず理由（構造一致）がある。
+          </p>
+        </div>
+        <div>
+          <h4>学習・情緒価値</h4>
+          <p>
+            打てた字の読み・分解が表示され「読めなかった字が読めるようになる」。検索の悔しさが小さな達成感に変わる。
+          </p>
+        </div>
+      </div>
 
-  <h3>提供価値（Jobs to be Done）</h3>
-  <div class="kv">
-    <div><h4>機能価値</h4><p>「目の前の読めない字を、いま書いている文章に、確実に・その場で入れたい」— 部首索引の数分 → <b>15秒以内</b>へ。</p></div>
-    <div><h4>信頼価値</h4><p>認識任せの手書きOCRと違い、部品さえ見えれば<b>決定的に辿り着ける</b>。候補に必ず理由（構造一致）がある。</p></div>
-    <div><h4>学習・情緒価値</h4><p>打てた字の読み・分解が表示され「読めなかった字が読めるようになる」。検索の悔しさが小さな達成感に変わる。</p></div>
-  </div>
+      <h3>市場規模の目安</h3>
+      <ul>
+        <li>
+          <b>SAM：</b>文字業務専門職 —
+          自治体窓口・戸籍（1,700自治体）、出版・印刷・校正、大学人文系、司書、翻訳者で国内数十万人規模
+        </li>
+        <li>
+          <b>TAM：</b
+          >国内スマホ・PC日本語入力ユーザー全体（辞書アプリ・手書き検索利用層）＋海外の日本語学習者（数百万人規模）
+        </li>
+        <li>
+          <b>SOM（初年度）：</b
+          >専門職コミュニティ経由で数千〜1万MAU、B2Bパイロット2〜3件を現実的な初期目標とする
+        </li>
+      </ul>
+      <span class="doctag">カタチ入力 事業戦略</span
+      ><span class="pageno">4 / 6</span>
+    </div>
 
-  <h3>市場規模の目安</h3>
-  <ul>
-    <li><b>SAM：</b>文字業務専門職 — 自治体窓口・戸籍（1,700自治体）、出版・印刷・校正、大学人文系、司書、翻訳者で国内数十万人規模</li>
-    <li><b>TAM：</b>国内スマホ・PC日本語入力ユーザー全体（辞書アプリ・手書き検索利用層）＋海外の日本語学習者（数百万人規模）</li>
-    <li><b>SOM（初年度）：</b>専門職コミュニティ経由で数千〜1万MAU、B2Bパイロット2〜3件を現実的な初期目標とする</li>
-  </ul>
-  <span class="doctag">カタチ入力 事業戦略</span><span class="pageno">4 / 6</span>
-</div>
+    <!-- ===== P5: ポジショニングとGTM ===== -->
+    <div class="page">
+      <h2>4. ポジショニングと市場参入戦略</h2>
+      <h3>ポジショニングマップ</h3>
+      <div class="posmap">
+        <span class="yt">▲ 形（見た目）から入力</span>
+        <span class="xl">◀ 学習コスト 高</span>
+        <span class="xr">学習コスト 低 ▶</span>
+        <span class="dot" style="left: 18%; bottom: 78%"
+          >倉頡・五筆（中華圏）</span
+        >
+        <span class="dot" style="left: 30%; bottom: 55%"
+          >IMEパッド部首検索</span
+        >
+        <span class="dot" style="left: 78%; bottom: 58%"
+          >手書き入力（精度・PC難）</span
+        >
+        <span class="dot me" style="left: 76%; bottom: 82%">カタチ入力</span>
+        <span class="dot" style="left: 80%; bottom: 12%"
+          >Google日本語入力・ATOK・Simeji（音系）</span
+        >
+        <span class="dot" style="left: 55%; bottom: 26%"
+          >zi.tools（辞書サイト・非IME）</span
+        >
+      </div>
+      <div class="box-accent">
+        <p style="margin: 0">
+          <b>ポジショニング・ステートメント：</b
+          >文字と向き合う専門職と日本語学習者にとって、カタチ入力は、読みがわからない漢字を<b>見た目の構造から・その場で・確実に</b>入力できる唯一の日本語IMEである。手書き認識と違って認識の運に左右されず、部首索引と違って専門知識を要しない。
+        </p>
+      </div>
 
-<!-- ===== P5: ポジショニングとGTM ===== -->
-<div class="page">
-  <h2>4. ポジショニングと市場参入戦略</h2>
-  <h3>ポジショニングマップ</h3>
-  <div class="posmap">
-    <span class="yt">▲ 形（見た目）から入力</span>
-    <span class="xl">◀ 学習コスト 高</span>
-    <span class="xr">学習コスト 低 ▶</span>
-    <span class="dot" style="left:18%; bottom:78%">倉頡・五筆（中華圏）</span>
-    <span class="dot" style="left:30%; bottom:55%">IMEパッド部首検索</span>
-    <span class="dot" style="left:78%; bottom:58%">手書き入力（精度・PC難）</span>
-    <span class="dot me" style="left:76%; bottom:82%">カタチ入力</span>
-    <span class="dot" style="left:80%; bottom:12%">Google日本語入力・ATOK・Simeji（音系）</span>
-    <span class="dot" style="left:55%; bottom:26%">zi.tools（辞書サイト・非IME）</span>
-  </div>
-  <div class="box-accent">
-    <p style="margin:0"><b>ポジショニング・ステートメント：</b>文字と向き合う専門職と日本語学習者にとって、カタチ入力は、読みがわからない漢字を<b>見た目の構造から・その場で・確実に</b>入力できる唯一の日本語IMEである。手書き認識と違って認識の運に左右されず、部首索引と違って専門知識を要しない。</p>
-  </div>
+      <h3>市場参入（GTM）— 「置き換え」ではなく「2枚目のキーボード」</h3>
+      <ol>
+        <li>
+          <b>共存戦略：</b
+          >普段のIMEはそのまま。スマホはキーボード切替、PCはホットキーで「読めない字の時だけ」使う。<span
+            class="accent"
+            >既存習慣と戦わないため導入摩擦が最小</span
+          >
+        </li>
+        <li>
+          <b>チャネル：</b
+          >①専門職コミュニティ（翻刻プロジェクト・校正者団体・日本語教師会）へ直接提示
+          ②「読めない漢字 入力」等の検索流入をWeb版で受けアプリへ誘導
+          ③日本語学習系SNSでのデモ動画
+        </li>
+        <li>
+          <b>収益：</b>B2C
+          フリーミアム（Pro：異体字・外字・履歴同期・PC版）／B2B
+          サイトライセンス（自治体・出版・大学）
+        </li>
+      </ol>
 
-  <h3>市場参入（GTM）— 「置き換え」ではなく「2枚目のキーボード」</h3>
-  <ol>
-    <li><b>共存戦略：</b>普段のIMEはそのまま。スマホはキーボード切替、PCはホットキーで「読めない字の時だけ」使う。<span class="accent">既存習慣と戦わないため導入摩擦が最小</span></li>
-    <li><b>チャネル：</b>①専門職コミュニティ（翻刻プロジェクト・校正者団体・日本語教師会）へ直接提示 ②「読めない漢字 入力」等の検索流入をWeb版で受けアプリへ誘導 ③日本語学習系SNSでのデモ動画</li>
-    <li><b>収益：</b>B2C フリーミアム（Pro：異体字・外字・履歴同期・PC版）／B2B サイトライセンス（自治体・出版・大学）</li>
-  </ol>
+      <h3>プロダクトロードマップ</h3>
+      <table>
+        <tr>
+          <th style="width: 16%">Phase</th>
+          <th>内容</th>
+          <th style="width: 10%">状態</th>
+        </tr>
+        <tr>
+          <td>0. Web版</td>
+          <td>
+            Next.js プロトタイプ（13,108字、応答10ms以下）→
+            PWA公開・検索流入の受け皿
+          </td>
+          <td class="good">完成</td>
+        </tr>
+        <tr>
+          <td>1. スマホIME</td>
+          <td>
+            iOS Keyboard Extension（Swift）／Android
+            InputMethodService（Kotlin）。コンテナーはExpo/RN
+          </td>
+          <td>次期</td>
+        </tr>
+        <tr>
+          <td>2. PC</td>
+          <td>
+            先行: Rimeスキーマ（macOS Squirrel / Windows Weasel）→ 製品版:
+            IMKit・TSF ネイティブ
+          </td>
+          <td>計画</td>
+        </tr>
+        <tr>
+          <td>3. エンジン強化</td>
+          <td>
+            曖昧部品マッチ・手書き併用・オンデバイスLLM文脈候補・自前IDSデータ整備
+          </td>
+          <td>構想</td>
+        </tr>
+      </table>
+      <span class="doctag">カタチ入力 事業戦略</span
+      ><span class="pageno">5 / 6</span>
+    </div>
 
-  <h3>プロダクトロードマップ</h3>
-  <table>
-    <tr><th style="width:16%">Phase</th><th>内容</th><th style="width:10%">状態</th></tr>
-    <tr><td>0. Web版</td><td>Next.js プロトタイプ（13,108字、応答10ms以下）→ PWA公開・検索流入の受け皿</td><td class="good">完成</td></tr>
-    <tr><td>1. スマホIME</td><td>iOS Keyboard Extension（Swift）／Android InputMethodService（Kotlin）。コンテナーはExpo/RN</td><td>次期</td></tr>
-    <tr><td>2. PC</td><td>先行: Rimeスキーマ（macOS Squirrel / Windows Weasel）→ 製品版: IMKit・TSF ネイティブ</td><td>計画</td></tr>
-    <tr><td>3. エンジン強化</td><td>曖昧部品マッチ・手書き併用・オンデバイスLLM文脈候補・自前IDSデータ整備</td><td>構想</td></tr>
-  </table>
-  <span class="doctag">カタチ入力 事業戦略</span><span class="pageno">5 / 6</span>
-</div>
+    <!-- ===== P6: KPI・リスク ===== -->
+    <div class="page">
+      <h2>5. KPI・リスクと反証条件</h2>
+      <h3>検証すべき仮説とKPI</h3>
+      <table>
+        <tr>
+          <th style="width: 34%">仮説</th>
+          <th>KPI / 目標</th>
+        </tr>
+        <tr>
+          <td>「見たまま打てる」は部首索引・手書きより速く確実</td>
+          <td>
+            検索成功率（目的の字に到達）&gt; 90%／到達時間中央値 &lt; 15秒
+          </td>
+        </tr>
+        <tr>
+          <td>専門職は繰り返し使い、代金を払う</td>
+          <td>専門職WAU/MAU &gt; 40%／B2Bパイロット2件（初年度）</td>
+        </tr>
+        <tr>
+          <td>学習者には学習ツールとして刺さる</td>
+          <td>学習者セグメントのD30残存 &gt; 15%／SNSデモ動画の保存率</td>
+        </tr>
+        <tr>
+          <td>位置コード17個は5分で覚えられる</td>
+          <td>
+            初回セッションでのコード使用成功率 &gt; 80%（オンボーディング計測）
+          </td>
+        </tr>
+      </table>
 
-<!-- ===== P6: KPI・リスク ===== -->
-<div class="page">
-  <h2>5. KPI・リスクと反証条件</h2>
-  <h3>検証すべき仮説とKPI</h3>
-  <table>
-    <tr><th style="width:34%">仮説</th><th>KPI / 目標</th></tr>
-    <tr><td>「見たまま打てる」は部首索引・手書きより速く確実</td><td>検索成功率（目的の字に到達）&gt; 90%／到達時間中央値 &lt; 15秒</td></tr>
-    <tr><td>専門職は繰り返し使い、代金を払う</td><td>専門職WAU/MAU &gt; 40%／B2Bパイロット2件（初年度）</td></tr>
-    <tr><td>学習者には学習ツールとして刺さる</td><td>学習者セグメントのD30残存 &gt; 15%／SNSデモ動画の保存率</td></tr>
-    <tr><td>位置コード17個は5分で覚えられる</td><td>初回セッションでのコード使用成功率 &gt; 80%（オンボーディング計測）</td></tr>
-  </table>
+      <h3>主要リスクと対応</h3>
+      <table>
+        <tr>
+          <th style="width: 30%">リスク</th>
+          <th>対応</th>
+        </tr>
+        <tr>
+          <td>カメラOCR・マルチモーダルAIが「読めない字」を解決してしまう</td>
+          <td>
+            撮れない場面（画面上の字・手書き原稿・崩し字・低品質印刷）と「入力その場完結」に集中。OCR併用機能はむしろ取り込む（撮影→部品確認→確定入力）
+          </td>
+        </tr>
+        <tr>
+          <td>データライセンス（CJKVI IDS = GPLv2 / KANJIDIC2 = CC BY-SA）</td>
+          <td>
+            プロトタイプは出典明記で利用。製品化時に (a)
+            CHISE/BabelStoneの許諾整理 (b) 常用・人名用中心に自前IDSデータ再構築
+            のいずれかを実施（データ規模は1〜2万字で再構築可能）
+          </td>
+        </tr>
+        <tr>
+          <td>位置コードの学習障壁で一般層が離脱</td>
+          <td>
+            初回チュートリアル（3例打つだけ）・ボタンUI優先（コード暗記不要でも使える）・部品のみ検索の許容
+          </td>
+        </tr>
+        <tr>
+          <td>iOS/Androidのキーボード審査・技術制約（拡張のメモリ上限等）</td>
+          <td>
+            エンジンは軽量（辞書0.4MB・純ロジック）で拡張内動作可。フルアクセス不要設計でプライバシー審査を容易に
+          </td>
+        </tr>
+        <tr>
+          <td>大手IME（Google/ATOK）の機能追随</td>
+          <td>
+            ニッチ市場ゆえ参入誘因が薄い。専門職データ資産とB2B関係を先行構築。追随されれば買収・提携の選択肢
+          </td>
+        </tr>
+      </table>
 
-  <h3>主要リスクと対応</h3>
-  <table>
-    <tr><th style="width:30%">リスク</th><th>対応</th></tr>
-    <tr><td>カメラOCR・マルチモーダルAIが「読めない字」を解決してしまう</td><td>撮れない場面（画面上の字・手書き原稿・崩し字・低品質印刷）と「入力その場完結」に集中。OCR併用機能はむしろ取り込む（撮影→部品確認→確定入力）</td></tr>
-    <tr><td>データライセンス（CJKVI IDS = GPLv2 / KANJIDIC2 = CC BY-SA）</td><td>プロトタイプは出典明記で利用。製品化時に (a) CHISE/BabelStoneの許諾整理 (b) 常用・人名用中心に自前IDSデータ再構築 のいずれかを実施（データ規模は1〜2万字で再構築可能）</td></tr>
-    <tr><td>位置コードの学習障壁で一般層が離脱</td><td>初回チュートリアル（3例打つだけ）・ボタンUI優先（コード暗記不要でも使える）・部品のみ検索の許容</td></tr>
-    <tr><td>iOS/Androidのキーボード審査・技術制約（拡張のメモリ上限等）</td><td>エンジンは軽量（辞書0.4MB・純ロジック）で拡張内動作可。フルアクセス不要設計でプライバシー審査を容易に</td></tr>
-    <tr><td>大手IME（Google/ATOK）の機能追随</td><td>ニッチ市場ゆえ参入誘因が薄い。専門職データ資産とB2B関係を先行構築。追随されれば買収・提携の選択肢</td></tr>
-  </table>
+      <h3>反証条件（ピボット判断）</h3>
+      <ul>
+        <li>
+          専門職ユーザーテスト（n≥10）で検索成功率が70%を下回り、データ・エンジン改善でも改善しない場合
+          → 手書き・OCRハイブリッドへ軸足を移す
+        </li>
+        <li>
+          「読めない字」遭遇頻度が想定より低く、専門職でも週1未満なら →
+          IME単体でなく辞書・校正ツールへの機能提供（SDK/API）モデルに転換
+        </li>
+      </ul>
 
-  <h3>反証条件（ピボット判断）</h3>
-  <ul>
-    <li>専門職ユーザーテスト（n≥10）で検索成功率が70%を下回り、データ・エンジン改善でも改善しない場合 → 手書き・OCRハイブリッドへ軸足を移す</li>
-    <li>「読めない字」遭遇頻度が想定より低く、専門職でも週1未満なら → IME単体でなく辞書・校正ツールへの機能提供（SDK/API）モデルに転換</li>
-  </ul>
-
-  <div class="box">
-    <p class="small" style="margin:0"><b>注記：</b>本書の競合・市場に関する記述は、添付リサーチ「CJK（中日韓）漢字・文字入力方式 網羅的リサーチレポート」（2026年7月時点）に基づく。フリック利用率・形码残存等の数値は調査条件により変動するため、意思決定時は原典のCaveatsを参照のこと。</p>
-  </div>
-  <span class="doctag">カタチ入力 事業戦略</span><span class="pageno">6 / 6</span>
-</div>
-
-</body>
+      <div class="box">
+        <p class="small" style="margin: 0">
+          <b>注記：</b
+          >本書の競合・市場に関する記述は、添付リサーチ「CJK（中日韓）漢字・文字入力方式
+          網羅的リサーチレポート」（2026年7月時点）に基づく。フリック利用率・形码残存等の数値は調査条件により変動するため、意思決定時は原典のCaveatsを参照のこと。
+        </p>
+      </div>
+      <span class="doctag">カタチ入力 事業戦略</span
+      ><span class="pageno">6 / 6</span>
+    </div>
+  </body>
 </html>

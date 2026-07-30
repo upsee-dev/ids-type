@@ -52,3 +52,12 @@ export const KANJI_FONT = Platform.select({
   android: "serif",
   default: "serif",
 });
+
+/**
+ * 部品パレット専用のフォント。assets/fonts/KatachiParts.ttf を App.tsx で読み込む。
+ * 「難輸入部件」は拡張B〜Hの字が多く端末の標準フォントに無いので、そのままだと
+ * □ が並んで「見て選ぶ」画面が成立しない。サブセットに無い字は OS が
+ * 標準フォントへフォールバックするので、パレットだけこの指定にしておけばよい。
+ * 作り直し: scripts/build-font-subset.py
+ */
+export const PARTS_FONT = "KatachiParts";

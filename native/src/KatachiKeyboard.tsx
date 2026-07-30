@@ -7,9 +7,15 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { OPERATORS, PRIMARY_CODES, RADICAL_PALETTE, type Engine } from "./engine";
+import {
+  DIFFICULT_COMPONENTS,
+  OPERATORS,
+  PRIMARY_CODES,
+  RADICAL_PALETTE,
+  type Engine,
+} from "./engine";
 import { OperatorIcon } from "./OperatorIcon";
-import { KANJI_FONT, type Theme } from "./theme";
+import { KANJI_FONT, PARTS_FONT, type Theme } from "./theme";
 
 type Tab = "shape" | "common" | "radical";
 
@@ -157,9 +163,69 @@ export function KatachiKeyboard({
         )}
 
         {tab === "radical" && (
-          <PartGrid parts={RADICAL_PALETTE} width={partW} theme={theme} onInsert={onInsert} />
+          <RadicalTab width={partW} theme={theme} onInsert={onInsert} />
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * 部首・偏旁タブ。既定は日本語向けに絞った RADICAL_PALETTE、
+ * 画数チップを選ぶと zi.tools の「難輸入部件」全541件をその画数ぶんだけ出す。
+ * 541件を一度に並べると探せないので、zi.tools と同じく画数で区切っている。
+ */
+function RadicalTab({
+  width,
+  theme,
+  onInsert,
+}: {
+  width: number;
+  theme: Theme;
+  onInsert: (s: string) => void;
+}) {
+  const [group, setGroup] = useState<string>("common");
+  const parts = useMemo(() => {
+    if (group === "common") return RADICAL_PALETTE;
+    return [...(DIFFICULT_COMPONENTS.find(g => g.strokes === group)?.parts ?? "")];
+  }, [group]);
+
+  const chips = [
+    { key: "common", label: "よく使う" },
+    ...DIFFICULT_COMPONENTS.map(g => ({ key: g.strokes, label: `${g.strokes}画` })),
+  ];
+
+  return (
+    <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRow}
+      >
+        {chips.map(c => (
+          <Pressable
+            key={c.key}
+            onPress={() => setGroup(c.key)}
+            style={[
+              styles.chip,
+              {
+                borderColor: group === c.key ? theme.accent : theme.border,
+                backgroundColor: group === c.key ? theme.accentBg : "transparent",
+              },
+            ]}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                color: group === c.key ? theme.accent : theme.sub,
+              }}
+            >
+              {c.label}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <PartGrid parts={parts} width={width} theme={theme} onInsert={onInsert} />
     </View>
   );
 }
@@ -200,7 +266,7 @@ function PartGrid({
             },
           ]}
         >
-          <Text style={{ fontFamily: KANJI_FONT, fontSize: 22, color: theme.text }}>{p}</Text>
+          <Text style={{ fontFamily: PARTS_FONT, fontSize: 22, color: theme.text }}>{p}</Text>
         </Pressable>
       ))}
     </View>
@@ -222,6 +288,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     marginLeft: 4,
+  },
+  chipRow: { flexDirection: "row", gap: 4, paddingBottom: 6 },
+  chip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GAP },
   key: {

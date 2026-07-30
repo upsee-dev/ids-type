@@ -8,37 +8,20 @@ import {
   useRef,
   useState,
 } from "react";
-import { Engine, type Result } from "@/lib/engine";
+import Link from "next/link";
+import { type Result } from "@/lib/engine";
+import { useEngine } from "@/lib/useEngine";
+import { DICT_ERROR, DICT_LOADING, SAMPLES } from "@/lib/labels";
 import { KatachiKeyboard } from "@/components/KatachiKeyboard";
 import { OperatorIcon } from "@/components/OperatorIcon";
-
-const SAMPLES = [
-  { q: "LR日月", hint: "明" },
-  { q: "UD宀子", hint: "字" },
-  { q: "OC囗玉", hint: "国" },
-  { q: "RU辶刀", hint: "辺" },
-  { q: "LR氵?", hint: "海…" },
-  { q: "日月", hint: "部品検索" },
-];
-
-const GRADE_LABEL: Record<number, string> = {
-  1: "小1",
-  2: "小2",
-  3: "小3",
-  4: "小4",
-  5: "小5",
-  6: "小6",
-  8: "常用",
-  9: "人名用",
-  10: "人名用",
-};
+import { KanjiGrid } from "@/components/KanjiGrid";
+import { CharDetail } from "@/components/CharDetail";
 
 /** タップでフォーカスを奪わない＝ソフトキーボードを閉じさせない */
 const keepFocus = (e: React.PointerEvent) => e.preventDefault();
 
 export default function Home() {
-  const [engine, setEngine] = useState<Engine | null>(null);
-  const [loadError, setLoadError] = useState(false);
+  const { engine, loadError } = useEngine();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[]>([]);
   const [mode, setMode] = useState("empty");
@@ -52,13 +35,6 @@ export default function Home() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
-
-  useEffect(() => {
-    fetch("/data/kanji-data.json")
-      .then((r) => r.json())
-      .then((raw) => setEngine(new Engine(raw)))
-      .catch(() => setLoadError(true));
-  }, []);
 
   // IME変換中(composing)は未確定文字で検索しない
   useEffect(() => {
@@ -150,13 +126,21 @@ export default function Home() {
                 読めない漢字を、見たまま打てる
               </span>
             </h1>
-            <button
-              onPointerDown={keepFocus}
-              onClick={() => setShowHelp((h) => !h)}
-              className="shrink-0 rounded-full border border-stone-300 px-2 py-0.5 text-[11px] text-stone-500 dark:border-stone-700 dark:text-stone-400"
-            >
-              使い方
-            </button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Link
+                href="/chars"
+                className="rounded-full border border-stone-300 px-2 py-0.5 text-[11px] text-stone-500 dark:border-stone-700 dark:text-stone-400"
+              >
+                収録一覧
+              </Link>
+              <button
+                onPointerDown={keepFocus}
+                onClick={() => setShowHelp((h) => !h)}
+                className="rounded-full border border-stone-300 px-2 py-0.5 text-[11px] text-stone-500 dark:border-stone-700 dark:text-stone-400"
+              >
+                使い方
+              </button>
+            </div>
           </div>
 
           <div className="mt-1.5 flex items-center gap-1.5">
@@ -220,7 +204,7 @@ export default function Home() {
 
           {!engine && !loadError && (
             <p className="py-10 text-center text-sm text-stone-500">
-              辞書データを読み込み中… (約0.8MB)
+              辞書データを読み込み中… (10万字・gzip 約0.8MB)
             </p>
           )}
           {loadError && (
@@ -269,51 +253,23 @@ export default function Home() {
             </p>
           )}
 
-          <div className="grid grid-cols-6 gap-1 sm:grid-cols-10">
-            {results.map((r) => (
-              <button
-                key={r.ch}
-                onPointerDown={keepFocus}
-                onClick={() => pick(r.ch)}
-                title={`${r.meta.on} ${r.meta.kun}`.trim()}
-                className={`kanji flex min-h-[48px] items-center justify-center rounded-lg border text-2xl leading-none active:bg-indigo-100 dark:active:bg-stone-700 ${
-                  r.exact
-                    ? "border-indigo-400 bg-indigo-50/60 dark:border-indigo-600 dark:bg-stone-900"
-                    : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900"
-                }`}
-              >
-                {r.ch}
-              </button>
-            ))}
-          </div>
+          <KanjiGrid
+            items={results}
+            onPick={pick}
+            onPointerDown={keepFocus}
+          />
 
           {selected && selMeta && (
-            <section className="mt-3 flex gap-3 rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-              <div className="kanji shrink-0 text-5xl leading-none">
-                {selected}
-              </div>
-              <div className="min-w-0 text-xs">
-                <p className="flex flex-wrap gap-x-3 gap-y-0.5">
-                  {selMeta.on && <span>音: {selMeta.on}</span>}
-                  {selMeta.kun && <span>訓: {selMeta.kun}</span>}
-                  {GRADE_LABEL[selMeta.grade] && (
-                    <span className="text-stone-500">
-                      {GRADE_LABEL[selMeta.grade]}
-                    </span>
-                  )}
-                </p>
-                {selDecomp.length > 0 && (
-                  <p className="kanji mt-1 break-all text-stone-500 dark:text-stone-400">
-                    {selDecomp.join("　")}
-                  </p>
-                )}
-              </div>
+            <section className="mt-3 rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+              <CharDetail ch={selected} meta={selMeta} decomposition={selDecomp} />
             </section>
           )}
 
           <footer className="mt-6 text-[10px] leading-relaxed text-stone-400 dark:text-stone-500">
-            入力方式は zi.tools の IDS 部品入力を参考にしています。分解データ:
-            CJKVI IDS Database (CHISE IDS Database 由来, GPLv2) / 漢字情報:
+            入力方式は zi.tools の IDS 部品入力を参考にしています。収録字は
+            zi.tools と同じ Unicode の全CJK漢字 102,980字 (統合漢字 URO・拡張A〜J
+            + 互換漢字)。分解データ: BabelStone IDS (Andrew West, 著作権主張なし)
+            / CHISE IDS Database / CJKVI IDS Database (GPLv2) / 漢字情報:
             KANJIDIC2 (EDRDG, CC BY-SA 4.0)。本アプリはプロトタイプです。
           </footer>
         </div>

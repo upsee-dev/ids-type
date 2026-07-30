@@ -1,0 +1,67 @@
+{
+  "$comment": "辞書の元データの出所。fetch.mjs がこれを読んで取得する。版・ライセンスの記録も兼ねる。url が単数なら1ファイル、urls が配列なら連結して1ファイルに保存する。",
+  "sources": [
+    {
+      "id": "babelstone",
+      "file": "ids/babelstone.txt",
+      "url": "https://babelstone.co.uk/CJK/IDS.TXT",
+      "title": "BabelStone IDS",
+      "author": "Andrew West (魏安)",
+      "unicodeVersion": "16.0",
+      "license": "作者が著作権を主張せず、用途・帰属の制限なしと明記",
+      "licenseUrl": "https://babelstone.co.uk/CJK/IDS.TXT",
+      "role": "IDSの土台。全97,680字。字源タグ(G/H/T/J/K/P/V)つきなので日本字体を選べる",
+      "encoding": "utf-8 (BOM付き・CRLF)"
+    },
+    {
+      "id": "chise",
+      "file": "ids/chise.txt",
+      "urls": [
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Basic.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-A.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-B-1.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-B-2.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-B-3.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-B-4.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-B-5.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-B-6.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-C.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-D.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-E.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-F.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-G.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-H.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-I.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Ext-J.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Compat.txt",
+        "https://raw.githubusercontent.com/chise/ids/master/IDS-UCS-Compat-Supplement.txt"
+      ],
+      "title": "CHISE IDS Database",
+      "unicodeVersion": "17.0",
+      "license": "GPLv2",
+      "licenseUrl": "https://gitlab.chise.org/CHISE/ids",
+      "role": "拡張Jの唯一の供給源(BabelStoneはUnicode 16.0で1字も持たない)。加えて他の表に分解が無い27字を埋める",
+      "note": "上流はブロックごとに18ファイルに分かれている。ソース単位で1ファイルにしたいので連結して保存する（各ファイルの ;; ヘッダも残すので由来は追える）"
+    },
+    {
+      "id": "cjkvi",
+      "file": "ids/cjkvi.txt",
+      "url": "https://raw.githubusercontent.com/cjkvi/cjkvi-ids/master/ids.txt",
+      "title": "CJKVI IDS Database",
+      "license": "GPLv2",
+      "licenseUrl": "https://github.com/cjkvi/cjkvi-ids",
+      "role": "KANJIDIC2収録字の日本字体([J]タグ)。従来の検索結果を変えないため最優先で上書きする"
+    },
+    {
+      "id": "kanjidic2",
+      "file": "kanjidic2/kanjidic2.xml.gz",
+      "url": "https://www.edrdg.org/kanjidic/kanjidic2.xml.gz",
+      "title": "KANJIDIC2",
+      "author": "EDRDG",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://www.edrdg.org/edrdg/licence.html",
+      "role": "読み・学年・頻度順位。ここに載っている13,108字が「日本の漢字」の定義",
+      "note": "展開後の kanjidic2.xml は15MBあるので .gitignore 済み。ビルド時に .gz から読む"
+    }
+  ]
+}

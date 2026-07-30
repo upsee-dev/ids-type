@@ -13,6 +13,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
+import { useFonts } from "expo-font";
 import { Engine, rawData, type Result } from "./src/engine";
 import { KatachiKeyboard } from "./src/KatachiKeyboard";
 import { OperatorIcon } from "./src/OperatorIcon";
@@ -26,6 +27,11 @@ const GRADE_LABEL: Record<number, string> = {
 const CAND_COLS = 6;
 
 export default function App() {
+  // 部品パレット用のサブセットフォント(拡張B〜Hの部品が□にならないように)。
+  // 29KBなので読み終わるのを待つ必要はない。読めていなくても OS の
+  // 標準フォントで描かれるだけなので、失敗しても画面は出す。
+  useFonts({ KatachiParts: require("./assets/fonts/KatachiParts.ttf") });
+
   return (
     <SafeAreaProvider>
       <Screen />
@@ -215,10 +221,19 @@ function Screen() {
                 {
                   backgroundColor: pressed ? t.accentBg : t.card,
                   borderColor: item.exact ? t.accent : t.border,
+                  // ext(KANJIDIC2 外の拡張漢字)は破線。端末フォントに無くて□になっても
+                  // 「読み込み失敗」ではなく「そういう字」だと分かるようにしている
+                  borderStyle: item.meta.ext ? "dashed" : "solid",
                 },
               ]}
             >
-              <Text style={{ fontFamily: KANJI_FONT, fontSize: 26, color: t.text }}>
+              <Text
+                style={{
+                  fontFamily: KANJI_FONT,
+                  fontSize: 26,
+                  color: item.meta.ext ? t.sub : t.text,
+                }}
+              >
                 {item.ch}
               </Text>
             </Pressable>
@@ -243,6 +258,8 @@ function Screen() {
                   selMeta.on && `音: ${selMeta.on}`,
                   selMeta.kun && `訓: ${selMeta.kun}`,
                   GRADE_LABEL[selMeta.grade],
+                  selMeta.ext &&
+                    `拡張漢字 (U+${selected.codePointAt(0)!.toString(16).toUpperCase()}・日本語の読みデータなし)`,
                 ]
                   .filter(Boolean)
                   .join("　")}

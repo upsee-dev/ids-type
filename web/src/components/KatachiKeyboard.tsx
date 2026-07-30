@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { OPERATORS, PRIMARY_CODES, RADICAL_PALETTE, type Engine } from "@/lib/engine";
+import {
+  DIFFICULT_COMPONENTS,
+  OPERATORS,
+  PRIMARY_CODES,
+  RADICAL_PALETTE,
+  type Engine,
+} from "@/lib/engine";
 import { OperatorIcon } from "./OperatorIcon";
 
 type Tab = "shape" | "common" | "radical";
@@ -101,10 +107,68 @@ export function KatachiKeyboard({
             <PartGrid parts={common} onInsert={onInsert} empty="辞書を読み込み中…" />
           )}
 
-          {tab === "radical" && <PartGrid parts={RADICAL_PALETTE} onInsert={onInsert} />}
+          {tab === "radical" && <RadicalTab onInsert={onInsert} />}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * 部首・偏旁タブ。既定は日本語向けに絞った RADICAL_PALETTE、
+ * 画数チップを選ぶと zi.tools の「難輸入部件」全541件をその画数ぶんだけ出す。
+ * 541件を一度に並べると探せないので、zi.tools と同じく画数で区切っている。
+ */
+function RadicalTab({ onInsert }: { onInsert: (s: string) => void }) {
+  const [group, setGroup] = useState<string>("common");
+  const parts = useMemo(() => {
+    if (group === "common") return RADICAL_PALETTE;
+    return [...(DIFFICULT_COMPONENTS.find((g) => g.strokes === group)?.parts ?? "")];
+  }, [group]);
+
+  return (
+    <div>
+      <div className="mb-1 flex gap-1 overflow-x-auto pb-0.5">
+        <StrokeChip
+          active={group === "common"}
+          onClick={() => setGroup("common")}
+          label="よく使う"
+        />
+        {DIFFICULT_COMPONENTS.map((g) => (
+          <StrokeChip
+            key={g.strokes}
+            active={group === g.strokes}
+            onClick={() => setGroup(g.strokes)}
+            label={`${g.strokes}画`}
+          />
+        ))}
+      </div>
+      <PartGrid parts={parts} onInsert={onInsert} />
+    </div>
+  );
+}
+
+function StrokeChip({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onPointerDown={keepFocus}
+      onClick={onClick}
+      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] whitespace-nowrap ${
+        active
+          ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-stone-900 dark:text-indigo-300"
+          : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

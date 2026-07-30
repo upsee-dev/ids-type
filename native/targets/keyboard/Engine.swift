@@ -1,0 +1,188 @@
+import Foundation
+
+/// 検索エンジン。core/engine.ts の Swift 移植。
+///
+/// 入力(かたちコード＋部品) → 候補漢字。やることは2つだけ:
+///   構造検索  … 入力に操作子が含まれる。IDS構文木どうしを突き合わせる
+///   部品検索  … 操作子なし。その部品を含む字を集める(再帰的な部品閉包)
+///
+/// TypeScript/Kotlin 版と候補の並びまで一致させること(同点は辞書の並び順で決まる)。
+final class Engine {
+
+    struct Hit {
+        let index: Int
+        let ch: String
+        let exact: Bool
+    }
+
+    enum Mode { case empty, structure, parts }
+
+    struct Result {
+        let hits: [Hit]
+        let mode: Mode
+    }
+
+    /// 閉包キャッシュの入れ物。
+    /// TypeScript/Kotlin では Set が参照型なので「先に空で登録 → 再帰しながら育てる」
+    /// という循環ガードが成立する。Swift の Set は値型なので同じ書き方だと
+    /// 再帰先に空のコピーが渡り、相互参照する部品の閉包が取りこぼされる
+    /// (LR日月 の候補が 76件→47件 に減る)。参照型で包んで挙動を合わせる。
+    private final class ClosureBox {
+        var set = Set<String>()
+    }
+
+    private let dict: Dict
+    private var treeCache: [String: Ids.Node?] = [:]
+    private var closureCache: [String: ClosureBox] = [:]
+
+    init(dict: Dict) { self.dict = dict }
+
+    // MARK: - 分解木
+
+    private func tree(_ ch: String) -> Ids.Node? {
+        if let c = treeCache[ch] { return c }
+        let s = dict.ids(of: ch)
+        let t = (s?.isEmpty ?? true) ? nil : Ids.parse(s!)
+        treeCache[ch] = t
+        return t
+    }
+
+    // MARK: - 部品の閉包(自身＋再帰的に到達できる全部品)
+
+    func closure(_ ch: String) -> Set<String> {
+        let c = Ids.norm(ch)
+        if let hit = closureCache[c] { return hit.set }
+        let box = ClosureBox()
+        closureCache[c] = box          // 循環ガード。先に置く
+        add(c, into: box)
+        return box.set
+    }
+
+    private func add(_ x: String, into box: ClosureBox) {
+        let n = Ids.norm(x)
+        if box.set.insert(n).inserted {
+            for s in subClosure(n) { box.set.insert(s) }
+        }
+        if n.count == 1, let f = n.first, let soft = Ids.soft[f] {
+            box.set.insert(String(soft))
+        }
+    }
+
+    private func subClosure(_ ch: String) -> Set<String> {
+        guard let s = dict.ids(of: ch), !s.isEmpty else { return [] }
+        var out = Set<String>()
+        for t in s {
+            if Ids.isIdc(t) { continue }
+            let n = Ids.norm(String(t))
+            if n == ch { continue }
+            out.formUnion(closure(n))
+        }
+        return out
+    }
+
+    private func closureOfNode(_ n: Ids.Node) -> Set<String> {
+        switch n {
+        case .leaf(let ch):
+            return ch == String(Ids.wild) ? [] : closure(ch)
+        case .op(_, let kids):
+            var out = Set<String>()
+            for k in kids { out.formUnion(closureOfNode(k)) }
+            return out
+        }
+    }
+
+    // MARK: - 構造マッチ: 2=完全一致, 1=包含, 0=不一致
+
+    private func match(_ q: Ids.Node, _ c: Ids.Node, _ depth: Int = 0) -> Int {
+        if depth > 12 { return 0 }
+        switch q {
+        case .leaf(let qch):
+            if qch == String(Ids.wild) { return 2 }
+            switch c {
+            case .leaf(let cch):
+                if qch == cch { return 2 }
+                let qs = qch.count == 1 ? Ids.soft[qch.first!].map(String.init) : nil
+                let cs = cch.count == 1 ? Ids.soft[cch.first!].map(String.init) : nil
+                if qs == cch || cs == qch { return 1 }
+                return closure(cch).contains(qch) ? 1 : 0
+            case .op:
+                return closureOfNode(c).contains(qch) ? 1 : 0
+            }
+        case .op(let qop, let qkids):
+            switch c {
+            case .leaf(let cch):
+                // 葉を展開して再帰(例: 果 → ⿱田木)
+                guard let sub = tree(cch), case .op = sub else { return 0 }
+                return match(q, sub, depth + 1) != 0 ? 1 : 0
+            case .op(let cop, let ckids):
+                guard qop == cop, qkids.count == ckids.count else { return 0 }
+                var best = 2
+                for i in qkids.indices {
+                    let m = match(qkids[i], ckids[i], depth + 1)
+                    if m == 0 { return 0 }
+                    best = min(best, m)
+                }
+                return best
+            }
+        }
+    }
+
+    // MARK: - 並び順
+    // 日本語入力なので、KANJIDIC2 に無い字は必ず日本の漢字の後ろへ。
+    // 素点の最大(500000+300000+27000)より大きい下駄を履かせて確実に分離する。
+    private func score(_ i: Int, _ exact: Bool) -> Int {
+        var s = exact ? 0 : 500_000
+        let g = dict.grade(at: i)
+        s += (g >= 1 && g <= 6 ? g : g == 8 ? 7 : (g == 9 || g == 10) ? 8 : 10) * 30_000
+        let f = dict.freq(at: i)
+        s += f > 0 ? f * 10 : 27_000
+        if dict.isExt(i) { s += 2_000_000 }
+        return s
+    }
+
+    /// 入力文字列から候補を返す
+    func search(_ input: String, limit: Int = 60) -> Result {
+        let compiled = Ids.compile(input)
+        if compiled.isEmpty { return Result(hits: [], mode: .empty) }
+
+        let hasIdc = compiled.contains(where: { Ids.isIdc($0) })
+        var hits: [Hit] = []
+        hits.reserveCapacity(limit * 2)
+
+        // 互換漢字(U+F900〜)は統合漢字と正規等価で、見た目も同じ。
+        // Swift の Set<String> は正規等価で判定するので、これに入れるだけで
+        // 「同じ字が2つ並ぶ」のを防げる。辞書は日本語の字を先に読むので、
+        // 残るのは KANJIDIC2 側(読み・学年つき)になる。
+        var seen = Set<String>()
+
+        if hasIdc {
+            guard let q = Ids.parse(compiled), case .op = q else {
+                return Result(hits: [], mode: .empty)
+            }
+            for i in 0..<dict.count {
+                let ch = dict.char(at: i)
+                guard let t = tree(ch), case .op = t else { continue }
+                let m = match(q, t)
+                if m != 0, seen.insert(ch).inserted {
+                    hits.append(Hit(index: i, ch: ch, exact: m == 2))
+                }
+            }
+            hits.sort { score($0.index, $0.exact) < score($1.index, $1.exact) }
+            return Result(hits: Array(hits.prefix(limit)), mode: .structure)
+        }
+
+        // 部品包含検索(操作子なし)
+        let want = compiled.filter { $0 != Ids.wild }.map { Ids.norm(String($0)) }
+        if want.isEmpty { return Result(hits: [], mode: .empty) }
+        for i in 0..<dict.count {
+            let ch = dict.char(at: i)
+            if want.count == 1 && ch == want[0] { continue } // 自分自身は除外
+            let cl = closure(ch)
+            if want.allSatisfy({ cl.contains($0) }), seen.insert(ch).inserted {
+                hits.append(Hit(index: i, ch: ch, exact: false))
+            }
+        }
+        hits.sort { score($0.index, $0.exact) < score($1.index, $1.exact) }
+        return Result(hits: Array(hits.prefix(limit)), mode: .parts)
+    }
+}

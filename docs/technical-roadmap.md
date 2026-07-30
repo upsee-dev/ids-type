@@ -32,20 +32,27 @@ Expo/RNやElectron/Tauriが担えるのは「コンテナーアプリ」（設�
 
 - `core/` … エンジン＋辞書＋キーボード定義。Web版・アプリ版が同じものを参照する
 - `web/` … Next.jsのWebプロトタイプ
-- `native/` … Expoアプリ（=下記の「コンテナーアプリ」の器）。**単体アプリとして漢字を検索・コピーできる状態**。キーボード拡張はまだ入っていない
+- `native/` … Expoアプリ（コンテナーアプリ）＋**Android のシステムキーボード本体**
+  - `native/ime/android/` … Kotlin の `InputMethodService`。エンジンも Kotlin へ移植済み（Ids/Dict/Engine/KeyboardView）
+  - `native/plugins/withKatachiIme.js` … `android/` が prebuild の生成物なので、毎回ここから注入する
+  - **エミュレータで動作確認済み**: Settings の検索欄に `左右→日→月` → `明` を確定できる
+  - iOS の Keyboard Extension は未着手
 
 アプリ内キーボード（かたち／よく使う部品／部首）はWeb版・アプリ版で同じ設計にしてあるので、そのままキーボード拡張のUI設計に流用できる。
 
 ## Phase 1: スマホIME
 
-### iOS
-- **キーボード本体**: Swift + Keyboard Extension。メモリ上限が厳しい（目安60〜80MB）ため、拡張内にRNを入れない。エンジンをSwift移植し、辞書JSONはApp Groupで共有。
-- **コンテナーアプリ**: Expo/RN でOK。`npx expo prebuild` + config plugin（または `@bacons/apple-targets`）でExtensionターゲットを追加する。
-- **審査対策**: ネットワーク不要の設計にして「フルアクセス」を要求しない（プライバシー面の審査・訴求で有利）。
+### iOS — **ビルド可能な状態まで完了**
+- **キーボード本体**: Swift + Keyboard Extension（`native/targets/keyboard/`）。`@bacons/apple-targets` でターゲット追加
+- **メモリ**: 上限約60MB。辞書は UTF-8 の `Data` 1本＋バイト範囲(Int32)の配列で持ち、String 化は表示分だけ。App Group ではなく拡張に同梱（ネットワーク・共有領域とも不要にするため）
+- **審査対策**: `RequestsOpenAccess = false`。フルアクセスを要求しない
+- 残: 実機での動作確認、App Store Connect のアプリレコード作成、提出
 
-### Android
-- **キーボード本体**: Kotlin + InputMethodService（UIはJetpack Compose可）。
-- Expoを使う場合はprebuild後にconfig pluginで `AndroidManifest.xml` にserviceを追加。コンテナーはRNのままでよい。
+### Android — **完了**
+- **キーボード本体**: Kotlin + InputMethodService。UIは素の View（Compose を足すと APK が膨らむため）
+- config plugin (`withKatachiIme.js`) が prebuild 後に Kotlin・リソース・辞書を注入し、`AndroidManifest.xml` に service を追加する
+- 辞書は tsv 直読み。日本語13,108字を先に読み、拡張漢字は後追いで読む（キーボードの初動を待たせない）
+- 残: 長押しでの連続削除、候補の横スクロール位置保持、ダークテーマ対応
 
 ## Phase 2: PC（質問への回答）
 
@@ -53,7 +60,7 @@ Expo/RNやElectron/Tauriが担えるのは「コンテナーアプリ」（設�
 
 1. **Rimeスキーマ（推奨・最短）**
    [Rime](https://rime.im/)はオープンソースのIMEプラットフォームで、macOS（Squirrel）・Windows（Weasel）・Linux（ibus/fcitx-rime)に対応。入力方式はYAMLスキーマ＋辞書テーブルで定義でき、ネイティブコード不要。
-   - `build-data.mjs` を拡張し「IDSコード列 → 漢字」の辞書テーブル（例: `lr日月 → 明`）を生成すればよい
+   - `build-data.mts` を拡張し「IDSコード列 → 漢字」の辞書テーブル（例: `lr日月 → 明`）を生成すればよい
    - 数日で全PC対応が得られる。制約はユーザーがRimeをインストールする必要があること（専門職アーリーアダプター向けには許容範囲）
 2. **macOS ネイティブ**: IMKit + Swift。Rime版で検証済みのUXを移植
 3. **Windows ネイティブ**: TSF。C++が伝統だが、新規ならRust + windows-rs も現実的。TSFは難所が多いので最後
@@ -70,11 +77,16 @@ Expo/RNやElectron/Tauriが担えるのは「コンテナーアプリ」（設�
 
 | データ | ライセンス | 対応 |
 |---|---|---|
-| CJKVI IDS（分解データ） | GPLv2 | プロトタイプ限定。製品版は (a) CHISE/BabelStoneの条件整理 か (b) 常用・人名用中心に自前でIDSデータを再構築（1〜2万字規模なら現実的） |
+| BabelStone IDS（分解データの土台・97,680字） | 作者(Andrew West)が著作権を主張せず、personal/commercial とも許諾・帰属不要と明記 | **そのまま商用可**。分解データの主軸をここへ移した |
+| CHISE IDS（拡張G〜J） | GPLv2 | 拡張Jのみ依存（Unicode 17.0 追加分で BabelStone 未対応のため）。BabelStone の 17.0 対応待ち、それまでは `IDS_SOURCE=babelstone` で外せる |
+| CJKVI IDS（KANJIDIC2収録字の日本字体） | GPLv2 | 既存の検索結果を変えないために優先しているだけで、外しても BabelStone の J字源タグで代替できる（`IDS_SOURCE=babelstone`）。差分は約2,270字 |
 | KANJIDIC2（読み・学年・頻度） | CC BY-SA 4.0（EDRDG） | 出典表示を継続。商用可 |
+
+製品版で GPLv2 を完全に外す場合は `IDS_SOURCE=babelstone` でビルドし、拡張Jの分解のみ別途用意する（IRGの提出資料由来のIDSを自前で起こすか、BabelStoneの更新を待つ）。
 
 ## 既知の制約（プロトタイプ）
 
 - Unicode 15.1で追加されたIDC（⿼⿽⿾⿿㇯ = OL/LU/MI/RO/SU）は分解データ側にほぼ出現せず、フォントによっては字形が出ない（ボタンは仕様準拠のため設置済み）
-- 未符号化部品（CDP外字）はデータ上①②③…のプレースホルダで表現され、検索キーには使えない
-- 候補は上位200件で打ち切り。異体字・旧字体の網羅はBabelStone導入時に拡充予定
+- 未符号化部品はデータ上プレースホルダ（cjkvi由来は①②③…、BabelStone/CHISE由来は？）で表現され、検索キーには使えない
+- 候補は上位200件で打ち切り
+- 拡張B以降の約8万字は端末に対応フォントが無いと □ で表示される。システムIME化のときは、候補ビューだけでも全字入りフォント（BabelStone Han や Noto Serif CJK の拡張版）を同梱するか、候補を字形SVGで描くかの判断が要る
