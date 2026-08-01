@@ -1,0 +1,30 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "production": {
+      "channel": "production",
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "preview": {
+      "channel": "preview",
+      "distribution": "internal"
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "upsee.haruki@gmail.com",
+        "ascAppId": "6796351470",
+        "appleTeamId": "W8P3V5NG4R"
+      },
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
+}

@@ -45,6 +45,31 @@
       ],
       "expo-font",
       "./plugins/withKatachiIme"
-    ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "com.upsee.idskanjitype.keyboard",
+                  "targetName": "keyboard"
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "f16a9cca-5309-499e-8324-c46580f7942e"
+      }
+    },
+    "owner": "upsee"
   }
 }
