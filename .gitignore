@@ -28,3 +28,10 @@ assets-archive/fonts/Plangothic*.ttf
 web/out/
 web/dist/
 native/dist/
+
+# ストア自動化の認証情報。絶対にコミットしないこと
+# （ASC の秘密鍵と Google Play のサービスアカウント）
+store/AuthKey/
+*.p8
+*-service-account*.json
+

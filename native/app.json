@@ -2,7 +2,7 @@
   "expo": {
     "name": "カタチ入力",
     "slug": "ids-kanji-type",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "ids-kanji-type",
@@ -13,11 +13,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.upsee.idskanjitype",
-      "appleTeamId": "W8P3V5NG4R"
+      "appleTeamId": "W8P3V5NG4R",
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.upsee.idskanjitype",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#FBFBF9",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -44,10 +45,11 @@
         }
       ],
       "expo-font",
-      "./plugins/withKatachiIme"
+      "./plugins/withKatachiIme",
+      "./plugins/withReleaseSigning"
     ],
     "updates": {
-      "url": "https://u.expo.dev/",
+      "url": "https://u.expo.dev/f16a9cca-5309-499e-8324-c46580f7942e",
       "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": {
