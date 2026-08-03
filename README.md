@@ -1,6 +1,9 @@
-# カタチ入力（仮称）
+# IDS漢字入力
 
 読めない漢字を、見たまま打てる。IDS（漢字の空間構造記述）コード＋部品で漢字を検索・入力する日本語キーボードプロジェクト。入力方式は [zi.tools](https://zi.tools/?secondary=ids) のIDS部品入力を日本語市場向けに再設計したもの。
+企画立案：西岡佑都
+アプリ制作＆企画伴走：春木俊明
+2026.07
 
 ```
 LR日月 → 明     UD宀子 → 字     OC囗玉 → 国     RU辶刀 → 辺
@@ -145,7 +148,10 @@ cd ios && xcodebuild -workspace app.xcworkspace -scheme app \
 
 #### TestFlight へ出す
 
-配布署名済みの IPA まではコマンドラインで作れる。
+配布署名済みの IPA を作って上げるところまで、コマンドラインで完結する
+（`ExportOptions.plist` は `native/` 直下に置いてある。プロファイルは持っていないので
+`-allowProvisioningUpdates` と ASC の APIキーで自動生成させる）。
+アップロード前に `--validate-app` を通しておくと、弾かれる原因を先に潰せる。
 
 ```bash
 cd native && npx expo prebuild -p ios --clean
@@ -221,7 +227,23 @@ npm run build:android
 - JDK 17 … `/opt/homebrew/opt/openjdk@17`（`/usr/libexec/java_home` には未登録なので `JAVA_HOME` を直接指定している）
 - Android SDK … `~/Library/Android/sdk`
 
-生成されるAPKはデバッグ用キーストア署名。端末にインストールして試す用途はこれでよい。ストア提出時は本番キーストアでの署名が別途必要。
+生成されるAPKは端末にインストールして試す用途のもの。ストアに出すのは AAB のほうで、
+`withReleaseSigning` プラグインが `store/AuthKey/keystore.properties` を読んで
+アップロード鍵で署名する（鍵が無いとデバッグ署名のままになり Play に弾かれる）。
+
+### Google Play に出す（ローカルビルド → 提出まで）
+
+```bash
+cd native && npx expo prebuild -p android --clean --no-install
+cd android && ./gradlew bundleRelease          # -> app/build/outputs/bundle/release/app-release.aab
+cd ../.. && python3 scripts/submit-play.py \
+  native/android/app/build/outputs/bundle/release/app-release.aab "リリースノート"
+```
+
+`submit-play.py` は Play Developer API を直接叩く（`store/AuthKey/GPC_AuthKey.json`）。
+edit を作る → AAB を上げる → internal トラックに割り当てる → commit の順で、
+commit するまで Play 側には反映されないので途中で失敗しても中途半端にならない。
+製品版へはそこから Play Console で昇格させる。
 
 ### iOS
 

@@ -26,6 +26,11 @@ data-src/kanjidic2/kanjidic2.xml
 # 持たない）ので、リポジトリに入れておかないとビルドが ☒ だらけになる。
 assets-archive/fonts/Plangothic*.ttf
 
+# iOSキーボード拡張へ複製されるフォント。実体は native/assets/fonts/ にあり、
+# prebuild のたびに withKatachiIme.js が置き直す。追跡すると同じ21.7MBが
+# リポジトリに二重に入るだけなので持たない
+native/targets/keyboard/KatachiExt*.ttf
+
 # 静的書き出し（EAS Hosting へのデプロイ時に作る一時物）
 web/out/
 web/dist/

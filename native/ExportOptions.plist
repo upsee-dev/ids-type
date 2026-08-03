@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- App Store Connect へ上げる IPA を書き出す設定。
+         ios/ は prebuild の生成物なのでここ(native/直下)に置いて -exportOptionsPlist で渡す。
+         プロファイルは持っていないので、xcodebuild に
+         -allowProvisioningUpdates と ASC の APIキーを渡して自動生成させる。 -->
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>teamID</key>
+    <string>W8P3V5NG4R</string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+    <key>destination</key>
+    <string>export</string>
+    <!-- ビットコードは廃止済み。シンボルは TestFlight のクラッシュ解析に要る -->
+    <key>uploadSymbols</key>
+    <true/>
+    <key>manageAppVersionAndBuildNumber</key>
+    <false/>
+  </dict>
+</plist>
