@@ -21,8 +21,22 @@ export class Engine {
   private closureCache = new Map<string, Set<string>>();
 
   constructor(raw: RawData) {
-    for (const [ch, [ids, grade, freq, on, kun]] of Object.entries(raw.chars)) {
-      this.chars.set(ch, { ids, grade, freq, on, kun, ext: false });
+    for (const [
+      ch,
+      [ids, grade, freq, on, kun, strokes, rad, meaning],
+    ] of Object.entries(raw.chars)) {
+      this.chars.set(ch, {
+        ids,
+        grade,
+        freq,
+        on,
+        kun,
+        // 旧形式の辞書(5要素)でも動くように既定値を入れる
+        strokes: strokes ?? 0,
+        rad: rad ?? 0,
+        meaning: meaning ?? "",
+        ext: false,
+      });
       if (ids) this.decompMap.set(ch, ids);
     }
     // ext も検索候補。chars のあとに入れるので、同点のときは KANJIDIC2 側が先に並ぶ
@@ -34,6 +48,9 @@ export class Engine {
         freq: 0,
         on: "",
         kun: "",
+        strokes: 0,
+        rad: 0,
+        meaning: "",
         ext: true,
       });
       if (ids) this.decompMap.set(ch, ids);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -13,11 +14,24 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
-import { useFonts } from "expo-font";
-import { Engine, rawData, type Result } from "./src/engine";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  codePointLabel,
+  Engine,
+  radicalChar,
+  rawData,
+  THEMES,
+  type Result,
+} from "./src/engine";
 import { KatachiKeyboard } from "./src/KatachiKeyboard";
 import { OperatorIcon } from "./src/OperatorIcon";
-import { KANJI_FONT, useTheme } from "./src/theme";
+import { AUTO_THEME, fontFor, INPUT_FONT, KANJI_FONT, useTheme } from "./src/theme";
+import {
+  haptic,
+  HAPTIC_LEVELS,
+  setHapticLevel,
+  type HapticLevel,
+} from "./src/feedback";
 
 const GRADE_LABEL: Record<number, string> = {
   1: "小1", 2: "小2", 3: "小3", 4: "小4", 5: "小5", 6: "小6",
@@ -27,11 +41,9 @@ const GRADE_LABEL: Record<number, string> = {
 const CAND_COLS = 6;
 
 export default function App() {
-  // 部品パレット用のサブセットフォント(拡張B〜Hの部品が□にならないように)。
-  // 29KBなので読み終わるのを待つ必要はない。読めていなくても OS の
-  // 標準フォントで描かれるだけなので、失敗しても画面は出す。
-  useFonts({ KatachiParts: require("./assets/fonts/KatachiParts.ttf") });
-
+  // 拡張B〜Jの字を描くフォントは app.json の expo-font プラグインで
+  // 静的にバンドルしている(起動時の読み込み待ちが無く、Android では
+  // システムIME からも同じ1部を読める)。ここでの読み込みは要らない。
   return (
     <SafeAreaProvider>
       <Screen />
@@ -39,8 +51,63 @@ export default function App() {
   );
 }
 
+/**
+ * 漢字を並べて描く。端末の標準フォントに無い字(拡張B〜J)は同梱フォントに
+ * 回す必要があり、React Native には unicode-range が無いので1字ずつ分ける。
+ */
+function Kanji({
+  text,
+  size,
+  color,
+}: {
+  text: string;
+  size: number;
+  color: string;
+}) {
+  return (
+    <Text style={{ fontSize: size, color }}>
+      {[...text].map((ch, i) => (
+        <Text key={i} style={{ fontFamily: fontFor(ch) }}>
+          {ch}
+        </Text>
+      ))}
+    </Text>
+  );
+}
+
+const THEME_STORAGE_KEY = "katachi.theme";
+const HAPTIC_STORAGE_KEY = "katachi.haptic";
+
 function Screen() {
-  const t = useTheme();
+  // 着せ替え。既定は「おまかせ」(端末のライト/ダーク設定に追従)
+  const [themeKey, setThemeKey] = useState(AUTO_THEME);
+  const [showThemes, setShowThemes] = useState(false);
+  // 触覚の強さ。モジュール側は再描画に関係しないので値を渡すだけ
+  const [hapticLevel, setLevel] = useState<HapticLevel>("normal");
+  useEffect(() => {
+    AsyncStorage.multiGet([THEME_STORAGE_KEY, HAPTIC_STORAGE_KEY])
+      .then(([[, theme], [, level]]) => {
+        if (theme) setThemeKey(theme);
+        if (level) {
+          setLevel(level as HapticLevel);
+          setHapticLevel(level as HapticLevel);
+        }
+      })
+      .catch(() => {});
+  }, []);
+  const pickTheme = (key: string) => {
+    haptic("toggle");
+    setThemeKey(key);
+    AsyncStorage.setItem(THEME_STORAGE_KEY, key).catch(() => {});
+  };
+  const pickHaptic = (next: HapticLevel) => {
+    setLevel(next);
+    setHapticLevel(next); // 先に反映してから鳴らす＝選んだ強さを その場で試せる
+    haptic("commit");
+    AsyncStorage.setItem(HAPTIC_STORAGE_KEY, next).catch(() => {});
+  };
+
+  const t = useTheme(themeKey);
   const { height } = useWindowDimensions();
 
   const [engine, setEngine] = useState<Engine | null>(null);
@@ -54,6 +121,7 @@ function Screen() {
   const [osKeyboard, setOsKeyboard] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
+  const outputScroll = useRef<ScrollView>(null);
   const caret = useRef({ start: 0, end: 0 });
   const [forceSel, setForceSel] = useState<{ start: number; end: number } | null>(null);
 
@@ -63,12 +131,20 @@ function Screen() {
     return () => clearTimeout(id);
   }, []);
 
+  // 「該当なし」に落ちた瞬間だけ1回警告を返す。候補が0のあいだ打つたびに
+  // 鳴らすとうるさいので、0でなかった状態からの変わり目でだけ出す
+  const wasEmpty = useRef(false);
+
   useEffect(() => {
     if (!engine) return;
     const id = setTimeout(() => {
       const found = engine.search(query);
       setResults(found.results);
       setMode(found.mode);
+      const nowEmpty =
+        !!query && found.mode !== "empty" && found.results.length === 0;
+      if (nowEmpty && !wasEmpty.current) haptic("warn");
+      wasEmpty.current = nowEmpty;
     }, 120);
     return () => clearTimeout(id);
   }, [engine, query]);
@@ -110,8 +186,19 @@ function Screen() {
   const copy = async () => {
     if (!output) return;
     await Clipboard.setStringAsync(output);
+    haptic("success"); // 画面を見ていなくてもコピーできたと分かる
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
+  };
+
+  // 選択中の1字だけをコピーする(出力欄とは別。詳細パネルのボタンから使う)
+  const [charCopied, setCharCopied] = useState(false);
+  const copySelected = async () => {
+    if (!selected) return;
+    await Clipboard.setStringAsync(selected);
+    haptic("success");
+    setCharCopied(true);
+    setTimeout(() => setCharCopied(false), 1200);
   };
 
   const selMeta = selected && engine ? engine.meta(selected) : undefined;
@@ -126,24 +213,124 @@ function Screen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={["top", "bottom"]}>
       <StatusBar style={t.dark ? "light" : "dark"} />
 
+      {/* 「あ」で端末のキーボードに切り替えたとき、下段の入力欄が
+          キーボードに隠れて打っている文字が見えなくならないよう持ち上げる。
+          Android は OS の adjustResize が同じことをするので iOS だけ */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+
       {/* ── 上段: タイトル + 出力(確定テキスト) ── */}
       <View style={[s.header, { backgroundColor: t.card, borderBottomColor: t.border }]}>
         <View style={s.titleRow}>
           <Text style={[s.title, { color: t.text }]}>カタチ入力</Text>
-          <Text style={[s.subtitle, { color: t.faint }]}>読めない漢字を、見たまま打てる</Text>
+          <Text style={[s.subtitle, { color: t.faint, flex: 1 }]} numberOfLines={1}>
+            読めない漢字を、見たまま打てる
+          </Text>
+          <Pressable
+            onPressIn={() => haptic("toggle")}
+            onPress={() => setShowThemes(v => !v)}
+            hitSlop={8}
+            accessibilityLabel="着せ替え"
+            style={[
+              s.themeBtn,
+              { borderColor: showThemes ? t.accent : t.border },
+            ]}
+          >
+            <Text style={{ fontSize: 13 }}>🎨</Text>
+          </Pressable>
         </View>
+
+        {showThemes && (
+          <View style={s.settingRow}>
+            <Text style={{ fontSize: 11, color: t.faint }}>触覚</Text>
+            {HAPTIC_LEVELS.map(h => (
+              <Pressable
+                key={h.key}
+                onPress={() => pickHaptic(h.key)}
+                style={[
+                  s.themeChip,
+                  {
+                    borderColor: hapticLevel === h.key ? t.accent : t.border,
+                    backgroundColor:
+                      hapticLevel === h.key ? t.accentBg : "transparent",
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: hapticLevel === h.key ? t.accent : t.sub,
+                  }}
+                >
+                  {h.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {showThemes && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.themeRow}
+          >
+            {[
+              { key: AUTO_THEME, label: "おまかせ", swatch: null as string | null },
+              ...THEMES.map(d => ({ key: d.key, label: d.label, swatch: d.colors.accent })),
+            ].map(item => (
+              <Pressable
+                key={item.key}
+                onPress={() => pickTheme(item.key)}
+                style={[
+                  s.themeChip,
+                  {
+                    borderColor: themeKey === item.key ? t.accent : t.border,
+                    backgroundColor: themeKey === item.key ? t.accentBg : "transparent",
+                  },
+                ]}
+              >
+                {item.swatch && (
+                  <View style={[s.swatch, { backgroundColor: item.swatch }]} />
+                )}
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: themeKey === item.key ? t.accent : t.sub,
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
         <View style={s.row}>
-          <TextInput
-            value={output}
-            editable={false}
-            placeholder="ここに確定した文字が入ります"
-            placeholderTextColor={t.faint}
+          {/* 確定テキストは読むだけなので Text で組む。TextInput と違って
+              1字ずつフォントを選べる＝拡張漢字が ☒ にならない */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            ref={outputScroll}
+            onContentSizeChange={() => outputScroll.current?.scrollToEnd({ animated: false })}
             style={[
               s.field,
-              { fontFamily: KANJI_FONT, color: t.text, borderColor: t.border, backgroundColor: t.bg },
+              { borderColor: t.border, backgroundColor: t.bg },
             ]}
-          />
+            contentContainerStyle={s.outputInner}
+          >
+            {output ? (
+              <Kanji text={output} size={18} color={t.text} />
+            ) : (
+              <Text style={{ fontSize: 18, color: t.faint }}>
+                ここに確定した文字が入ります
+              </Text>
+            )}
+          </ScrollView>
           <Pressable
+            onPressIn={() => haptic("delete")}
             onPress={() => setOutput(o => [...o].slice(0, -1).join(""))}
             style={[s.smallBtn, { borderColor: t.border }]}
           >
@@ -201,6 +388,8 @@ function Screen() {
           numColumns={CAND_COLS}
           keyExtractor={r => r.ch}
           keyboardShouldPersistTaps="always"
+          // 候補を眺めたいときはスクロールで端末のキーボードを引っ込められる
+          keyboardDismissMode="on-drag"
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8, gap: 4 }}
           columnWrapperStyle={{ gap: 4 }}
           ListEmptyComponent={
@@ -212,9 +401,11 @@ function Screen() {
           }
           renderItem={({ item }) => (
             <Pressable
+              onPressIn={() => haptic("commit")}
               onPress={() => {
                 setOutput(o => o + item.ch);
                 setSelected(item.ch);
+                setCharCopied(false);
               }}
               style={({ pressed }) => [
                 s.candidate,
@@ -229,7 +420,7 @@ function Screen() {
             >
               <Text
                 style={{
-                  fontFamily: KANJI_FONT,
+                  fontFamily: fontFor(item.ch),
                   fontSize: 26,
                   color: item.meta.ext ? t.sub : t.text,
                 }}
@@ -243,32 +434,68 @@ function Screen() {
         {selected && selMeta && (
           <ScrollView
             horizontal={false}
-            style={{ maxHeight: 96 }}
+            style={{ maxHeight: 132 }}
             contentContainerStyle={[
               s.detail,
               { backgroundColor: t.card, borderColor: t.border },
             ]}
           >
-            <Text style={{ fontFamily: KANJI_FONT, fontSize: 44, color: t.text }}>
+            <Text style={{ fontFamily: fontFor(selected), fontSize: 44, color: t.text }}>
               {selected}
             </Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: t.text, fontSize: 12 }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              {/* 読みがいちばん知りたい情報なので先頭に大きく */}
+              {selMeta.on || selMeta.kun ? (
+                <Text style={{ color: t.text, fontSize: 14, fontWeight: "600" }}>
+                  {[
+                    selMeta.on && `音 ${selMeta.on}`,
+                    selMeta.kun && `訓 ${selMeta.kun}`,
+                  ]
+                    .filter(Boolean)
+                    .join("　")}
+                </Text>
+              ) : (
+                <Text style={{ color: t.sub, fontSize: 11 }}>
+                  読みデータなし(KANJIDIC2 未収録の拡張漢字)
+                </Text>
+              )}
+              <Text style={{ color: t.sub, fontSize: 11 }}>
                 {[
-                  selMeta.on && `音: ${selMeta.on}`,
-                  selMeta.kun && `訓: ${selMeta.kun}`,
+                  selMeta.strokes > 0 && `${selMeta.strokes}画`,
+                  !!radicalChar(selMeta.rad) && `部首 ${radicalChar(selMeta.rad)}`,
                   GRADE_LABEL[selMeta.grade],
-                  selMeta.ext &&
-                    `拡張漢字 (U+${selected.codePointAt(0)!.toString(16).toUpperCase()}・日本語の読みデータなし)`,
+                  selMeta.freq > 0 && `頻度 ${selMeta.freq}位`,
+                  codePointLabel(selected),
                 ]
                   .filter(Boolean)
                   .join("　")}
               </Text>
-              {selDecomp.length > 0 && (
-                <Text style={{ color: t.sub, fontSize: 12, fontFamily: KANJI_FONT }}>
-                  {selDecomp.join("　")}
+              {!!selMeta.meaning && (
+                <Text style={{ color: t.sub, fontSize: 11 }}>
+                  意味(英): {selMeta.meaning}
                 </Text>
               )}
+              {selDecomp.length > 0 && (
+                <Kanji text={selDecomp.join("　")} size={11} color={t.sub} />
+              )}
+            </View>
+            <View style={{ alignItems: "center", gap: 8 }}>
+              <Pressable
+                onPress={copySelected}
+                style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: t.accent }}
+              >
+                <Text style={{ color: t.onAccent, fontSize: 11, fontWeight: "600" }}>
+                  {charCopied ? "コピー済" : "コピー"}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPressIn={() => haptic("toggle")}
+                onPress={() => setSelected(null)}
+                hitSlop={8}
+                accessibilityLabel="詳細を閉じる"
+              >
+                <Text style={{ color: t.faint, fontSize: 14 }}>✕</Text>
+              </Pressable>
             </View>
           </ScrollView>
         )}
@@ -292,16 +519,25 @@ function Screen() {
           placeholderTextColor={t.faint}
           style={[
             s.field,
-            { fontFamily: KANJI_FONT, color: t.text, borderColor: t.accent, backgroundColor: t.bg },
+            { fontFamily: INPUT_FONT, color: t.text, borderColor: t.accent, backgroundColor: t.bg },
           ]}
         />
-        <Pressable onPress={() => insert("?")} style={[s.smallBtn, { borderColor: t.border }]}>
+        <Pressable
+          onPressIn={() => haptic("key")}
+          onPress={() => insert("?")}
+          style={[s.smallBtn, { borderColor: t.border }]}
+        >
           <Text style={{ color: t.sub, fontSize: 16 }}>?</Text>
         </Pressable>
-        <Pressable onPress={backspace} style={[s.smallBtn, { borderColor: t.border }]}>
+        <Pressable
+          onPressIn={() => haptic("delete")}
+          onPress={backspace}
+          style={[s.smallBtn, { borderColor: t.border }]}
+        >
           <Text style={{ color: t.sub, fontSize: 16 }}>⌫</Text>
         </Pressable>
         <Pressable
+          onPressIn={() => haptic("delete")}
           onPress={() => applyEdit("", 0)}
           style={[s.smallBtn, { borderColor: t.border }]}
         >
@@ -321,13 +557,32 @@ function Screen() {
         }}
         maxHeight={keyboardMaxHeight}
       />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   header: { paddingHorizontal: 12, paddingBottom: 8, paddingTop: 4, borderBottomWidth: 1 },
-  titleRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginBottom: 6 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  themeBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  themeRow: { flexDirection: "row", gap: 4, paddingBottom: 8 },
+  settingRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingBottom: 6 },
+  themeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  swatch: { width: 12, height: 12, borderRadius: 6 },
   title: { fontSize: 16, fontWeight: "700" },
   subtitle: { fontSize: 10 },
   row: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -340,6 +595,7 @@ const s = StyleSheet.create({
     paddingVertical: Platform.OS === "ios" ? 10 : 6,
     fontSize: 18,
   },
+  outputInner: { alignItems: "center", minHeight: 26 },
   smallBtn: {
     borderWidth: 1,
     borderRadius: 8,

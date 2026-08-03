@@ -22,6 +22,8 @@ import {
   emitImeDict,
   emitPalettesKotlin,
   emitPalettesSwift,
+  emitThemesKotlin,
+  emitThemesSwift,
 } from "./build-data/emit-ime.mts";
 
 const mode = (process.env.IDS_SOURCE as IdsMode) || "mixed";
@@ -56,6 +58,15 @@ console.log(
 );
 console.log(
   "  IME辞書: " + emitPalettesSwift(join(ROOT, "native/targets/keyboard/Palettes.swift")),
+);
+console.log(
+  "  着せ替え: " +
+    emitThemesKotlin(
+      join(ROOT, "native/ime/android/java/com/upsee/katachi/ime/Themes.kt"),
+    ),
+);
+console.log(
+  "  着せ替え: " + emitThemesSwift(join(ROOT, "native/targets/keyboard/Themes.swift")),
 );
 
 const json = JSON.stringify({ chars: data.chars, ext: data.ext, parts: data.parts });

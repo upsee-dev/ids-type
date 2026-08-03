@@ -42,6 +42,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   // ノッチ端末で画面下端まで使う(下段のキーボードを底に貼り付けるため)
   viewportFit: "cover",
+  // OSキーボードが出たらレイアウトごと縮める(Android Chrome)。これが無いと
+  // キーボードが画面に覆い被さり、下段の入力欄が隠れて打っている文字が見えない。
+  // iOS Safari は未対応なので page.tsx 側で visualViewport を見て同じことをする
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#FBFBF9" },
     { media: "(prefers-color-scheme: dark)", color: "#0C0A09" },

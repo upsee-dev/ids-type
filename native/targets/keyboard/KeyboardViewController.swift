@@ -7,7 +7,12 @@ import UIKit
 /// (審査でもプライバシー訴求でも有利。docs/technical-roadmap.md 参照)。
 ///
 /// 拡張のメモリ上限は約60MB。RN は載せず、UI もエンジンもここで完結させる。
-final class KeyboardViewController: UIInputViewController {
+/// UIInputViewAudioFeedback に準拠して enableInputClicksWhenVisible を true に
+/// しないと、playInputClick() を呼んでもキー音は鳴らない。
+final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedback {
+
+    var enableInputClicksWhenVisible: Bool { true }
+
 
     private let dict = Dict()
     private lazy var engine = Engine(dict: dict)
@@ -21,15 +26,63 @@ final class KeyboardViewController: UIInputViewController {
     private var currentTab: Tab = .shape
     private var strokeGroup = "common"
     private var searchSeq = 0
+    /// ⌫長押しの連射タイマー
+    private var repeatTimer: Timer?
 
-    // 色。Web/Android と揃える
-    private let colBg = UIColor(red: 0.98, green: 0.98, blue: 0.976, alpha: 1)
-    private let colCard = UIColor.white
-    private let colBorder = UIColor(white: 0.90, alpha: 1)
-    private let colText = UIColor(white: 0.11, alpha: 1)
-    private let colSub = UIColor(white: 0.47, alpha: 1)
-    private let colAccent = UIColor(red: 0.267, green: 0.216, blue: 0.819, alpha: 1)
-    private let colAccentBg = UIColor(red: 0.933, green: 0.949, blue: 1, alpha: 1)
+    private static func rgb(_ hex: UInt32) -> UIColor {
+        UIColor(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1,
+        )
+    }
+
+    /// 着せ替え。テーマの定義は core/data/themes.ts の1か所(Themes.swift は生成物)。
+    /// 選んだテーマは UserDefaults に覚える(既定 "auto" = 端末のライト/ダークに追従)。
+    /// 🎨キーで切り替え。
+    private var themeKey: String {
+        UserDefaults.standard.string(forKey: "katachi.theme") ?? "auto"
+    }
+
+    /// テーマの1色。おまかせのときは OS のダーク切り替えに自動で追従する
+    private func themeColor(_ pick: (Themes.Palette) -> UInt32) -> UIColor {
+        if let p = Themes.palette(themeKey) { return Self.rgb(pick(p)) }
+        let light = pick(Themes.palette(Themes.autoLight) ?? Themes.all[0])
+        let dark = pick(Themes.palette(Themes.autoDark) ?? Themes.all[0])
+        return UIColor { $0.userInterfaceStyle == .dark ? Self.rgb(dark) : Self.rgb(light) }
+    }
+
+    // 色は部品を作るときに焼き込まれる。テーマ変更時は applyTheme が作り直す
+    private var colBg: UIColor { themeColor { $0.bg } }
+    private var colCard: UIColor { themeColor { $0.card } }
+    private var colBorder: UIColor { themeColor { $0.border } }
+    private var colText: UIColor { themeColor { $0.text } }
+    private var colSub: UIColor { themeColor { $0.sub } }
+    private var colAccent: UIColor { themeColor { $0.accent } }
+    private var colAccentBg: UIColor { themeColor { $0.accentBg } }
+
+    /// テーマ変更時に塗り直す常設ボタン(⌫・消・🎨・あ)。キーや候補と違って
+    /// 作り直されないので、ここで持っておいて applyTheme が直接塗り直す
+    private var chromeButtons: [UIButton] = []
+
+    @objc private func onCycleTheme() {
+        let order = ["auto"] + Themes.all.map(\.key)
+        let next = order[((order.firstIndex(of: themeKey) ?? 0) + 1) % order.count]
+        UserDefaults.standard.set(next, forKey: "katachi.theme")
+        applyTheme()
+    }
+
+    private func applyTheme() {
+        view.backgroundColor = colBg
+        for b in chromeButtons {
+            b.setTitleColor(colSub, for: .normal)
+            style(b, fill: colCard, stroke: colBorder)
+        }
+        buildStrokeChips()
+        rebuildKeys()
+        onComposingChanged() // ラベルの色を直し、候補も引き直す
+    }
 
     private let composingLabel = UILabel()
     private let candidateScroll = UIScrollView()
@@ -39,11 +92,25 @@ final class KeyboardViewController: UIInputViewController {
     private let strokeRow = UIStackView()
     private let keyArea = UIStackView()
 
-    /// 部品パレット用サブセットフォント。拡張B〜Hの部品は標準フォントに無く、
-    /// これが無いと □ が並んで「見て選ぶ」画面が成立しない
-    private lazy var partsFont: UIFont = {
-        UIFont(name: "KatachiParts", size: 20) ?? UIFont.systemFont(ofSize: 20)
-    }()
+    /// 拡張漢字用の同梱フォント(KatachiExt1/2)。端末の標準フォントは拡張B以降を
+    /// 持っておらず、これが無いと候補も部品も ☒ で埋まって「見て選ぶ」画面が
+    /// 成立しない。7.5万字は TrueType の65,535グリフ上限に収まらないので2つに
+    /// 分かれており、どちらで描くかは ExtFonts.fontIndex が決める(自動生成)。
+    /// Info.plist の UIAppFonts に載せていないと UIFont(name:) が nil になる。
+    private lazy var extFont1 = UIFont(name: "KatachiExt1", size: 20)
+    private lazy var extFont2 = UIFont(name: "KatachiExt2", size: 20)
+
+    /// 1字を描くフォント。同梱フォントに無い字は OS の標準フォントに任せる
+    private func font(for s: String, size: CGFloat) -> UIFont {
+        guard let scalar = s.unicodeScalars.first else { return .systemFont(ofSize: size) }
+        var base: UIFont?
+        switch ExtFonts.fontIndex(scalar.value) {
+        case 1: base = extFont1
+        case 2: base = extFont2
+        default: base = nil
+        }
+        return base?.withSize(size) ?? .systemFont(ofSize: size)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -82,10 +149,16 @@ final class KeyboardViewController: UIInputViewController {
         top.axis = .horizontal
         top.spacing = 6
         composingLabel.textColor = colText
-        composingLabel.font = .systemFont(ofSize: 17)
+        // 入力中の表示は1字ずつ分けられないので、部品を多く含む1枚目を当てる。
+        // このフォントに無い字(かな・常用漢字)は OS が標準フォントで描く
+        composingLabel.font = extFont1?.withSize(17) ?? .systemFont(ofSize: 17)
         composingLabel.text = ""
         top.addArrangedSubview(composingLabel)
-        top.addArrangedSubview(smallButton("⌫", #selector(onBackspace)))
+        let backspace = smallButton("⌫", #selector(onBackspace))
+        backspace.addGestureRecognizer(
+            UILongPressGestureRecognizer(target: self, action: #selector(onBackspaceLongPress(_:))),
+        )
+        top.addArrangedSubview(backspace)
         top.addArrangedSubview(smallButton("消", #selector(onClear)))
         root.addArrangedSubview(top)
 
@@ -117,8 +190,9 @@ final class KeyboardViewController: UIInputViewController {
             b.addTarget(self, action: #selector(onTab(_:)), for: .touchUpInside)
             tabRow.addArrangedSubview(b)
         }
+        let themeBtn = smallButton("🎨", #selector(onCycleTheme))
         let switchBtn = smallButton("あ", #selector(onSwitchKeyboard))
-        let tabWrap = UIStackView(arrangedSubviews: [tabRow, switchBtn])
+        let tabWrap = UIStackView(arrangedSubviews: [tabRow, themeBtn, switchBtn])
         tabWrap.axis = .horizontal
         tabWrap.spacing = 4
         root.addArrangedSubview(tabWrap)
@@ -165,12 +239,44 @@ final class KeyboardViewController: UIInputViewController {
         rebuildKeys()
     }
 
-    @objc private func onBackspace() {
+    @objc private func onBackspace() { deleteOne() }
+
+    private func deleteOne() {
         if composing.isEmpty {
             textDocumentProxy.deleteBackward()
         } else {
             composing.removeLast()   // Character 単位なのでサロゲートペアも1文字
         }
+    }
+
+    /// ⌫の長押し。1文字ずつタップさせると打ち直しが遅すぎるので、標準の
+    /// キーボードと同じく押しっぱなしで消せるようにする
+    @objc private func onBackspaceLongPress(_ g: UILongPressGestureRecognizer) {
+        switch g.state {
+        case .began:
+            repeatTimer?.invalidate()
+            repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) {
+                [weak self] _ in
+                self?.tapFeedback()
+                self?.deleteOne()
+            }
+        case .ended, .cancelled, .failed:
+            repeatTimer?.invalidate()
+            repeatTimer = nil
+        default:
+            break
+        }
+    }
+
+    /// 打鍵フィードバック。指が触れた瞬間に返したいので、呼ぶのは
+    /// .touchDown(離したときの .touchUpInside ではない)。
+    ///
+    /// 音は playInputClick が端末の設定を見て鳴らす(フルアクセス不要)。
+    /// 触覚(UIImpactFeedbackGenerator)はキーボード拡張ではフルアクセスを
+    /// 許可しないと動かない。このアプリは通信もせず全部端末内で完結するので
+    /// フルアクセスは要求しない方針(docs/technical-roadmap.md)。よって音だけ。
+    private func tapFeedback() {
+        UIDevice.current.playInputClick()
     }
 
     @objc private func onClear() { composing = "" }
@@ -226,11 +332,12 @@ final class KeyboardViewController: UIInputViewController {
         for h in r.hits {
             let b = UIButton(type: .system)
             b.setTitle(h.ch, for: .normal)
-            b.titleLabel?.font = partsFont.withSize(23)
+            b.titleLabel?.font = font(for: h.ch, size: 23)
             b.setTitleColor(dict.isExt(h.index) ? colSub : colText, for: .normal)
             style(b, fill: h.exact ? colAccentBg : colCard, stroke: h.exact ? colAccent : colBorder)
             b.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
             b.accessibilityLabel = h.ch
+            b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
             b.addAction(UIAction { [weak self] _ in self?.commit(h.ch) }, for: .touchUpInside)
             candidateRow.addArrangedSubview(b)
         }
@@ -249,6 +356,7 @@ final class KeyboardViewController: UIInputViewController {
             b.setTitleColor(active ? colAccent : colSub, for: .normal)
             b.contentEdgeInsets = UIEdgeInsets(top: 2, left: 8, bottom: 2, right: 8)
             style(b, fill: active ? colAccentBg : .clear, stroke: active ? colAccent : colBorder)
+            b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
             b.addAction(UIAction { [weak self] _ in
                 self?.strokeGroup = key
                 self?.buildStrokeChips()
@@ -342,10 +450,12 @@ final class KeyboardViewController: UIInputViewController {
     private func key(_ label: String, size: CGFloat, _ onTap: @escaping () -> Void) -> UIView {
         let b = UIButton(type: .system)
         b.setTitle(label, for: .normal)
-        b.titleLabel?.font = size >= 18 ? partsFont.withSize(size) : .systemFont(ofSize: size)
+        b.titleLabel?.font = size >= 18 ? font(for: label, size: size) : .systemFont(ofSize: size)
         b.setTitleColor(colText, for: .normal)
         style(b, fill: colCard, stroke: colBorder)
         b.heightAnchor.constraint(equalToConstant: 42).isActive = true
+        // 音は触れた瞬間、実際の入力は離したとき(押し間違いを指をずらして取り消せる)
+        b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
         b.addAction(UIAction { _ in onTap() }, for: .touchUpInside)
         return b
     }
@@ -357,7 +467,9 @@ final class KeyboardViewController: UIInputViewController {
         b.setTitleColor(colSub, for: .normal)
         b.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
         style(b, fill: colCard, stroke: colBorder)
+        b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
         b.addTarget(self, action: action, for: .touchUpInside)
+        chromeButtons.append(b) // テーマ変更時に applyTheme が塗り直す
         return b
     }
 

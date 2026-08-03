@@ -36,7 +36,7 @@ export function KanjiGrid({
           onClick={() => onPick(ch)}
           title={
             meta.ext
-              ? `${codePointLabel(ch)} 拡張漢字(端末にフォントが無いと□で表示されます)`
+              ? `${codePointLabel(ch)} 拡張漢字(読みデータなし)`
               : `${codePointLabel(ch)} ${meta.on} ${meta.kun}`.trim()
           }
           className={`kanji flex min-h-12 items-center justify-center rounded-lg border text-2xl leading-none active:bg-indigo-100 dark:active:bg-stone-700 ${

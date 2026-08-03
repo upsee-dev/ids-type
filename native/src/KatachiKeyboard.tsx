@@ -15,7 +15,8 @@ import {
   type Engine,
 } from "./engine";
 import { OperatorIcon } from "./OperatorIcon";
-import { KANJI_FONT, PARTS_FONT, type Theme } from "./theme";
+import { fontFor, type Theme } from "./theme";
+import { haptic } from "./feedback";
 
 type Tab = "shape" | "common" | "radical";
 
@@ -62,12 +63,36 @@ export function KatachiKeyboard({
   const shapeW = (inner - GAP * (SHAPE_COLS - 1)) / SHAPE_COLS;
   const partW = (inner - GAP * (PART_COLS - 1)) / PART_COLS;
 
+  // 端末のキーボード使用中はパレットを畳む。畳まないと端末のキーボードと
+  // 二重に場所を取り、候補がほとんど見えなくなる
+  if (osKeyboard) {
+    return (
+      <View style={{ backgroundColor: theme.bg, borderTopWidth: 1, borderTopColor: theme.border }}>
+        <View style={[styles.collapsedRow, { paddingHorizontal: SIDE_PADDING }]}>
+          <Text numberOfLines={1} style={{ flex: 1, fontSize: 11, color: theme.sub }}>
+            端末のキーボードで部品を直接入力できます
+          </Text>
+          <Pressable
+            onPressIn={() => haptic("toggle")}
+            onPress={onToggleOsKeyboard}
+            style={[styles.returnBtn, { backgroundColor: theme.accent }]}
+          >
+            <Text style={{ fontSize: 12, fontWeight: "600", color: theme.onAccent }}>
+              カタチキーボードに戻る
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={{ backgroundColor: theme.bg, borderTopWidth: 1, borderTopColor: theme.border }}>
       <View style={[styles.tabRow, { paddingHorizontal: SIDE_PADDING }]}>
         {TABS.map(t => (
           <Pressable
             key={t.id}
+            onPressIn={() => haptic("toggle")}
             onPress={() => setTab(t.id)}
             style={[
               styles.tab,
@@ -86,6 +111,7 @@ export function KatachiKeyboard({
           </Pressable>
         ))}
         <Pressable
+          onPressIn={() => haptic("toggle")}
           onPress={onToggleOsKeyboard}
           style={[
             styles.imeToggle,
@@ -117,6 +143,8 @@ export function KatachiKeyboard({
             {ops.map(op => (
               <Pressable
                 key={op.code}
+                // 触覚は指が触れた瞬間に返す(離してからだと一拍遅れて感じる)
+                onPressIn={() => haptic("key")}
                 onPress={() => onInsert(op.code)}
                 style={({ pressed }) => [
                   styles.key,
@@ -133,6 +161,7 @@ export function KatachiKeyboard({
               </Pressable>
             ))}
             <Pressable
+              onPressIn={() => haptic("toggle")}
               onPress={() => setShowAllOps(s => !s)}
               style={[
                 styles.key,
@@ -205,6 +234,7 @@ function RadicalTab({
         {chips.map(c => (
           <Pressable
             key={c.key}
+            onPressIn={() => haptic("toggle")}
             onPress={() => setGroup(c.key)}
             style={[
               styles.chip,
@@ -255,6 +285,7 @@ function PartGrid({
       {parts.map(p => (
         <Pressable
           key={p}
+          onPressIn={() => haptic("key")}
           onPress={() => onInsert(p)}
           style={({ pressed }) => [
             styles.key,
@@ -266,7 +297,7 @@ function PartGrid({
             },
           ]}
         >
-          <Text style={{ fontFamily: PARTS_FONT, fontSize: 22, color: theme.text }}>{p}</Text>
+          <Text style={{ fontFamily: fontFor(p), fontSize: 22, color: theme.text }}>{p}</Text>
         </Pressable>
       ))}
     </View>
@@ -275,6 +306,13 @@ function PartGrid({
 
 const styles = StyleSheet.create({
   tabRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingTop: 6 },
+  collapsedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  returnBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   tab: {
     flex: 1,
     alignItems: "center",

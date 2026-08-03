@@ -1,0 +1,752 @@
+/*
+ * 自動生成: scripts/build-font-slices.py が書き出す。直接編集しないこと。
+ *
+ * Plangothic (SIL OFL 1.1・public/fonts/OFL.txt) を符号位置1024ごとに
+ * 割ったスライス。unicode-range により、画面に出た字を含むスライスだけを
+ * ブラウザが取りに行く。端末フォントで描ける字はスタックの前段で解決される
+ * ため落ちてこない。全124枚・計11.7MB(全部読んだ場合)。
+ */
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-02c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2E80-2E99, U+2E9B-2EF3, U+2F00-2FD5, U+2FFC-2FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-02c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2FF0-2FFB;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-03000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+31D2, U+31E4-31E5, U+31EF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-03400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+34C1, U+34DF, U+34F0, U+3506, U+3513, U+351E, U+353E, U+366F;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-03400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+3432, U+3436;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-03800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+382F, U+387C, U+393A, U+3A6C, U+3A93, U+3AC1, U+3B05, U+3B50, U+3B9D;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-03c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+3C94, U+3CFD, U+3D1D, U+3D33, U+3D6E, U+3D96, U+3E3F, U+3EAC;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-04000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+4039, U+40E3, U+4227, U+4266, U+4301, U+4359, U+43D5, U+43D9;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-04400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+440B, U+4450, U+446E, U+44B3, U+452B, U+4548, U+454E, U+455D, U+4561, U+4695, U+46BE, U+46C7, U+4748, U+47B1;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-04800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+4888, U+48DF, U+49C8, U+4A76, U+4A9F, U+4AB2, U+4AEC, U+4BA7, U+4BCE;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-04c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+4C41, U+4CA3, U+4CED, U+4DB6-4DBF, U+4E00, U+4E0D, U+4E12, U+4E28, U+4E32, U+4E36, U+4E38-4E39, U+4E3F, U+4E41, U+4E55, U+4E59-4E5B, U+4E62, U+4E74-4E75, U+4E77, U+4E80, U+4E82, U+4E85-4E86, U+4E8C, U+4E90, U+4E9C, U+4EAE, U+4EBA-4EBB, U+4EC0, U+4ED0, U+4EE4, U+4EFE, U+4F2E, U+4F31, U+4F71, U+4F86, U+4F8B, U+4FAE, U+4FBB, U+4FBF, U+4FD6, U+4FE2, U+4FF7;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-04c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+4E01, U+4E04, U+4E07-4E08, U+4E0E, U+4E19, U+4E1B, U+4E2D, U+4E37, U+4E3B, U+4E42-4E43, U+4E45, U+4E47, U+4E5D, U+4EA6, U+4EA9, U+4EC5, U+4EC9, U+4ECD, U+4ED2, U+4ED4-4ED5, U+4ED7-4ED8, U+4EDA, U+4EE0, U+4EE9, U+4F0F, U+4F1E;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-05000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+5010, U+5024, U+502B, U+5039, U+505D, U+5071, U+507A, U+507C, U+5087, U+50BC, U+50C1, U+50DA, U+50E0, U+50E7, U+50FD, U+5116, U+5128, U+513F-5140, U+5145, U+514F, U+5168-5169, U+516D, U+5182, U+5196, U+51A3, U+51A9, U+51AB, U+51AD, U+51B7, U+51C9, U+51CC, U+51DC, U+51E0, U+51F2, U+5200, U+5202, U+5207, U+5217, U+5229, U+523A, U+524E, U+5262-5263, U+5266, U+5271, U+5277, U+5289, U+5292, U+529B, U+52A3, U+52B6-52B7, U+52C4, U+52C7, U+52C9, U+52D2, U+52DE, U+52E4, U+52F5, U+52F9-52FA, U+5303, U+5307, U+5315, U+5317, U+531B, U+531E, U+5328-5329, U+533F, U+5341, U+5351, U+535C, U+5364, U+5369, U+5375, U+5382, U+53C3, U+53CA, U+53E3, U+53E5;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-05000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+516B-516C, U+5173, U+5184, U+51E1, U+51FA, U+5348, U+534E, U+53B6, U+53BA, U+53C8, U+53F3;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-05400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+540F, U+5414, U+5419, U+541D, U+5437-5438, U+5442, U+5444, U+5448-5449, U+549E, U+54BD, U+54CB, U+5500, U+5512, U+5553, U+5560, U+5584, U+5587, U+558C, U+559D, U+55C0, U+55C2, U+55E0, U+55E2, U+5606, U+565B, U+5668, U+5690, U+56A0, U+56C6, U+56D7, U+56F3, U+56F9, U+570F, U+5716, U+571F, U+5738, U+57B9;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-05400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+5404, U+5720, U+5724-5725, U+5727, U+5736;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-05800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+585A, U+585E, U+5870, U+587B, U+58A8, U+58D8, U+58DF, U+58E1, U+58EB, U+58F3, U+58F5, U+58FB, U+58FF, U+5902, U+5915, U+5918, U+591B, U+5922, U+5927, U+5936, U+5948, U+5951, U+5970, U+5973, U+5995, U+599B, U+5A27, U+5A2F, U+5A3F, U+5A66, U+5A72, U+5A8D, U+5B36, U+5B3E, U+5B50, U+5B52, U+5B5E, U+5B6F, U+5B7E, U+5B85, U+5BE7, U+5BEE, U+5BF3, U+5BF8, U+5BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-05800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+5929-592A, U+592C, U+592F, U+5931, U+593A-593B, U+593E;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-05c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+5C0F, U+5C22-5C23, U+5C2E, U+5C36, U+5C38, U+5C3F, U+5C5B, U+5C62, U+5C64-5C65, U+5C6E, U+5CB2, U+5CC0, U+5D19, U+5D43-5D44, U+5D50, U+5D7C, U+5D83, U+5DBA, U+5DD9, U+5DDB, U+5DE5, U+5DF1, U+5DF3, U+5DFB, U+5DFD-5DFE, U+5E28, U+5E32, U+5E59, U+5E60, U+5E72, U+5E74, U+5E77, U+5E7A, U+5EA6, U+5EC9, U+5ED2-5ED3, U+5EEC, U+5EFD-5EFE, U+5F04, U+5F09, U+5F0B, U+5F16, U+5F2B-5F2C, U+5F3E, U+5F41, U+5F45, U+5F50-5F51, U+5F61, U+5F72-5F73, U+5F8B, U+5F8F, U+5FA9, U+5FB5, U+5FC3-5FC4, U+5FF5, U+5FF9;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-05c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+5C71, U+5DFF-5E00, U+5E73, U+5EFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-06000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+6012, U+601C, U+6039, U+6090, U+6094, U+60A9, U+60E1, U+60E5, U+6144, U+6154, U+618E, U+6190, U+61A0, U+61F1, U+61F6, U+6200, U+6208, U+622E, U+6236, U+624B-624C, U+6287, U+62B0, U+62C9, U+62CF, U+62D3-62D4, U+62FE, U+6315, U+637B, U+6383, U+63A0, U+63B5, U+63F7, U+63FA;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-06400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+6422-6423, U+6469, U+647E, U+649A, U+649D, U+64C4, U+64CF, U+64EB, U+650E, U+6510, U+652F, U+6534-6535, U+654F, U+6556, U+6565, U+656C, U+6578-6579, U+6581, U+6589, U+6597-6599, U+65A4, U+65C5, U+65E0-65E1, U+65E5, U+65FE, U+6613, U+661B, U+6671, U+6674, U+6688, U+66AF, U+66B4, U+66C6, U+66DE, U+66F0, U+66F4, U+66FB, U+6700, U+6707-6708, U+6717, U+671B, U+6721, U+6728, U+674E, U+6763, U+6779, U+677B, U+6797, U+679B, U+67F3;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-06400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+6587, U+674F;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-06800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+6817, U+6820, U+6826, U+683A, U+6857, U+685C, U+6881, U+6885, U+6891, U+68A8, U+68BB, U+691C, U+6967, U+69A3, U+69B5, U+69DD, U+69E9, U+6A02-6A03, U+6A13, U+6A2E, U+6A30, U+6A37, U+6A57, U+6A73, U+6AA8, U+6ACF, U+6AD3, U+6B04, U+6B20-6B21, U+6B25, U+6B2B, U+6B54, U+6B5A, U+6B62, U+6B69, U+6B6F, U+6B76-6B77, U+6B79-6B7A, U+6B7D, U+6B9F, U+6BAC, U+6BAE, U+6BB1, U+6BB3, U+6BBA, U+6BCD-6BCE, U+6BDB, U+6BDF, U+6BEE;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-06800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+6B63;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-06c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+6C0B, U+6C0E, U+6C11, U+6C14, U+6C34-6C35, U+6C88, U+6C8E, U+6CB7, U+6CCC, U+6CE5, U+6D1B, U+6D1E, U+6D41-6D42, U+6D6A, U+6D77-6D78, U+6DCB, U+6DDA, U+6DEA, U+6E03, U+6E09, U+6E2A, U+6E42, U+6E61, U+6E6E, U+6E80, U+6E95, U+6E9C, U+6EBA, U+6ED1, U+6F0F, U+6F22-6F23, U+6F55, U+6F79, U+6FAB, U+6FBF, U+6FEB, U+6FF2, U+6FF9, U+6FFE-6FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-06c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+6C41, U+6C5E;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-07000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+700E, U+701E, U+7031, U+7047, U+706B-706C, U+7071, U+7074, U+708B, U+7093, U+7099, U+70A3, U+70AD, U+70C5-70C6, U+70C8, U+70CC-70CD, U+70D2, U+70D9, U+710F, U+711F, U+7128, U+712C, U+713A-713B, U+7142, U+7144, U+7149, U+714D, U+714F, U+7154, U+7158, U+715F, U+716E, U+7170, U+7179, U+717C, U+7181-7182, U+719C, U+71BC-71BD, U+71C6, U+71CE, U+71D0, U+71E4, U+71E8, U+7203, U+7205, U+720F-7210, U+721B, U+721E, U+7223, U+7227-7228, U+722A-722B, U+7234-7235, U+723F, U+7247, U+724A, U+725B, U+7262, U+72A1, U+72AC-72AD, U+72B1, U+72C0, U+72C5, U+72FC, U+732A, U+733C, U+735B, U+7373, U+7375, U+7387, U+7389, U+73A4, U+73B2, U+73DE, U+73F1;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-07000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+738B, U+738D, U+73AB;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-07400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+7406, U+7409, U+7422, U+7436, U+744C, U+745F, U+7468-7469, U+7489, U+7498, U+7518, U+751F, U+7528, U+7530, U+7559, U+7565, U+7570, U+7575, U+758B, U+75E2, U+761F, U+7642, U+7669, U+7676, U+767D, U+76AE, U+76BF, U+76C1, U+76CA, U+76DA, U+76E7, U+76EE, U+76F4, U+7701, U+770F, U+7740, U+7781, U+7796, U+77CE, U+77DB, U+77E2, U+77EA, U+77F3;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-07400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+7531, U+77F5;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-07800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+784F, U+786B, U+7872, U+788C, U+7891, U+78CA, U+78CC, U+78F0, U+78FB, U+7916, U+791D, U+7923, U+792A, U+793B, U+797F, U+79AE, U+79BE, U+79C2, U+79C7, U+79CA, U+79EB, U+7A1C, U+7A2A, U+7A2C, U+7A40, U+7A5D, U+7A81, U+7AB1, U+7ACB, U+7ADC, U+7AF9, U+7AFC, U+7B01, U+7B1A, U+7B1D, U+7B20, U+7B42, U+7B44, U+7B53, U+7B63, U+7B6A, U+7B78, U+7B7A, U+7B82, U+7BA3, U+7BBA, U+7BC0, U+7BD8, U+7BE2, U+7BF6, U+7BFB, U+7BFD, U+7BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-07800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+7A74;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-07c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+7C0A, U+7C1D, U+7C35, U+7C3E, U+7C60, U+7C73, U+7C82, U+7C8E, U+7C92, U+7CAD, U+7CD0, U+7CD6, U+7CDA, U+7CE7-7CE9, U+7CF9, U+7D10, U+7D22, U+7D2F, U+7D5B, U+7DA0, U+7DBE, U+7DF4, U+7E09, U+7E37, U+7E41, U+7E9F, U+7F3C, U+7F53, U+7F64, U+7F79, U+7F85, U+7F88, U+7F8A, U+7F9A;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-08000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+8001-8002, U+8005, U+8009, U+800C, U+8013, U+8033, U+8040, U+8046, U+8060, U+806F-8070, U+8074, U+807E-8080, U+8089-808B, U+8090, U+8095, U+809E, U+80AD, U+80B2, U+80C9, U+80D1, U+80E3, U+80F7, U+8103, U+8115, U+8119, U+812A, U+8133-8134, U+813C, U+8141-8142, U+8144, U+8156, U+815C, U+8162, U+816C, U+81A4-81A5, U+81AB, U+81CB, U+81D0, U+81D3, U+81D8, U+81E8, U+81EA, U+81ED, U+81FC, U+820E, U+8215, U+8217, U+826F, U+8272, U+8279, U+827C, U+8285, U+828B, U+829D-829E, U+82B1, U+82B5, U+82C3, U+82C6, U+82D6, U+82E5-82E6, U+82F2, U+82F5, U+82F8, U+82FC, U+830A, U+8319, U+8320, U+8323, U+8326, U+8336, U+833F, U+8341, U+834B, U+8374, U+8381, U+838B, U+8390, U+8397, U+83A4, U+83AE-83AF, U+83B5, U+83C4, U+83C9-83CC, U+83D7, U+83DC, U+83F1;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-08000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+80B0, U+80FF, U+827E, U+8282, U+8289, U+8296;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-08400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+843D, U+8449, U+8457, U+84EE, U+84FC, U+8550, U+85CD, U+85CF, U+85FA, U+8606, U+862D, U+863F, U+864D-864E, U+8657, U+865C-865D, U+866B, U+8745, U+8779, U+8786, U+87BA, U+87E1, U+87F6, U+87F8;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-08800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+881F, U+8840, U+884C, U+8864, U+88C2, U+88CF, U+88D7, U+88DE, U+88E1, U+88F8, U+8910, U+891D, U+8930, U+8964, U+897F, U+898B, U+8990, U+8996, U+89A8, U+89C1, U+89D2, U+8AAA, U+8ABF, U+8ACB, U+8AD2, U+8AD6, U+8AF8, U+8AFE, U+8B01, U+8B39, U+8B58, U+8B80, U+8BA0;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-08800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+8BA3;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-08c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+8C37, U+8C46, U+8C48, U+8C55, U+8C63, U+8C78, U+8C9D, U+8CC2, U+8CC8, U+8CD3, U+8D08, U+8D1D, U+8D64, U+8D70-8D71, U+8D77, U+8DB3, U+8DCB, U+8DE5, U+8DEF, U+8E9A, U+8EB1, U+8EB5, U+8EBE, U+8EC6-8EC7, U+8ECA, U+8F0C, U+8F26, U+8F2A, U+8F3B, U+8F4C, U+8F62, U+8F66, U+8FB0, U+8FB5-8FB6, U+8FBC;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-08c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+8EAB;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-09000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+9018, U+9023, U+9038, U+9077, U+907C, U+908F, U+9091, U+9094, U+90C9, U+90DE, U+9111, U+9137, U+9142, U+9147-9148, U+9157, U+916A, U+91B4, U+91C6, U+91CC, U+91CF, U+91D1, U+91DB, U+91E1, U+91FB-91FC, U+921D, U+921F, U+922C, U+9234, U+9238, U+9243, U+9247, U+9259, U+9268, U+9292, U+929F, U+92AD, U+9304, U+9337, U+933B, U+934A, U+936F, U+937F, U+93F9;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-09400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+9402, U+941A, U+9421, U+945A, U+945C, U+9484-9485, U+9577-9578, U+957F-9580, U+958A, U+95AD, U+95B7, U+95E8, U+961C-961D, U+962E, U+964B, U+964D, U+9675, U+9678, U+967A, U+967C, U+967F, U+9686, U+96A3, U+96B2, U+96B6-96B7, U+96E2-96E3, U+96E8, U+96F6-96F7, U+9732, U+9748, U+974E, U+9751-9752, U+9756, U+9762, U+9769, U+9775, U+97C6, U+97D7, U+97DB, U+97E6, U+97ED;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-09800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+9801, U+9818, U+981A, U+9825, U+983B, U+985E, U+9875, U+98AA-98AB, U+98CE, U+98DB, U+98DE-98E0, U+98EE, U+990A, U+9920, U+9963, U+9996, U+9999, U+99A7, U+99AC, U+99C6, U+99C8, U+99F1, U+99FE, U+9A08, U+9A13, U+9A6A, U+9A6C, U+9AA8, U+9B12, U+9B25, U+9B2F, U+9B3C, U+9B45, U+9B5A, U+9B6F, U+9B94, U+9BBC, U+9BCE;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-09c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+9C04, U+9C57, U+9C7C, U+9CE5, U+9D0E, U+9D11, U+9D62, U+9D65, U+9DFA, U+9E1D-9E1F, U+9E75, U+9E78, U+9E7F, U+9E97, U+9E9F, U+9EA4-9EA6, U+9EC3-9EC4, U+9ECD-9ECE, U+9ED1, U+9EFD-9EFE, U+9F0E, U+9F13, U+9F50, U+9F7F, U+9F8D, U+9F99, U+9F9C, U+9F9F-9FA0, U+9FA6, U+9FA8-9FA9, U+9FAC, U+9FAE, U+9FB3, U+9FBC, U+9FC0, U+9FC3-9FC4, U+9FC8, U+9FCA, U+9FE6-9FE7, U+9FEA, U+9FEE-9FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-0f800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+F900-FA6D, U+FA70-FAD9;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-20000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+20000-203FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-20400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+20400-207FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-20800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+20800-20BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-20c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+20C00-20FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-21000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+21000-213FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-21400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+21400-217FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-21800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+21800-21BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-21c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+21C00-21FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-22000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+22000-223FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-22400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+22400-227FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-22800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+22800-22BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-22c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+22C00-22FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-23000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+23000-233FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-23400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+23400-237FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-23800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+23800-23BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-23c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+23C00-23FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-24000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+24000-243FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-24400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+24400-247FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-24800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+24800-24BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-24c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+24C00-24FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-25000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+25000-253FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-25400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+25400-257FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-25800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+25800-25BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-25c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+25C00-25FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-26000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+26000-263FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-26400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+26400-267FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-26800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+26800-26BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-26c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+26C00-26FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-27000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+27000-273FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-27400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+27400-277FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-27800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+27800-27BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-27c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+27C00-27FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-28000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+28000-283FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-28400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+28400-287FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-28800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+28800-28BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-28c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+28C00-28FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-29000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+29000-293FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-29400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+29400-297FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-29800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+29800-29BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-29c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+29C00-29FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2a000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2A000-2A3FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2a400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2A400-2A6DF, U+2A700-2A7FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2a800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2A800-2ABFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2ac00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2AC00-2AFFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2b000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2B000-2B3FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2b400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2B400-2B7FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2b800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2B800-2B81E, U+2B820-2BBFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2bc00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2BC00-2BFFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2c000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2C000-2C3FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2c400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2C400-2C7FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2c800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2C800-2CBFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2cc00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2CC00-2CEAD, U+2CEB0-2CFFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2d000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2D000-2D3FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2d400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2D400-2D7FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2d800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2D800-2DBFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2dc00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2DC00-2DFFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2e000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2E000-2E3FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2e400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2E400-2E7FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2e800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2E800-2EBE0, U+2EBF0-2EBFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2ec00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2EC00-2EE5D;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-2f800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+2F800-2FA1D;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-30000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+30000-303FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-30400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+30400-307FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-30800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+30800-30BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-30c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+30C00-30FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-31000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+31000-3134A, U+31350-313FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-31400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+317AB;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-31400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+31400-317AA, U+317AC-317FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-31800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+31800-31BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-31c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+31C2D, U+31E7C;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-31c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+31C00-31C2C, U+31C2E-31E7B, U+31E7D-31FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-32000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+32000-323FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-32400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+32400-327FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p1-32800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+3295C;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-32800.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+32800-3295B, U+3295D-32BFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-32c00.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+32C00-32FFF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-33000.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+33000-333FF;
+}
+@font-face {
+  font-family: "Plangothic";
+  src: url("/fonts/plangothic/p2-33400.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+33400-33479;
+}

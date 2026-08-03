@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* 全CJK漢字の分割フォント(自動生成)。scripts/build-font-slices.py で作り直せる */
+@import "./plangothic.css";
 
 :root {
   --background: #fafaf9;
@@ -63,7 +65,13 @@ textarea {
   unicode-range: U+2E80-2FFF, U+3400-4DBF, U+20000-3FFFF;
 }
 
+/*
+ * 漢字表示のフォントスタック。
+ * 端末のフォントで描ける字は端末の明朝/ゴシックで描き、無い字(拡張B〜Jの
+ * 大半)だけ最後の Plangothic(分割Webフォント・plangothic.css)が受け持つ。
+ * これで候補や収録一覧が ☒ にならず、全収録字を実際の字形で見られる。
+ */
 .kanji {
   font-family: "KatachiParts", "Hiragino Mincho ProN", "Yu Mincho",
-    "Noto Serif JP", "Hiragino Sans", "Noto Sans CJK JP", serif;
+    "Noto Serif JP", "Hiragino Sans", "Noto Sans CJK JP", "Plangothic", serif;
 }

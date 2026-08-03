@@ -42,6 +42,27 @@ export function KatachiKeyboard({
 
   const common = useMemo(() => engine?.commonParts(180) ?? [], [engine]);
 
+  // 端末のキーボード使用中はパレットを畳む。畳まないとOSキーボードと
+  // 二重に場所を取り、候補がほとんど見えなくなる
+  if (osKeyboard) {
+    return (
+      <div className="border-t border-stone-200 bg-stone-100/95 backdrop-blur dark:border-stone-800 dark:bg-stone-900/95">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-3 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+          <p className="min-w-0 flex-1 truncate text-[11px] text-stone-500 dark:text-stone-400">
+            端末のキーボードで部品を直接入力できます
+          </p>
+          <button
+            onPointerDown={keepFocus}
+            onClick={onToggleOsKeyboard}
+            className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white active:bg-indigo-700"
+          >
+            カタチキーボードに戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="border-t border-stone-200 bg-stone-100/95 backdrop-blur dark:border-stone-800 dark:bg-stone-900/95">
       <div className="mx-auto w-full max-w-3xl px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">

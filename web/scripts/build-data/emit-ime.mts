@@ -18,6 +18,7 @@ import {
   DIFFICULT_COMPONENTS,
   RADICAL_PALETTE,
 } from "../../../core/data/palettes.ts";
+import { AUTO_DARK, AUTO_LIGHT, THEMES } from "../../../core/data/themes.ts";
 
 /**
  * 部品パレットを Kotlin のソースとして書き出す。
@@ -73,6 +74,103 @@ ${groups}
   mkdirSync(join(outPath, ".."), { recursive: true });
   writeFileSync(outPath, src);
   return "Palettes.swift";
+}
+
+/**
+ * 着せ替え(カラーテーマ)を Kotlin へ。出所は core/data/themes.ts の1か所。
+ * 「おまかせ」(auto)の解決もここで生成して、各実装が同じ規則になるようにする。
+ */
+export function emitThemesKotlin(outPath: string): string {
+  const rows = THEMES.map(
+    (t) =>
+      `        Palette("${t.key}", "${t.label}", ${t.colors.dark}, ` +
+      `"${t.colors.bg}", "${t.colors.card}", "${t.colors.key}", "${t.colors.border}", ` +
+      `"${t.colors.text}", "${t.colors.sub}", "${t.colors.faint}", ` +
+      `"${t.colors.accent}", "${t.colors.accentBg}", "${t.colors.onAccent}"),`,
+  ).join("\n");
+  const src = `package com.upsee.katachi.ime
+
+// 自動生成: core/data/themes.ts から web の build:data が書き出す。直接編集しないこと。
+object Themes {
+    data class Palette(
+        val key: String,
+        val label: String,
+        val dark: Boolean,
+        val bg: String,
+        val card: String,
+        val keyFill: String,
+        val border: String,
+        val text: String,
+        val sub: String,
+        val faint: String,
+        val accent: String,
+        val accentBg: String,
+        val onAccent: String,
+    )
+
+    val ALL = listOf(
+${rows}
+    )
+
+    /** key からテーマを引く。"auto"・不明な key は端末のダーク設定に追従する */
+    fun resolve(key: String?, systemDark: Boolean): Palette {
+        val fallback = if (systemDark) "${AUTO_DARK}" else "${AUTO_LIGHT}"
+        return ALL.firstOrNull { it.key == key } ?: ALL.first { it.key == fallback }
+    }
+}
+`;
+  mkdirSync(join(outPath, ".."), { recursive: true });
+  writeFileSync(outPath, src);
+  return `Themes.kt (${THEMES.length}テーマ)`;
+}
+
+/** 同じものを iOS(Swift)へ */
+export function emitThemesSwift(outPath: string): string {
+  const hex = (s: string) => `0x${s.slice(1)}`;
+  const rows = THEMES.map(
+    (t) =>
+      `        Palette(key: "${t.key}", label: "${t.label}", dark: ${t.colors.dark}, ` +
+      `bg: ${hex(t.colors.bg)}, card: ${hex(t.colors.card)}, keyFill: ${hex(t.colors.key)}, ` +
+      `border: ${hex(t.colors.border)}, text: ${hex(t.colors.text)}, sub: ${hex(t.colors.sub)}, ` +
+      `faint: ${hex(t.colors.faint)}, accent: ${hex(t.colors.accent)}, ` +
+      `accentBg: ${hex(t.colors.accentBg)}, onAccent: ${hex(t.colors.onAccent)}),`,
+  ).join("\n");
+  const src = `import Foundation
+
+// 自動生成: core/data/themes.ts から web の build:data が書き出す。直接編集しないこと。
+enum Themes {
+    struct Palette {
+        let key: String
+        let label: String
+        let dark: Bool
+        let bg: UInt32
+        let card: UInt32
+        let keyFill: UInt32
+        let border: UInt32
+        let text: UInt32
+        let sub: UInt32
+        let faint: UInt32
+        let accent: UInt32
+        let accentBg: UInt32
+        let onAccent: UInt32
+    }
+
+    static let all: [Palette] = [
+${rows}
+    ]
+
+    static let autoLight = "${AUTO_LIGHT}"
+    static let autoDark = "${AUTO_DARK}"
+
+    /// key からテーマを引く。"auto"・不明な key は nil(呼び出し側でおまかせ扱い)
+    static func palette(_ key: String?) -> Palette? {
+        all.first { $0.key == key }
+    }
+}
+`;
+  mkdirSync(join(outPath, ".."), { recursive: true });
+  writeFileSync(outPath, src);
+  return "Themes.swift";
 }
 
 export function emitImeDict(data: RawData, outDir: string): string[] {

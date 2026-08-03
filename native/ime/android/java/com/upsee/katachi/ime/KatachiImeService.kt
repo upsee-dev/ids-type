@@ -79,6 +79,11 @@ class KatachiImeService : InputMethodService() {
                 // 「あ」キー。OSのIME切り替えへ
                 switchToNextInputMethod(false)
             }
+
+            override fun recreateKeyboard() {
+                // 🎨キー(着せ替え)。色はビュー生成時に決まるので作り直して反映する
+                setInputView(onCreateInputView())
+            }
         })
         view = v
         return v

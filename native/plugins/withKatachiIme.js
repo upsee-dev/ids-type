@@ -19,6 +19,9 @@ const path = require("node:path");
 
 const SERVICE = "com.upsee.katachi.ime.KatachiImeService";
 
+/** 拡張漢字用フォント(scripts/build-font-app.py が生成)。iOS拡張だけ自前の複製が要る */
+const EXT_FONTS = ["KatachiExt1.ttf", "KatachiExt2.ttf"];
+
 function copyDir(from, to) {
   fs.mkdirSync(to, { recursive: true });
   for (const name of fs.readdirSync(from)) {
@@ -55,13 +58,17 @@ const withImeSources = (config) =>
         if (f.endsWith(".tsv")) fs.copyFileSync(path.join(dictDir, f), path.join(assets, f));
       }
 
-      // 部品パレット用サブセットフォント。RN 側は expo-font で読むが、
-      // キーボード拡張は Kotlin なので assets から Typeface で読む必要がある
-      const font = path.join(root, "assets", "fonts", "KatachiParts.ttf");
-      if (fs.existsSync(font)) {
-        fs.copyFileSync(font, path.join(assets, "KatachiParts.ttf"));
-      } else {
-        console.warn("!! KatachiParts.ttf が無いので IME の部品が □ になります: " + font);
+      // 拡張漢字用フォント(KatachiExt1/2)は app.json の expo-font プラグインが
+      // assets/fonts/ へ置くので、ここでコピーする必要はない。IME(Kotlin)は
+      // RN と同じその1部を Typeface.createFromAsset で読む＝APK が二重に太らない。
+      // 生成されているかだけ確かめる(無いとキーボードが ☒ だらけになる)
+      for (const name of EXT_FONTS) {
+        if (!fs.existsSync(path.join(root, "assets", "fonts", name))) {
+          console.warn(
+            `!! ${name} が無いのでキーボードの拡張漢字が ☒ になります。` +
+              "python3 scripts/build-font-app.py を実行してください",
+          );
+        }
       }
       return cfg;
     },
@@ -118,8 +125,22 @@ const withImeAssetsIos = (config) =>
       for (const f of fs.readdirSync(dictDir)) {
         if (f.endsWith(".tsv")) fs.copyFileSync(path.join(dictDir, f), path.join(target, f));
       }
-      const font = path.join(root, "assets", "fonts", "KatachiParts.ttf");
-      if (fs.existsSync(font)) fs.copyFileSync(font, path.join(target, "KatachiParts.ttf"));
+      // iOS の App Extension は自分のバンドルしか読めないので、Android と違って
+      // 拡張漢字フォントの複製が要る(その分アプリの容量が増えるが、これが無いと
+      // システムキーボードの候補が ☒ になる)。Info.plist の UIAppFonts に
+      // 載せてあるので、拡張の中で UIFont(name:) として引ける
+      const fonts = path.join(root, "assets", "fonts");
+      for (const name of EXT_FONTS) {
+        const src = path.join(fonts, name);
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, path.join(target, name));
+        } else {
+          console.warn(
+            `!! ${name} が無いのでキーボードの拡張漢字が ☒ になります。` +
+              "python3 scripts/build-font-app.py を実行してください",
+          );
+        }
+      }
       return cfg;
     },
   ]);

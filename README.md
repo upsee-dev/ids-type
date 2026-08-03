@@ -20,8 +20,9 @@ katachi-ime/
 │   ├── data/
 │   │   ├── blocks.ts           #     Unicodeブロック表（★ビルドと実行時で共有）
 │   │   ├── palettes.ts         #     キーボードに並べる部品
+│   │   ├── themes.ts           #     着せ替え（Kotlin/Swift へは build:data が生成）
 │   │   └── types.ts            #     辞書の型
-│   └── kanji-data.json         #   生成済み辞書(102,998字・2.4MB / gzip 0.8MB)
+│   └── kanji-data.json         #   生成済み辞書(102,998字・2.7MB / gzip 0.9MB)
 ├── data-src/                   # 元データ（加工しない。README/sources.json に出典）
 │   ├── ids/                    #   BabelStone / CHISE拡張G〜J / CJKVI
 │   ├── kanjidic2/
@@ -46,7 +47,11 @@ katachi-ime/
 │   └── scripts/
 │       ├── sync-core.mjs       #   ../core を src/core/ へ複製（Metro制約の回避）
 │       └── build-android.sh    #   ローカルAPKビルド
-├── scripts/build-icons.py      # ロゴ1枚から配布用アイコン一式を書き出す
+├── scripts/
+│   ├── build-icons.py          # ロゴ1枚から配布用アイコン一式を書き出す
+│   ├── build-font-subset.py    # 部品パレット541字のサブセットフォント(旧・IME用に残置)
+│   ├── build-font-slices.py    # 全CJK字形の分割Webフォント(unicode-range・Web専用)
+│   └── build-font-app.py       # アプリ同梱フォント(KatachiExt1/2 + 各言語の範囲表)
 ├── assets-archive/logo/        # 採用ロゴのマスター
 └── docs/
     ├── katachi-strategy.pdf    # 事業戦略ドキュメント(A4・6ページ)

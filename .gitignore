@@ -20,8 +20,10 @@ data-src/kanjidic2/kanjidic2.xml
 *.log
 *.tsbuildinfo
 
-# サブセットの元フォント（32MB）。scripts/build-font-subset.py の実行時だけ要る。
-# 配布物は web/public/fonts/ と native/assets/fonts/ のサブセット(計100KB弱)のほう
+# サブセットの元フォント（32MB）。scripts/build-font-*.py の実行時だけ要る。
+# 配布物は web/public/fonts/ と native/assets/fonts/ の切り出しのほう。
+# そちらは34MBあるが、EAS Build も Vercel も Python を回さない（元フォントも
+# 持たない）ので、リポジトリに入れておかないとビルドが ☒ だらけになる。
 assets-archive/fonts/Plangothic*.ttf
 
 # 静的書き出し（EAS Hosting へのデプロイ時に作る一時物）

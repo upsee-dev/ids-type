@@ -139,17 +139,33 @@ export default function CharsPage() {
             </Link>
           </div>
 
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={(e) => {
-              setComposing(false);
-              setInput(e.currentTarget.value);
-            }}
-            placeholder="絞り込み: かたち(LR木木) / 部品(氵) / 読み(あお) / U+3134A"
-            className="kanji mt-1.5 w-full rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-base dark:border-stone-700 dark:bg-stone-950"
-          />
+          <div className="relative mt-1.5">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={(e) => {
+                setComposing(false);
+                setInput(e.currentTarget.value);
+              }}
+              enterKeyHint="search"
+              // 検索キーでOSキーボードを閉じて一覧を見られるようにする
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !composing) e.currentTarget.blur();
+              }}
+              placeholder="絞り込み: かたち(LR木木) / 部品(氵) / 読み(あお) / U+3134A"
+              className="kanji w-full rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 pr-9 text-base dark:border-stone-700 dark:bg-stone-950"
+            />
+            {input && (
+              <button
+                onClick={() => setInput("")}
+                aria-label="絞り込みを消す"
+                className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-full px-2 py-1 text-sm text-stone-400 active:text-stone-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             {LIST_EXAMPLES.map((x) => (
@@ -244,8 +260,9 @@ export default function CharsPage() {
 
           <footer className="mt-6 text-[10px] leading-relaxed text-stone-400 dark:text-stone-500">
             実線枠＝KANJIDIC2 収録(読み・学年つき)、破線枠＝それ以外の CJK
-            統合漢字。拡張B以降の字は端末にフォントが無いと □
-            で表示されます(データとしては入っており、コピーすれば正しく貼り付けられます)。
+            統合漢字。端末にフォントが無い字は Plangothic (SIL OFL 1.1)
+            の分割フォントを読み込んで表示します。それでも □
+            になる字はフォント未収録です(表示だけの問題で、コピーすれば正しく貼り付けられます)。
           </footer>
         </div>
       </main>

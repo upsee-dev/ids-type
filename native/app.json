@@ -44,7 +44,16 @@
           }
         }
       ],
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "//": "拡張B〜Jの字を描く同梱フォント(scripts/build-font-app.py が生成)。静的バンドルにすると Android は app/src/main/assets/fonts/ に置かれ、システムIME(Kotlin)も同じ1部を読める",
+          "fonts": [
+            "./assets/fonts/KatachiExt1.ttf",
+            "./assets/fonts/KatachiExt2.ttf"
+          ]
+        }
+      ],
       "./plugins/withKatachiIme",
       "./plugins/withReleaseSigning"
     ],

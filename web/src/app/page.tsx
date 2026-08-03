@@ -34,7 +34,41 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const outputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
+
+  // 確定文字が欄からあふれたら、打ったばかりの字(末尾)が見える位置へ送る
+  useEffect(() => {
+    const el = outputRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [output]);
+
+  // OSキーボード表示中は画面全体を visualViewport の高さに縮めて、
+  // 下段の入力欄がキーボードの真上に来るようにする。iOS Safari は
+  // interactive-widget 未対応で、何もしないとキーボードが画面に覆い被さり
+  // 入力欄が隠れて打っている文字が見えない。
+  const [viewH, setViewH] = useState<number | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!osKeyboard || !vv) {
+      setViewH(null);
+      return;
+    }
+    const update = () => {
+      // キーボードに隠れている分。ブラウザUIの誤差程度なら何もしない
+      const covered = window.innerHeight - vv.height - vv.offsetTop;
+      setViewH(covered > 50 ? vv.height : null);
+      // Safari が入力欄を見せようとページごと押し上げるのを戻す
+      window.scrollTo(0, 0);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, [osKeyboard]);
 
   // IME変換中(composing)は未確定文字で検索しない
   useEffect(() => {
@@ -94,6 +128,7 @@ export default function Home() {
   const pick = (ch: string) => {
     setOutput((o) => o + ch);
     setSelected(ch);
+    setCharCopied(false);
   };
 
   const copy = async () => {
@@ -107,6 +142,19 @@ export default function Home() {
     }
   };
 
+  // 選択中の1字だけをコピーする(出力欄とは別。詳細パネルのボタンから使う)
+  const [charCopied, setCharCopied] = useState(false);
+  const copyChar = async () => {
+    if (!selected) return;
+    try {
+      await navigator.clipboard.writeText(selected);
+      setCharCopied(true);
+      setTimeout(() => setCharCopied(false), 1200);
+    } catch {
+      setCharCopied(false);
+    }
+  };
+
   const selMeta = selected && engine ? engine.meta(selected) : undefined;
   const selDecomp = useMemo(
     () => (selected && engine ? engine.decompose(selected) : []),
@@ -114,7 +162,10 @@ export default function Home() {
   );
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
+    <div
+      className="flex h-dvh flex-col overflow-hidden"
+      style={viewH ? { height: viewH } : undefined}
+    >
       {/* ── 上段: タイトル + 出力(確定テキスト) ── */}
       <header className="shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90">
         <div className="mx-auto w-full max-w-3xl px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
@@ -145,6 +196,7 @@ export default function Home() {
 
           <div className="mt-1.5 flex items-center gap-1.5">
             <input
+              ref={outputRef}
               value={output}
               readOnly
               placeholder="ここに確定した文字が入ります"
@@ -204,7 +256,7 @@ export default function Home() {
 
           {!engine && !loadError && (
             <p className="py-10 text-center text-sm text-stone-500">
-              辞書データを読み込み中… (10万字・gzip 約0.8MB)
+              辞書データを読み込み中… (10万字・gzip 約0.9MB)
             </p>
           )}
           {loadError && (
@@ -259,24 +311,38 @@ export default function Home() {
             onPointerDown={keepFocus}
           />
 
-          {selected && selMeta && (
-            <section className="mt-3 rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-              <CharDetail ch={selected} meta={selMeta} decomposition={selDecomp} />
-            </section>
-          )}
-
           <footer className="mt-6 text-[10px] leading-relaxed text-stone-400 dark:text-stone-500">
             入力方式は zi.tools の IDS 部品入力を参考にしています。収録字は
             zi.tools と同じ Unicode の全CJK漢字 102,980字 (統合漢字 URO・拡張A〜J
             + 互換漢字)。分解データ: BabelStone IDS (Andrew West, 著作権主張なし)
             / CHISE IDS Database / CJKVI IDS Database (GPLv2) / 漢字情報:
-            KANJIDIC2 (EDRDG, CC BY-SA 4.0)。本アプリはプロトタイプです。
+            KANJIDIC2 (EDRDG, CC BY-SA 4.0) / 字形表示: Plangothic (SIL OFL
+            1.1)。本アプリはプロトタイプです。
           </footer>
         </div>
       </main>
 
-      {/* ── 下段: 入力欄 + カタチキーボード ── */}
+      {/* ── 下段: 選んだ字の詳細 + 入力欄 + カタチキーボード ── */}
       <div className="shrink-0">
+        {/* 候補一覧の下(スクロールの奥)に置くと選んでも見えないので、常に見える位置に出す */}
+        {selected && selMeta && (
+          <section
+            onPointerDown={keepFocus}
+            className="border-t border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900"
+          >
+            <div className="mx-auto w-full max-w-3xl px-3 py-2">
+              <CharDetail
+                ch={selected}
+                meta={selMeta}
+                decomposition={selDecomp}
+                onCopy={copyChar}
+                onClose={() => setSelected(null)}
+                copied={charCopied}
+              />
+            </div>
+          </section>
+        )}
+
         <div className="border-t border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-1.5 px-3 py-2">
             <input
@@ -291,6 +357,10 @@ export default function Home() {
               // 自前キーボード使用時は端末のキーボードを出さない(画面が隠れるため)
               inputMode={osKeyboard ? "text" : "none"}
               enterKeyHint="search"
+              // 検索キーでOSキーボードを閉じて候補を全部見られるようにする
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !composing) e.currentTarget.blur();
+              }}
               placeholder="例: LR日月"
               autoComplete="off"
               autoCorrect="off"

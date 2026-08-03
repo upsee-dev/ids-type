@@ -28,6 +28,9 @@ export function splitDictionary(
       m.freq,
       m.on.join(" "),
       m.kun.join(" "),
+      m.strokes,
+      m.rad,
+      m.meaning.join(", "),
     ];
   }
 

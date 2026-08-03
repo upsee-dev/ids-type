@@ -38,6 +38,17 @@ export {
 
 export { RADICAL_PALETTE, DIFFICULT_COMPONENTS } from "./data/palettes.ts";
 
+export {
+  AUTO_DARK,
+  AUTO_LIGHT,
+  THEMES,
+  themeByKey,
+  type ThemeColors,
+  type ThemeDef,
+} from "./data/themes.ts";
+
+export { radicalChar } from "./data/types.ts";
+
 export type {
   CharMeta,
   ListPage,

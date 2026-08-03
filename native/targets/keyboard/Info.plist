@@ -2,6 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
+    <!-- 同梱フォント。拡張は自分のバンドルのフォントをここに書かないと
+         UIFont(name:) で引けず、拡張漢字が ☒ になる
+         (実体は withKatachiIme.js が assets/fonts/ から複製する) -->
+    <key>UIAppFonts</key>
+    <array>
+      <string>KatachiExt1.ttf</string>
+      <string>KatachiExt2.ttf</string>
+    </array>
     <key>NSExtension</key>
     <dict>
       <key>NSExtensionPointIdentifier</key>
