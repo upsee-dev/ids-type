@@ -1,8 +1,8 @@
 import UIKit
 
-/// カタチ入力の iOS キーボード拡張。
+/// 漢字カタチ入力の iOS キーボード拡張。
 ///
-/// 設定 > 一般 > キーボード > キーボード に「カタチ入力」として追加される。
+/// 設定 > 一般 > キーボード > キーボード に「漢字カタチ入力」として追加される。
 /// ネットワークを使わない設計なので「フルアクセス」は要求しない
 /// (審査でもプライバシー訴求でも有利。docs/technical-roadmap.md 参照)。
 ///
@@ -22,8 +22,11 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         didSet { onComposingChanged() }
     }
 
-    private enum Tab: Int { case shape, common, radical }
-    private var currentTab: Tab = .shape
+    /// 部品パレットの種類。**かたち(操作子)はタブに含めない**。
+    /// 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
+    /// かたちは候補の下に常時出しておき、タブは部品の出し分けだけに使う。
+    private enum Tab: Int { case common, radical }
+    private var currentTab: Tab = .common
     private var strokeGroup = "common"
     private var searchSeq = 0
     /// ⌫長押しの連射タイマー
@@ -79,6 +82,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             b.setTitleColor(colSub, for: .normal)
             style(b, fill: colCard, stroke: colBorder)
         }
+        buildOperators()
         buildStrokeChips()
         rebuildKeys()
         onComposingChanged() // ラベルの色を直し、候補も引き直す
@@ -88,6 +92,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private let candidateScroll = UIScrollView()
     private let candidateRow = UIStackView()
     private let tabRow = UIStackView()
+    /// かたち(操作子)の行。タブに関係なく常に出す
+    private let opScroll = UIScrollView()
+    private let opRow = UIStackView()
     private let strokeScroll = UIScrollView()
     private let strokeRow = UIStackView()
     private let keyArea = UIStackView()
@@ -178,11 +185,30 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         ])
         root.addArrangedSubview(candidateScroll)
 
+        // ── かたち(操作子) ──
+        // タブの外に出して常時表示にする。「かたち→部品→部品」と続けて打つのに
+        // タブ往復が要らなくなる
+        opRow.axis = .horizontal
+        opRow.spacing = 4
+        opRow.translatesAutoresizingMaskIntoConstraints = false
+        opScroll.addSubview(opRow)
+        opScroll.showsHorizontalScrollIndicator = false
+        NSLayoutConstraint.activate([
+            opRow.topAnchor.constraint(equalTo: opScroll.topAnchor),
+            opRow.bottomAnchor.constraint(equalTo: opScroll.bottomAnchor),
+            opRow.leadingAnchor.constraint(equalTo: opScroll.leadingAnchor),
+            opRow.trailingAnchor.constraint(equalTo: opScroll.trailingAnchor),
+            opRow.heightAnchor.constraint(equalTo: opScroll.heightAnchor),
+            opScroll.heightAnchor.constraint(equalToConstant: 38),
+        ])
+        root.addArrangedSubview(opScroll)
+        buildOperators()
+
         // ── タブ ──
         tabRow.axis = .horizontal
         tabRow.spacing = 4
         tabRow.distribution = .fillEqually
-        for (i, label) in ["かたち", "よく使う部品", "部首・偏旁"].enumerated() {
+        for (i, label) in ["よく使う部品", "部首・偏旁"].enumerated() {
             let b = UIButton(type: .system)
             b.setTitle(label, for: .normal)
             b.titleLabel?.font = .systemFont(ofSize: 12)
@@ -235,7 +261,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     // MARK: - 操作
 
     @objc private func onTab(_ sender: UIButton) {
-        currentTab = Tab(rawValue: sender.tag) ?? .shape
+        currentTab = Tab(rawValue: sender.tag) ?? .common
         rebuildKeys()
     }
 
@@ -366,6 +392,28 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         }
     }
 
+    /// かたちの並び。よく使う順を先頭にして横スクロールで全部出す。
+    /// IDC文字(⿰⿱⿴…)は端末のフォントで豆腐になるので日本語ラベルで描く。
+    private func buildOperators() {
+        opRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let codes = Ids.primaryCodes
+            + Ids.operators.map(\.code).filter { !Ids.primaryCodes.contains($0) }
+        for code in codes {
+            guard let op = Ids.operators.first(where: { $0.code == code }) else { continue }
+            let b = UIButton(type: .system)
+            b.setTitle(op.label, for: .normal)
+            b.titleLabel?.font = .systemFont(ofSize: 13)
+            b.setTitleColor(colText, for: .normal)
+            b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 10, bottom: 4, right: 10)
+            style(b, fill: colCard, stroke: colBorder)
+            b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+            b.addAction(
+                UIAction { [weak self] _ in self?.insert(op.code) }, for: .touchUpInside,
+            )
+            opRow.addArrangedSubview(b)
+        }
+    }
+
     private func rebuildKeys() {
         for (i, v) in tabRow.arrangedSubviews.enumerated() {
             guard let b = v as? UIButton else { continue }
@@ -377,13 +425,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         keyArea.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         switch currentTab {
-        case .shape:
-            // 操作子。IDC文字ではなく日本語ラベルを出す
-            let codes = Ids.primaryCodes + Ids.operators.map(\.code).filter { !Ids.primaryCodes.contains($0) }
-            grid(codes.map { code in
-                let op = Ids.operators.first { $0.code == code }!
-                return key(op.label, size: 13) { [weak self] in self?.insert(op.code) }
-            }, cols: 4)
         case .common:
             let parts = commonParts()
             if parts.isEmpty {

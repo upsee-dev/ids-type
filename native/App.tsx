@@ -59,13 +59,16 @@ function Kanji({
   text,
   size,
   color,
+  lines,
 }: {
   text: string;
   size: number;
   color: string;
+  /** 指定すると行数を抑える（解説をスクロールさせないため） */
+  lines?: number;
 }) {
   return (
-    <Text style={{ fontSize: size, color }}>
+    <Text numberOfLines={lines} style={{ fontSize: size, color }}>
       {[...text].map((ch, i) => (
         <Text key={i} style={{ fontFamily: fontFor(ch) }}>
           {ch}
@@ -117,8 +120,10 @@ function Screen() {
   const [output, setOutput] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  // 既定は自前のカタチキーボード。「あ」で端末のキーボードに切り替える
-  const [osKeyboard, setOsKeyboard] = useState(false);
+
+  // 入力欄にカーソルがあるあいだだけキーボードを出す。閉じているあいだは
+  // そのぶん候補が広く見えるので、探す→選ぶが1画面で完結する
+  const [focused, setFocused] = useState(true);
 
   const inputRef = useRef<TextInput>(null);
   const outputScroll = useRef<ScrollView>(null);
@@ -128,6 +133,12 @@ function Screen() {
   // 辞書(約13,000字)の構築は最初の描画を待ってから行う
   useEffect(() => {
     const id = setTimeout(() => setEngine(new Engine(rawData)), 0);
+    return () => clearTimeout(id);
+  }, []);
+
+  // 起動直後から打てるように、入力欄にカーソルを置いてキーボードを出しておく
+  useEffect(() => {
+    const id = setTimeout(() => inputRef.current?.focus(), 250);
     return () => clearTimeout(id);
   }, []);
 
@@ -203,7 +214,7 @@ function Screen() {
 
   const selMeta = selected && engine ? engine.meta(selected) : undefined;
   const selDecomp = useMemo(
-    () => (selected && engine ? engine.decompose(selected) : []),
+    () => (selected && engine ? engine.decompose(selected, 3) : []),
     [selected, engine],
   );
 
@@ -224,7 +235,7 @@ function Screen() {
       {/* ── 上段: タイトル + 出力(確定テキスト) ── */}
       <View style={[s.header, { backgroundColor: t.card, borderBottomColor: t.border }]}>
         <View style={s.titleRow}>
-          <Text style={[s.title, { color: t.text }]}>カタチ入力</Text>
+          <Text style={[s.title, { color: t.text }]}>漢字カタチ入力</Text>
           <Text style={[s.subtitle, { color: t.faint, flex: 1 }]} numberOfLines={1}>
             読めない漢字を、見たまま打てる
           </Text>
@@ -432,14 +443,9 @@ function Screen() {
         />
 
         {selected && selMeta && (
-          <ScrollView
-            horizontal={false}
-            style={{ maxHeight: 132 }}
-            contentContainerStyle={[
-              s.detail,
-              { backgroundColor: t.card, borderColor: t.border },
-            ]}
-          >
+          // 高さを固定するとスクロールが要る＝ひとめで読めないので、
+          // 中身の量に合わせて伸ばす（行数は下で numberOfLines に抑えてある）
+          <View style={[s.detail, { backgroundColor: t.card, borderColor: t.border }]}>
             <Text style={{ fontFamily: fontFor(selected), fontSize: 44, color: t.text }}>
               {selected}
             </Text>
@@ -471,12 +477,12 @@ function Screen() {
                   .join("　")}
               </Text>
               {!!selMeta.meaning && (
-                <Text style={{ color: t.sub, fontSize: 11 }}>
+                <Text numberOfLines={2} style={{ color: t.sub, fontSize: 11 }}>
                   意味(英): {selMeta.meaning}
                 </Text>
               )}
               {selDecomp.length > 0 && (
-                <Kanji text={selDecomp.join("　")} size={11} color={t.sub} />
+                <Kanji text={selDecomp.join("　")} size={11} color={t.sub} lines={2} />
               )}
             </View>
             <View style={{ alignItems: "center", gap: 8 }}>
@@ -497,7 +503,7 @@ function Screen() {
                 <Text style={{ color: t.faint, fontSize: 14 }}>✕</Text>
               </Pressable>
             </View>
-          </ScrollView>
+          </View>
         )}
       </View>
 
@@ -510,9 +516,13 @@ function Screen() {
           onSelectionChange={e => {
             caret.current = e.nativeEvent.selection;
           }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           selection={forceSel ?? undefined}
-          // 自前キーボード使用時は端末のキーボードを出さない(画面が隠れるため)
-          showSoftInputOnFocus={osKeyboard}
+          // かたちコードの欄には端末のIMEを一切触らせない。触らせると変換が
+          // 始まった瞬間に欄ごと持っていかれ、先に選んだ〈左右〉などが消える。
+          // 読みから部品を引きたいときはキーボード内の「読みでさがす」を使う
+          showSoftInputOnFocus={false}
           autoCorrect={false}
           autoCapitalize="characters"
           placeholder="例: LR日月"
@@ -545,18 +555,25 @@ function Screen() {
         </Pressable>
       </View>
 
+      {/* カーソルがあるときだけ浮上させる。閉じているときは
+          「タップして入力」の細い帯だけ残し、触れれば戻ってくる */}
+      {focused ? (
       <KatachiKeyboard
         engine={engine}
         theme={t}
         onInsert={insert}
-        osKeyboard={osKeyboard}
-        onToggleOsKeyboard={() => {
-          setOsKeyboard(v => !v);
-          inputRef.current?.blur();
-          setTimeout(() => inputRef.current?.focus(), 0);
-        }}
         maxHeight={keyboardMaxHeight}
       />
+      ) : (
+        <Pressable
+          onPress={() => inputRef.current?.focus()}
+          style={[s.reopenBar, { backgroundColor: t.card, borderTopColor: t.border }]}
+        >
+          <Text style={{ fontSize: 12, color: t.sub }}>
+            タップしてキーボードを出す
+          </Text>
+        </Pressable>
+      )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -596,6 +613,11 @@ const s = StyleSheet.create({
     fontSize: 18,
   },
   outputInner: { alignItems: "center", minHeight: 26 },
+  reopenBar: {
+    alignItems: "center",
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
   smallBtn: {
     borderWidth: 1,
     borderRadius: 8,

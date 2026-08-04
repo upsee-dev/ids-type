@@ -7,7 +7,7 @@
  */
 module.exports = {
   type: "keyboard",
-  name: "カタチ入力",
+  name: "漢字カタチ入力",
   icon: "../../assets/icon.png",
   colors: { $accent: "#4437D1" },
   deploymentTarget: "15.1",

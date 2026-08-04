@@ -28,8 +28,6 @@ export default function Home() {
   const [output, setOutput] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  // 既定は自前のカタチキーボード。「あ」で端末のキーボードに切り替える
-  const [osKeyboard, setOsKeyboard] = useState(false);
   const [composing, setComposing] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
@@ -43,17 +41,14 @@ export default function Home() {
     if (el) el.scrollLeft = el.scrollWidth;
   }, [output]);
 
-  // OSキーボード表示中は画面全体を visualViewport の高さに縮めて、
-  // 下段の入力欄がキーボードの真上に来るようにする。iOS Safari は
-  // interactive-widget 未対応で、何もしないとキーボードが画面に覆い被さり
-  // 入力欄が隠れて打っている文字が見えない。
+  // 端末のキーボードが出ているあいだは画面全体を visualViewport の高さに縮める。
+  // iOS Safari は interactive-widget 未対応で、何もしないとキーボードが画面に
+  // 覆い被さって下段が隠れる。出るのは「読みでさがす」の欄に触れたときだけだが、
+  // どの欄から出ても効くよう常に見張っておく。
   const [viewH, setViewH] = useState<number | null>(null);
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!osKeyboard || !vv) {
-      setViewH(null);
-      return;
-    }
+    if (!vv) return;
     const update = () => {
       // キーボードに隠れている分。ブラウザUIの誤差程度なら何もしない
       const covered = window.innerHeight - vv.height - vv.offsetTop;
@@ -68,7 +63,7 @@ export default function Home() {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
     };
-  }, [osKeyboard]);
+  }, []);
 
   // IME変換中(composing)は未確定文字で検索しない
   useEffect(() => {
@@ -172,7 +167,7 @@ export default function Home() {
           {/* 横向きなど画面が低いときはタイトルを畳んで候補の高さを確保する */}
           <div className="flex items-baseline justify-between gap-2 [@media(max-height:560px)]:hidden">
             <h1 className="truncate text-base font-bold tracking-wide sm:text-lg">
-              カタチ入力
+              漢字カタチ入力
               <span className="ml-1.5 text-[10px] font-normal text-stone-400">
                 読めない漢字を、見たまま打てる
               </span>
@@ -354,8 +349,10 @@ export default function Home() {
                 setComposing(false);
                 setQuery(e.currentTarget.value);
               }}
-              // 自前キーボード使用時は端末のキーボードを出さない(画面が隠れるため)
-              inputMode={osKeyboard ? "text" : "none"}
+              // かたちコードの欄には端末のIMEを触らせない。変換が始まると
+              // 欄ごと持っていかれ、先に選んだ〈左右〉などが消えるため。
+              // 読みから部品を引くのはキーボード内の「読みでさがす」で行う
+              inputMode="none"
               enterKeyHint="search"
               // 検索キーでOSキーボードを閉じて候補を全部見られるようにする
               onKeyDown={(e) => {
@@ -394,19 +391,7 @@ export default function Home() {
           </div>
         </div>
 
-        <KatachiKeyboard
-          engine={engine}
-          onInsert={insert}
-          osKeyboard={osKeyboard}
-          onToggleOsKeyboard={() => {
-            setOsKeyboard((v) => !v);
-            // inputMode の反映後にフォーカスし直さないと端末のキーボードが出ない
-            setTimeout(
-              () => inputRef.current?.focus({ preventScroll: true }),
-              0,
-            );
-          }}
-        />
+        <KatachiKeyboard engine={engine} onInsert={insert} />
       </div>
     </div>
   );

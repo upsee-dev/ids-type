@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-const TITLE = "カタチ入力 — 読めない漢字を、見たまま打てる";
+const TITLE = "漢字カタチ入力 — 読めない漢字を、見たまま打てる";
 const DESCRIPTION =
   "IDS(空間関係)コードと部品の組み合わせで、読みが分からない漢字を入力できる日本語向けキーボード。Unicode の CJK 統合漢字 102,998 字を収録。";
 
@@ -18,19 +18,19 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: TITLE,
   description: DESCRIPTION,
-  applicationName: "カタチ入力",
+  applicationName: "漢字カタチ入力",
   // favicon.ico / icon.png / apple-icon.png / opengraph-image.png は
   // app/ 直下のファイル規約で自動的に <head> に入る(手書きしない)
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "カタチ入力",
+    title: "漢字カタチ入力",
     statusBarStyle: "default",
   },
   openGraph: {
     type: "website",
     locale: "ja_JP",
-    siteName: "カタチ入力",
+    siteName: "漢字カタチ入力",
     title: TITLE,
     description: DESCRIPTION,
   },

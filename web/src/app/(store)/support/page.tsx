@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { StorePage, Section } from "@/components/StorePage";
 
 export const metadata: Metadata = {
-  title: "サポート — カタチ入力",
-  description: "カタチ入力の使い方・よくある質問・お問い合わせ先。",
+  title: "サポート — 漢字カタチ入力",
+  description: "漢字カタチ入力の使い方・よくある質問・お問い合わせ先。",
 };
 
 export default function Support() {
@@ -27,11 +27,11 @@ export default function Support() {
         <ul>
           <li>
             <b>iOS</b>: 設定 → 一般 → キーボード → キーボード → 新しいキーボードを追加
-            →「カタチ入力」。フルアクセスは不要です
+            →「漢字カタチ入力」。フルアクセスは不要です
           </li>
           <li>
             <b>Android</b>: 設定 → 言語と入力 → 画面キーボード → キーボードを管理
-            →「カタチ入力」をオン
+            →「漢字カタチ入力」をオン
           </li>
         </ul>
       </Section>

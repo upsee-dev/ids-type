@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import { StorePage, Section } from "@/components/StorePage";
 
 export const metadata: Metadata = {
-  title: "アカウント削除 — カタチ入力",
+  title: "アカウント削除 — 漢字カタチ入力",
   description:
-    "カタチ入力にはアカウント機能がありません。削除すべきデータは存在せず、アプリを削除すれば端末上のデータも残りません。",
+    "漢字カタチ入力にはアカウント機能がありません。削除すべきデータは存在せず、アプリを削除すれば端末上のデータも残りません。",
 };
 
 export default function AccountDeletion() {
   return (
     <StorePage title="アカウントとデータの削除" updated="2026-08-01">
-      <Section title="カタチ入力にアカウントはありません">
+      <Section title="漢字カタチ入力にアカウントはありません">
         <p>
           ログイン機能がないため、<b>作成されるアカウントがありません</b>。
           サーバー上にお客様のデータを保持していないため、削除を依頼していただく先もありません。
@@ -25,10 +25,10 @@ export default function AccountDeletion() {
         <ul>
           <li>
             <b>iOS</b>: ホーム画面でアイコンを長押し →「Appを削除」。あわせて
-            設定 → 一般 → キーボード → キーボード から「カタチ入力」を削除できます
+            設定 → 一般 → キーボード → キーボード から「漢字カタチ入力」を削除できます
           </li>
           <li>
-            <b>Android</b>: 設定 → アプリ →「カタチ入力」→ アンインストール。あわせて
+            <b>Android</b>: 設定 → アプリ →「漢字カタチ入力」→ アンインストール。あわせて
             設定 → 言語と入力 → 画面キーボード から無効にできます
           </li>
         </ul>

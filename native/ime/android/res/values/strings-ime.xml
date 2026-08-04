@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="katachi_ime_label">カタチ入力</string>
+    <string name="katachi_ime_label">漢字カタチ入力</string>
 </resources>

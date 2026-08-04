@@ -7,7 +7,7 @@ import android.view.View
 import kotlin.concurrent.thread
 
 /**
- * カタチ入力のシステムキーボード本体。
+ * 漢字カタチ入力のシステムキーボード本体。
  *
  * Android の入力方式は InputMethodService を継承した Service として登録する
  * （設定 > 言語と入力 > 画面キーボード に出るのはこれ）。

@@ -22,7 +22,7 @@ export function StorePage({
             href="/"
             className="text-xs text-stone-500 hover:text-indigo-600 dark:text-stone-400"
           >
-            ← カタチ入力
+            ← 漢字カタチ入力
           </Link>
           <h1 className="mt-2 text-2xl font-bold tracking-wide">{title}</h1>
           {updated && (
@@ -45,7 +45,7 @@ export function StorePage({
             サポート
           </Link>
           <Link href="/about" className="hover:text-indigo-600">
-            カタチ入力について
+            漢字カタチ入力について
           </Link>
           <span className="ml-auto">Upsee Inc.</span>
         </footer>

@@ -47,7 +47,13 @@ class KeyboardView(context: Context, private val host: Host) : LinearLayout(cont
         fun recreateKeyboard()
     }
 
-    private enum class Tab { SHAPE, COMMON, RADICAL }
+    /**
+     * 部品パレットの種類。**かたち(操作子)はタブに含めない**。
+     * 「⿰の左右」を選んでから部品を2つ選ぶ、という打ち方をするので、
+     * かたちと部品が別タブにあると1字打つたびに往復させられる。
+     * かたちは候補の下に常時出しておき、タブは部品の出し分けだけに使う。
+     */
+    private enum class Tab { COMMON, RADICAL }
 
     private companion object {
         /** ⌫長押しの連射間隔。標準のキーボードと同じくらいの速さ */
@@ -97,7 +103,7 @@ class KeyboardView(context: Context, private val host: Host) : LinearLayout(cont
     private val matchParent = ViewGroup.LayoutParams.MATCH_PARENT
 
     private var tabViews: List<TextView> = emptyList()
-    private var tab = Tab.SHAPE
+    private var tab = Tab.COMMON
     private var strokeGroup = "common"
     private var searchSeq = 0
     private var cachedCommon: List<String>? = null
@@ -107,6 +113,8 @@ class KeyboardView(context: Context, private val host: Host) : LinearLayout(cont
     private val keyArea: LinearLayout
     private val strokeRow: HorizontalScrollView
     private val strokeInner: LinearLayout
+    /** かたち(操作子)の行。タブに関係なく常に出す */
+    private val opInner: LinearLayout
     private val main = Handler(Looper.getMainLooper())
 
     /**
@@ -170,13 +178,28 @@ class KeyboardView(context: Context, private val host: Host) : LinearLayout(cont
             },
         )
 
-        // ── タブ ──
+        // ── かたち(操作子) ──
+        // タブの外に出して常時表示にする。「かたち→部品→部品」と続けて打つのに
+        // タブ往復が要らなくなる
+        opInner = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            setPadding(dp(6), dp(4), dp(6), dp(4))
+        }
+        addView(
+            HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(opInner)
+                layoutParams = LayoutParams(matchParent, wrap)
+            },
+        )
+        buildOperators()
+
+        // ── タブ(部品パレットの出し分けだけ) ──
         val tabs = LinearLayout(context).apply {
             orientation = HORIZONTAL
             setPadding(dp(6), dp(2), dp(6), dp(2))
         }
         tabViews = listOf(
-            Tab.SHAPE to "かたち",
             Tab.COMMON to "よく使う部品",
             Tab.RADICAL to "部首・偏旁",
         ).map { (t, label) ->
@@ -206,7 +229,9 @@ class KeyboardView(context: Context, private val host: Host) : LinearLayout(cont
         addView(
             ScrollView(context).apply {
                 addView(keyArea)
-                layoutParams = LayoutParams(matchParent, dp(210))
+                // かたちの行を常時表示にしたぶん、キーボード全体が高くなりすぎない
+                // よう部品グリッドを詰める(足りない分はスクロールで出す)
+                layoutParams = LayoutParams(matchParent, dp(168))
             },
         )
 
@@ -324,6 +349,34 @@ class KeyboardView(context: Context, private val host: Host) : LinearLayout(cont
         }
     }
 
+    /**
+     * かたちの並び。よく使う順(PRIMARY_CODES)を先頭にして横スクロールで全部出す。
+     * IDC文字(⿰⿱⿴…)は端末のフォントで豆腐になるので日本語ラベルで描く。
+     */
+    private fun buildOperators() {
+        opInner.removeAllViews()
+        val codes = Ids.PRIMARY_CODES +
+            Ids.OPERATORS.map { it.code }.filter { it !in Ids.PRIMARY_CODES }
+        for (code in codes) {
+            val op = Ids.OPERATORS.first { it.code == code }
+            opInner.addView(
+                TextView(context).apply {
+                    text = op.label
+                    setTextColor(colText)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    gravity = Gravity.CENTER
+                    setPadding(dp(10), dp(8), dp(10), dp(8))
+                    background = keyBg(colCard, colBorder)
+                    isClickable = true
+                    setOnClickListener { host.insert(op.code) }
+                    feedbackOnPress()
+                    layoutParams = LinearLayout.LayoutParams(wrap, wrap)
+                        .apply { marginEnd = dp(4) }
+                },
+            )
+        }
+    }
+
     private fun rebuildKeys() {
         tabViews.forEachIndexed { i, v ->
             val active = i == tab.ordinal
@@ -337,15 +390,6 @@ class KeyboardView(context: Context, private val host: Host) : LinearLayout(cont
         keyArea.removeAllViews()
 
         when (tab) {
-            Tab.SHAPE -> {
-                // 操作子。IDC文字ではなく日本語ラベルを出す
-                val codes = Ids.PRIMARY_CODES +
-                    Ids.OPERATORS.map { it.code }.filter { it !in Ids.PRIMARY_CODES }
-                grid(codes.size, 4) { i ->
-                    val op = Ids.OPERATORS.first { it.code == codes[i] }
-                    keyButton(op.label, 13f) { host.insert(op.code) }
-                }
-            }
             Tab.COMMON -> {
                 val parts = commonParts()
                 if (parts.isEmpty()) {

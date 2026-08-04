@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { StorePage, Section } from "@/components/StorePage";
 
 export const metadata: Metadata = {
-  title: "プライバシーポリシー — カタチ入力",
+  title: "プライバシーポリシー — 漢字カタチ入力",
   description:
-    "カタチ入力のプライバシーポリシー。入力内容・利用状況を含め、一切の情報を収集も送信もしません。",
+    "漢字カタチ入力のプライバシーポリシー。入力内容・利用状況を含め、一切の情報を収集も送信もしません。",
 };
 
 export default function Privacy() {
@@ -12,7 +12,7 @@ export default function Privacy() {
     <StorePage title="プライバシーポリシー" updated="2026-08-01">
       <Section title="ひとことで言うと">
         <p>
-          <b>カタチ入力は、何も集めず、どこにも送りません。</b>
+          <b>漢字カタチ入力は、何も集めず、どこにも送りません。</b>
           通信機能そのものを実装していないため、たとえ送ろうとしても送れません。
         </p>
       </Section>

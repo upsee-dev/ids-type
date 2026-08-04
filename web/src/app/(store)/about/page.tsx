@@ -2,17 +2,17 @@ import type { Metadata } from "next";
 import { StorePage, Section } from "@/components/StorePage";
 
 export const metadata: Metadata = {
-  title: "カタチ入力について",
+  title: "漢字カタチ入力について",
   description:
     "読めない漢字を、見たまま打てる。Unicodeの全CJK漢字102,998字を、形から引ける日本語キーボード。",
 };
 
 export default function About() {
   return (
-    <StorePage title="カタチ入力について">
+    <StorePage title="漢字カタチ入力について">
       <Section title="読めない漢字を、見たまま打てる">
         <p>
-          読みが分からない漢字は、普通のかなキーボードでは打てません。カタチ入力は
+          読みが分からない漢字は、普通のかなキーボードでは打てません。漢字カタチ入力は
           「どんな形か」だけで漢字を引けるキーボードです。
         </p>
         <p className="kanji text-base">
