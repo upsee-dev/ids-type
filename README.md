@@ -200,8 +200,15 @@ JDK 17 は `/opt/homebrew/opt/openjdk@17`、Android SDK は `~/Library/Android/s
   EAS Build ならチャンネルは自動で入るが、ローカルビルドでは
   `updates.requestHeaders` の `expo-channel-name` を自分で指定しないと入らず、
   アプリの更新リクエストは `expo-channel-name` 不足でサーバーに 400 で弾かれる
-  （**1.0.0〜1.0.2 のビルドがこの状態**で、OTAは一切届かない。1.0.2 より後の
-  ビルドから有効になる）
+  （**1.0.0〜1.0.2 のビルドがこの状態**で、OTAは一切届かない。**1.0.3 以降で有効**）。
+  疎通は curl で確かめられる — チャンネル無しなら 400、
+  有りかつ配信対象の runtimeVersion なら 200 でマニフェストが返る:
+
+  ```bash
+  curl -i https://u.expo.dev/<project-id> \
+    -H 'expo-platform: ios' -H 'expo-runtime-version: 1.0.3' \
+    -H 'expo-channel-name: production' -H 'accept: multipart/mixed'
+  ```
 - **Android**: `gradlew bundleRelease` で AAB を作り、`scripts/submit-play.py` で
   internal トラックへ。`withReleaseSigning` プラグインが `store/AuthKey/` の
   アップロード鍵で署名する（鍵が無いとデバッグ署名のままになり Play に弾かれる）。
