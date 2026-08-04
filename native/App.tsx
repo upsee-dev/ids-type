@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -167,10 +168,13 @@ function Screen() {
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // かたちコードを直接打つモード。⌨ で入り切りする。
+  // 端末のIMEをそのまま当てると変換が始まった瞬間に欄ごと持っていかれ、
+  // 先に選んだ〈左右〉が消えるので、変換の起きない英数キーボードを出す
+  const [directInput, setDirectInput] = useState(false);
+
   const inputRef = useRef<TextInput>(null);
   const outputScroll = useRef<ScrollView>(null);
-  const caret = useRef({ start: 0, end: 0 });
-  const [forceSel, setForceSel] = useState<{ start: number; end: number } | null>(null);
 
   // 辞書(約13,000字)の構築は最初の描画を待ってから行う
   useEffect(() => {
@@ -202,38 +206,22 @@ function Screen() {
     return () => clearTimeout(id);
   }, [engine, query]);
 
-  // selection を1レンダーだけ固定してキャレットを移し、あとは端末に任せる
-  useEffect(() => {
-    if (forceSel) setForceSel(null);
-  }, [forceSel]);
-
-  const applyEdit = (next: string, caretPos: number) => {
-    caret.current = { start: caretPos, end: caretPos };
-    setForceSel({ start: caretPos, end: caretPos });
-    setQuery(next);
-  };
-
-  const insert = (s: string) => {
-    const { start, end } = caret.current;
-    const safeStart = Math.min(start, query.length);
-    const safeEnd = Math.min(end, query.length);
-    applyEdit(query.slice(0, safeStart) + s + query.slice(safeEnd), safeStart + s.length);
-  };
+  /**
+   * かたちコードの編集。
+   *
+   * 以前はキャレット位置を selection で毎回押し込んでいたが、これが日本語IMEの
+   * 変換と衝突し、変換を始めた瞬間に欄の中身ごと消えていた（先に選んだ〈左右〉が
+   * 飛ぶ原因）。selection は渡さず、パレットからの挿入は末尾に足すだけにする。
+   * 左から順に組み立てる入力なので、これで困る場面はほぼない。
+   */
+  const insert = (s: string) => setQuery(q => q + s);
 
   const backspace = () => {
-    const { start, end } = caret.current;
-    const safeStart = Math.min(start, query.length);
-    const safeEnd = Math.min(end, query.length);
-    if (safeStart !== safeEnd) {
-      applyEdit(query.slice(0, safeStart) + query.slice(safeEnd), safeStart);
-    } else if (safeStart > 0) {
-      // サロゲートペア(𠮟 など)を1文字として消す
-      const dropped = [...query.slice(0, safeStart)].pop() ?? "";
-      applyEdit(
-        query.slice(0, safeStart - dropped.length) + query.slice(safeStart),
-        safeStart - dropped.length,
-      );
-    }
+    // サロゲートペア(𠮟 など)を1文字として消す
+    setQuery(q => {
+      const dropped = [...q].pop() ?? "";
+      return q.slice(0, q.length - dropped.length);
+    });
   };
 
   const copy = async () => {
@@ -569,16 +557,13 @@ function Screen() {
           ref={inputRef}
           value={query}
           onChangeText={setQuery}
-          onSelectionChange={e => {
-            caret.current = e.nativeEvent.selection;
-          }}
-          selection={forceSel ?? undefined}
-          // かたちコードの欄には端末のIMEを一切触らせない。触らせると変換が
-          // 始まった瞬間に欄ごと持っていかれ、先に選んだ〈左右〉などが消える。
-          // 読みから部品を引きたいときはキーボード内の「読みでさがす」を使う
-          showSoftInputOnFocus={false}
+          // ⌨ を押したときだけ端末のキーボードを出す。出すのは変換の起きない
+          // 英数キーボード(iOS: ascii-capable / Android: visible-password)。
+          // かな入力のまま打たせると変換が始まった瞬間に欄ごと持っていかれ、
+          // 先に選んだ〈左右〉が消える。部品は palette か「読みでさがす」から
+          showSoftInputOnFocus={directInput}
           autoCorrect={false}
-          autoCapitalize="characters"
+          autoCapitalize="none"
           placeholder="例: LR日月"
           placeholderTextColor={t.faint}
           style={[
@@ -586,6 +571,27 @@ function Screen() {
             { fontFamily: INPUT_FONT, color: t.text, borderColor: t.accent, backgroundColor: t.bg },
           ]}
         />
+        <Pressable
+          onPressIn={() => haptic("toggle")}
+          onPress={() => {
+            const next = !directInput;
+            setDirectInput(next);
+            // showSoftInputOnFocus の反映後に当て直さないと出ない/引っ込まない
+            inputRef.current?.blur();
+            setTimeout(() => inputRef.current?.focus(), 0);
+            if (!next) Keyboard.dismiss();
+          }}
+          accessibilityLabel="かたちコードを直接打つ"
+          style={[
+            s.smallBtn,
+            {
+              borderColor: directInput ? t.accent : t.border,
+              backgroundColor: directInput ? t.accentBg : "transparent",
+            },
+          ]}
+        >
+          <Text style={{ color: directInput ? t.accent : t.sub, fontSize: 16 }}>⌨</Text>
+        </Pressable>
         <Pressable
           onPressIn={() => haptic("key")}
           onPress={() => insert("?")}
@@ -602,7 +608,7 @@ function Screen() {
         </Pressable>
         <Pressable
           onPressIn={() => haptic("delete")}
-          onPress={() => applyEdit("", 0)}
+          onPress={() => setQuery("")}
           style={[s.smallBtn, { borderColor: t.border }]}
         >
           <Text style={{ color: t.sub, fontSize: 16 }}>✕</Text>
@@ -617,6 +623,11 @@ function Screen() {
         theme={t}
         onInsert={insert}
         maxHeight={keyboardMaxHeight}
+        collapsed={directInput}
+        onExpand={() => {
+          setDirectInput(false);
+          Keyboard.dismiss();
+        }}
       />
       </KeyboardAvoidingView>
 

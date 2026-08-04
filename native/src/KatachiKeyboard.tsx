@@ -41,11 +41,16 @@ export function KatachiKeyboard({
   theme,
   onInsert,
   maxHeight,
+  collapsed,
+  onExpand,
 }: {
   engine: Engine | null;
   theme: Theme;
   onInsert: (s: string) => void;
   maxHeight: number;
+  /** 端末のキーボードで直接打っているあいだは畳んで場所を空ける */
+  collapsed?: boolean;
+  onExpand?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("common");
   const [showAllOps, setShowAllOps] = useState(false);
@@ -59,6 +64,27 @@ export function KatachiKeyboard({
   }, [showAllOps]);
 
   const common = useMemo(() => engine?.commonParts(180) ?? [], [engine]);
+
+  // 直接入力中は端末のキーボードが下半分を占めるので、パレットは畳んでおく
+  if (collapsed) {
+    return (
+      <View style={{ backgroundColor: theme.bg, borderTopWidth: 1, borderTopColor: theme.border }}>
+        <View style={[styles.collapsedRow, { paddingHorizontal: SIDE_PADDING }]}>
+          <Text numberOfLines={1} style={{ flex: 1, fontSize: 11, color: theme.sub }}>
+            端末のキーボードで直接打てます（LR・UD などのコードも文字も）
+          </Text>
+          <Pressable
+            onPress={onExpand}
+            style={[styles.returnBtn, { backgroundColor: theme.accent }]}
+          >
+            <Text style={{ fontSize: 12, fontWeight: "600", color: theme.onAccent }}>
+              パレットに戻る
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   const inner = width - SIDE_PADDING * 2;
   const partW = (inner - GAP * (PART_COLS - 1)) / PART_COLS;
@@ -373,6 +399,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GAP },
+  collapsedRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 },
+  returnBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   opRow: { flexDirection: "row", gap: GAP, paddingVertical: 6 },
   opKey: {
     minWidth: 52,

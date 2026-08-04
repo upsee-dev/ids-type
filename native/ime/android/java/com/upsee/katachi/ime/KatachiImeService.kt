@@ -4,6 +4,7 @@ import android.inputmethodservice.InputMethodService
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import kotlin.concurrent.thread
 
 /**
@@ -76,8 +77,23 @@ class KatachiImeService : InputMethodService() {
             }
 
             override fun switchToOtherIme() {
-                // 「あ」キー。OSのIME切り替えへ
-                switchToNextInputMethod(false)
+                // 「あ」キー。かな入力など別のキーボードへ移りたいときに押す。
+                //
+                // switchToNextInputMethod だと有効なIMEを順送りするだけなので、
+                // 絵文字や音声入力に飛んでしまう。どれに移るかは本人に選ばせる。
+                //
+                // 移る前に未確定の「かたちコード」を消しておく。残したままだと
+                // 相手のテキスト欄に LR日 のような文字列と下線が居座り、
+                // カーソルの位置も分からなくなる。
+                currentInputConnection?.apply {
+                    setComposingText("", 1)
+                    finishComposingText()
+                }
+                composing.setLength(0)
+                view?.onComposingChanged()
+
+                val imm = getSystemService(InputMethodManager::class.java)
+                imm?.showInputMethodPicker()
             }
 
             override fun recreateKeyboard() {

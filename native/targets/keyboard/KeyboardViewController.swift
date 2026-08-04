@@ -217,7 +217,12 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             tabRow.addArrangedSubview(b)
         }
         let themeBtn = smallButton("🎨", #selector(onCycleTheme))
-        let switchBtn = smallButton("あ", #selector(onSwitchKeyboard))
+        let switchBtn = smallButton("あ", #selector(onSwitchKeyboard(_:event:)))
+        // handleInputModeList は event が要るので、この1つだけ event 付きで受ける
+        switchBtn.removeTarget(self, action: #selector(onSwitchKeyboard(_:event:)), for: .touchUpInside)
+        switchBtn.addTarget(
+            self, action: #selector(onSwitchKeyboard(_:event:)), for: .allTouchEvents,
+        )
         let tabWrap = UIStackView(arrangedSubviews: [tabRow, themeBtn, switchBtn])
         tabWrap.axis = .horizontal
         tabWrap.spacing = 4
@@ -307,7 +312,19 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     @objc private func onClear() { composing = "" }
 
-    @objc private func onSwitchKeyboard() { advanceToNextInputMode() }
+    /// 「あ」キー。かな入力など別のキーボードへ移りたいときに押す。
+    ///
+    /// advanceToNextInputMode() だと有効なキーボードを順送りするだけなので、
+    /// 絵文字に飛んでしまう。どれに移るかは本人に選ばせる
+    /// (handleInputModeList は地球儀キーと同じ選択リストを出す)。
+    ///
+    /// 移る前に未確定の「かたちコード」を消しておく。残したままだと相手の
+    /// テキスト欄に LR日 のような文字列が居座り、カーソルの位置も分からなくなる。
+    /// .allTouchEvents で受けるので何度も呼ばれる。空にする処理は1回で足りる
+    @objc private func onSwitchKeyboard(_ sender: UIButton, event: UIEvent) {
+        if !composing.isEmpty { composing = "" }
+        handleInputModeList(from: sender, with: event)
+    }
 
     private func insert(_ s: String) { composing += s }
 
