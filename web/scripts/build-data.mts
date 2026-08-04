@@ -24,6 +24,8 @@ import {
   emitPalettesSwift,
   emitThemesKotlin,
   emitThemesSwift,
+  emitOperatorIconsKotlin,
+  emitOperatorIconsSwift,
 } from "./build-data/emit-ime.mts";
 
 const mode = (process.env.IDS_SOURCE as IdsMode) || "mixed";
@@ -67,6 +69,16 @@ console.log(
 );
 console.log(
   "  着せ替え: " + emitThemesSwift(join(ROOT, "native/targets/keyboard/Themes.swift")),
+);
+console.log(
+  "  配置図: " +
+    emitOperatorIconsKotlin(
+      join(ROOT, "native/ime/android/java/com/upsee/katachi/ime/OperatorIcons.kt"),
+    ),
+);
+console.log(
+  "  配置図: " +
+    emitOperatorIconsSwift(join(ROOT, "native/targets/keyboard/OperatorIcons.swift")),
 );
 
 const json = JSON.stringify({ chars: data.chars, ext: data.ext, parts: data.parts });

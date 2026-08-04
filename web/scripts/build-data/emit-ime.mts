@@ -19,6 +19,7 @@ import {
   RADICAL_PALETTE,
 } from "../../../core/data/palettes.ts";
 import { AUTO_DARK, AUTO_LIGHT, THEMES } from "../../../core/data/themes.ts";
+import { OPERATOR_ICON } from "../../../core/ids/operators.ts";
 
 /**
  * 部品パレットを Kotlin のソースとして書き出す。
@@ -171,6 +172,75 @@ ${rows}
   mkdirSync(join(outPath, ".."), { recursive: true });
   writeFileSync(outPath, src);
   return "Themes.swift";
+}
+
+/**
+ * 操作子の配置図を Kotlin / Swift へ。
+ *
+ * IDC文字(⿰⿱⿴…)は端末のフォントで豆腐になるので、システムキーボードでも
+ * アプリと同じように**矩形で図を描く**。図形の定義は core/ids/operators.ts の
+ * 1か所で、ここから各言語のテーブルを書き出す。
+ * 矩形は 0〜1 に正規化した [x, y, w, h, 役割(1〜3)]。
+ */
+function iconRows(fmt: (code: string, body: string) => string): string {
+  return Object.entries(OPERATOR_ICON)
+    .map(([code, spec]) => {
+      if (spec.symbol) return fmt(code, JSON.stringify(spec.symbol));
+      const rects = (spec.rects ?? [])
+        .map((r) => `${r.x}f, ${r.y}f, ${r.w}f, ${r.h}f, ${r.role}f`)
+        .join(",  ");
+      return fmt(code, rects);
+    })
+    .join("\n");
+}
+
+export function emitOperatorIconsKotlin(outPath: string): string {
+  const rows = iconRows((code, body) =>
+    body.startsWith('"')
+      ? `        "${code}" to Icon(symbol = ${body}),`
+      : `        "${code}" to Icon(rects = floatArrayOf(${body})),`,
+  );
+  const src = `package com.upsee.katachi.ime
+
+// 自動生成: core/ids/operators.ts から web の build:data が書き出す。直接編集しないこと。
+object OperatorIcons {
+    /** rects は [x, y, w, h, 役割] の並び。0〜1 に正規化してある */
+    data class Icon(val rects: FloatArray? = null, val symbol: String? = null)
+
+    val ALL: Map<String, Icon> = mapOf(
+${rows}
+    )
+}
+`;
+  mkdirSync(join(outPath, ".."), { recursive: true });
+  writeFileSync(outPath, src);
+  return `OperatorIcons.kt (${Object.keys(OPERATOR_ICON).length}種)`;
+}
+
+export function emitOperatorIconsSwift(outPath: string): string {
+  const rows = iconRows((code, body) =>
+    body.startsWith('"')
+      ? `        "${code}": Icon(symbol: ${body}),`
+      : `        "${code}": Icon(rects: [${body.replace(/f/g, "")}]),`,
+  );
+  const src = `import Foundation
+
+// 自動生成: core/ids/operators.ts から web の build:data が書き出す。直接編集しないこと。
+enum OperatorIcons {
+    /// rects は [x, y, w, h, 役割] の並び。0〜1 に正規化してある
+    struct Icon {
+        var rects: [CGFloat]? = nil
+        var symbol: String? = nil
+    }
+
+    static let all: [String: Icon] = [
+${rows}
+    ]
+}
+`;
+  mkdirSync(join(outPath, ".."), { recursive: true });
+  writeFileSync(outPath, src);
+  return "OperatorIcons.swift";
 }
 
 export function emitImeDict(data: RawData, outDir: string): string[] {

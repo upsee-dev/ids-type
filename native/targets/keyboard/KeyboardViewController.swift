@@ -199,7 +199,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             opRow.leadingAnchor.constraint(equalTo: opScroll.leadingAnchor),
             opRow.trailingAnchor.constraint(equalTo: opScroll.trailingAnchor),
             opRow.heightAnchor.constraint(equalTo: opScroll.heightAnchor),
-            opScroll.heightAnchor.constraint(equalToConstant: 38),
+            opScroll.heightAnchor.constraint(equalToConstant: 44),
         ])
         root.addArrangedSubview(opScroll)
         buildOperators()
@@ -400,16 +400,45 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             + Ids.operators.map(\.code).filter { !Ids.primaryCodes.contains($0) }
         for code in codes {
             guard let op = Ids.operators.first(where: { $0.code == code }) else { continue }
+            let icon = OperatorIcons.all[code]
+
+            // アプリ版と同じ配置図を矩形で描く。図が無い操作子(⇄ ↻ −)は記号を出す
+            let label = UILabel()
+            label.text = op.label
+            label.font = .systemFont(ofSize: 9)
+            label.textColor = colSub
+            label.textAlignment = .center
+
+            let stack = UIStackView()
+            stack.axis = .vertical
+            stack.alignment = .center
+            stack.spacing = 1
+            stack.isUserInteractionEnabled = false
+            if icon?.rects != nil {
+                stack.addArrangedSubview(OperatorIconView(icon: icon!, color: colText, size: 18))
+            } else if let sym = icon?.symbol {
+                let s = UILabel()
+                s.text = sym
+                s.font = .systemFont(ofSize: 15)
+                s.textColor = colText
+                stack.addArrangedSubview(s)
+            }
+            stack.addArrangedSubview(label)
+
             let b = UIButton(type: .system)
-            b.setTitle(op.label, for: .normal)
-            b.titleLabel?.font = .systemFont(ofSize: 13)
-            b.setTitleColor(colText, for: .normal)
-            b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 10, bottom: 4, right: 10)
             style(b, fill: colCard, stroke: colBorder)
             b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
             b.addAction(
                 UIAction { [weak self] _ in self?.insert(op.code) }, for: .touchUpInside,
             )
+            stack.translatesAutoresizingMaskIntoConstraints = false
+            b.addSubview(stack)
+            NSLayoutConstraint.activate([
+                stack.centerXAnchor.constraint(equalTo: b.centerXAnchor),
+                stack.centerYAnchor.constraint(equalTo: b.centerYAnchor),
+                b.widthAnchor.constraint(greaterThanOrEqualTo: stack.widthAnchor, constant: 16),
+                b.widthAnchor.constraint(greaterThanOrEqualToConstant: 46),
+            ])
             opRow.addArrangedSubview(b)
         }
     }

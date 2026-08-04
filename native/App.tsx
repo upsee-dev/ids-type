@@ -32,6 +32,8 @@ import {
   setHapticLevel,
   type HapticLevel,
 } from "./src/feedback";
+import { Settings } from "./src/Settings";
+import { loadPro } from "./src/purchases";
 import {
   loadFavorites,
   loadHistory,
@@ -92,7 +94,11 @@ const HAPTIC_STORAGE_KEY = "katachi.haptic";
 function Screen() {
   // 着せ替え。既定は「おまかせ」(端末のライト/ダーク設定に追従)
   const [themeKey, setThemeKey] = useState(AUTO_THEME);
-  const [showThemes, setShowThemes] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  useEffect(() => {
+    loadPro().then(setIsPro).catch(() => {});
+  }, []);
   // 触覚の強さ。モジュール側は再描画に関係しないので値を渡すだけ
   const [hapticLevel, setLevel] = useState<HapticLevel>("normal");
   useEffect(() => {
@@ -299,118 +305,15 @@ function Screen() {
           </Pressable>
           <Pressable
             onPressIn={() => haptic("toggle")}
-            onPress={() => setShowThemes(v => !v)}
+            onPress={() => setShowSettings(true)}
             hitSlop={8}
-            accessibilityLabel="着せ替え"
-            style={[
-              s.themeBtn,
-              { borderColor: showThemes ? t.accent : t.border },
-            ]}
+            accessibilityLabel="設定"
+            style={[s.themeBtn, { borderColor: t.border }]}
           >
-            <Text style={{ fontSize: 13 }}>🎨</Text>
+            <Text style={{ fontSize: 13 }}>⚙</Text>
           </Pressable>
         </View>
 
-        {showThemes && (
-          <View style={s.settingRow}>
-            <Text style={{ fontSize: 11, color: t.faint }}>触覚</Text>
-            {HAPTIC_LEVELS.map(h => (
-              <Pressable
-                key={h.key}
-                onPress={() => pickHaptic(h.key)}
-                style={[
-                  s.themeChip,
-                  {
-                    borderColor: hapticLevel === h.key ? t.accent : t.border,
-                    backgroundColor:
-                      hapticLevel === h.key ? t.accentBg : "transparent",
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: hapticLevel === h.key ? t.accent : t.sub,
-                  }}
-                >
-                  {h.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        {showThemes && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.themeRow}
-          >
-            {[
-              { key: AUTO_THEME, label: "おまかせ", swatch: null as string | null },
-              ...THEMES.map(d => ({ key: d.key, label: d.label, swatch: d.colors.accent })),
-            ].map(item => (
-              <Pressable
-                key={item.key}
-                onPress={() => pickTheme(item.key)}
-                style={[
-                  s.themeChip,
-                  {
-                    borderColor: themeKey === item.key ? t.accent : t.border,
-                    backgroundColor: themeKey === item.key ? t.accentBg : "transparent",
-                  },
-                ]}
-              >
-                {item.swatch && (
-                  <View style={[s.swatch, { backgroundColor: item.swatch }]} />
-                )}
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: themeKey === item.key ? t.accent : t.sub,
-                  }}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-        <View style={s.row}>
-          {/* 確定テキストは読むだけなので Text で組む。TextInput と違って
-              1字ずつフォントを選べる＝拡張漢字が ☒ にならない */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            ref={outputScroll}
-            onContentSizeChange={() => outputScroll.current?.scrollToEnd({ animated: false })}
-            style={[
-              s.field,
-              { borderColor: t.border, backgroundColor: t.bg },
-            ]}
-            contentContainerStyle={s.outputInner}
-          >
-            {output ? (
-              <Kanji text={output} size={18} color={t.text} />
-            ) : (
-              <Text style={{ fontSize: 18, color: t.faint }}>
-                ここに確定した文字が入ります
-              </Text>
-            )}
-          </ScrollView>
-          <Pressable
-            onPressIn={() => haptic("delete")}
-            onPress={() => setOutput(o => [...o].slice(0, -1).join(""))}
-            style={[s.smallBtn, { borderColor: t.border }]}
-          >
-            <Text style={{ color: t.sub, fontSize: 16 }}>⌫</Text>
-          </Pressable>
-          <Pressable onPress={copy} style={[s.primaryBtn, { backgroundColor: t.accent }]}>
-            <Text style={{ color: t.onAccent, fontSize: 12, fontWeight: "600" }}>
-              {copied ? "コピー済" : "コピー"}
-            </Text>
-          </Pressable>
-        </View>
       </View>
 
       {/* ── 履歴 / お気に入り ── */}
@@ -700,6 +603,20 @@ function Screen() {
         </Pressable>
       )}
       </KeyboardAvoidingView>
+
+      <Settings
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        theme={t}
+        themeKey={themeKey}
+        onPickTheme={pickTheme}
+        hapticLevel={hapticLevel}
+        onPickHaptic={pickHaptic}
+        historyCount={history.length}
+        favoriteCount={favorites.length}
+        onClearHistory={clearHistory}
+        isPro={isPro}
+      />
     </SafeAreaView>
   );
 }
@@ -713,18 +630,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  themeRow: { flexDirection: "row", gap: 4, paddingBottom: 8 },
-  settingRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingBottom: 6 },
-  themeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  swatch: { width: 12, height: 12, borderRadius: 6 },
   title: { fontSize: 16, fontWeight: "700" },
   subtitle: { fontSize: 10 },
   row: { flexDirection: "row", alignItems: "center", gap: 6 },

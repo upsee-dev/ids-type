@@ -359,13 +359,25 @@ class KeyboardView(context: Context, private val host: Host) : LinearLayout(cont
             Ids.OPERATORS.map { it.code }.filter { it !in Ids.PRIMARY_CODES }
         for (code in codes) {
             val op = Ids.OPERATORS.first { it.code == code }
+            val icon = OperatorIcons.ALL[op.code]
             opInner.addView(
                 TextView(context).apply {
-                    text = op.label
-                    setTextColor(colText)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    // アプリ版と同じ配置図を矩形で描く。図が無い操作子(⇄ ↻ −)だけ
+                    // 記号を1行目に出す
+                    if (icon?.rects != null) {
+                        val d = OperatorIconDrawable(icon, colText, dp(20))
+                        d.setBounds(0, 0, dp(20), dp(20))
+                        setCompoundDrawables(null, d, null, null)
+                        compoundDrawablePadding = dp(2)
+                        text = op.label
+                    } else {
+                        text = icon?.symbol?.let { "$it\n${op.label}" } ?: op.label
+                    }
+                    setTextColor(colSub)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
                     gravity = Gravity.CENTER
-                    setPadding(dp(10), dp(8), dp(10), dp(8))
+                    setPadding(dp(8), dp(6), dp(8), dp(6))
+                    minWidth = dp(52)
                     background = keyBg(colCard, colBorder)
                     isClickable = true
                     setOnClickListener { host.insert(op.code) }
