@@ -2,7 +2,7 @@
   "expo": {
     "name": "漢字カタチ入力",
     "slug": "ids-kanji-type",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "ids-kanji-type",
@@ -14,11 +14,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.upsee.idskanjitype",
       "appleTeamId": "W8P3V5NG4R",
-      "buildNumber": "5"
+      "buildNumber": "6"
     },
     "android": {
       "package": "com.upsee.idskanjitype",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#FBFBF9",
         "foregroundImage": "./assets/android-icon-foreground.png",

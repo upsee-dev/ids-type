@@ -167,10 +167,6 @@ function Screen() {
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // 入力欄にカーソルがあるあいだだけキーボードを出す。閉じているあいだは
-  // そのぶん候補が広く見えるので、探す→選ぶが1画面で完結する
-  const [focused, setFocused] = useState(true);
-
   const inputRef = useRef<TextInput>(null);
   const outputScroll = useRef<ScrollView>(null);
   const caret = useRef({ start: 0, end: 0 });
@@ -314,6 +310,38 @@ function Screen() {
           </Pressable>
         </View>
 
+        <View style={s.row}>
+          {/* 確定テキストは読むだけなので Text で組む。TextInput と違って
+              1字ずつフォントを選べる＝拡張漢字が ☒ にならない */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            ref={outputScroll}
+            onContentSizeChange={() => outputScroll.current?.scrollToEnd({ animated: false })}
+            style={[s.field, { borderColor: t.border, backgroundColor: t.bg }]}
+            contentContainerStyle={s.outputInner}
+          >
+            {output ? (
+              <Kanji text={output} size={18} color={t.text} />
+            ) : (
+              <Text style={{ fontSize: 18, color: t.faint }}>
+                ここに確定した文字が入ります
+              </Text>
+            )}
+          </ScrollView>
+          <Pressable
+            onPressIn={() => haptic("delete")}
+            onPress={() => setOutput(o => [...o].slice(0, -1).join(""))}
+            style={[s.smallBtn, { borderColor: t.border }]}
+          >
+            <Text style={{ color: t.sub, fontSize: 16 }}>⌫</Text>
+          </Pressable>
+          <Pressable onPress={copy} style={[s.primaryBtn, { backgroundColor: t.accent }]}>
+            <Text style={{ color: t.onAccent, fontSize: 12, fontWeight: "600" }}>
+              {copied ? "コピー済" : "コピー"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* ── 履歴 / お気に入り ── */}
@@ -544,8 +572,6 @@ function Screen() {
           onSelectionChange={e => {
             caret.current = e.nativeEvent.selection;
           }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
           selection={forceSel ?? undefined}
           // かたちコードの欄には端末のIMEを一切触らせない。触らせると変換が
           // 始まった瞬間に欄ごと持っていかれ、先に選んだ〈左右〉などが消える。
@@ -583,25 +609,15 @@ function Screen() {
         </Pressable>
       </View>
 
-      {/* カーソルがあるときだけ浮上させる。閉じているときは
-          「タップして入力」の細い帯だけ残し、触れれば戻ってくる */}
-      {focused ? (
+      {/* キーボードは常に出しておく。フォーカスに連動して隠すと、候補を
+          タップした拍子などに消えてしまい「キーボードが出ない」ことになる。
+          カーソルは起動時に自動で入力欄へ置くので、すぐ打ち始められる */}
       <KatachiKeyboard
         engine={engine}
         theme={t}
         onInsert={insert}
         maxHeight={keyboardMaxHeight}
       />
-      ) : (
-        <Pressable
-          onPress={() => inputRef.current?.focus()}
-          style={[s.reopenBar, { backgroundColor: t.card, borderTopColor: t.border }]}
-        >
-          <Text style={{ fontSize: 12, color: t.sub }}>
-            タップしてキーボードを出す
-          </Text>
-        </Pressable>
-      )}
       </KeyboardAvoidingView>
 
       <Settings
@@ -652,11 +668,6 @@ const s = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderRadius: 8,
-  },
-  reopenBar: {
-    alignItems: "center",
-    paddingVertical: 12,
-    borderTopWidth: 1,
   },
   smallBtn: {
     borderWidth: 1,
