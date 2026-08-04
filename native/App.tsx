@@ -32,6 +32,14 @@ import {
   setHapticLevel,
   type HapticLevel,
 } from "./src/feedback";
+import {
+  loadFavorites,
+  loadHistory,
+  pushHistory,
+  saveFavorites,
+  saveHistory,
+  toggleFavorite,
+} from "./src/history";
 
 const GRADE_LABEL: Record<number, string> = {
   1: "小1", 2: "小2", 3: "小3", 4: "小4", 5: "小5", 6: "小6",
@@ -112,6 +120,38 @@ function Screen() {
 
   const t = useTheme(themeKey);
   const { height } = useWindowDimensions();
+
+  // 使った字の履歴とお気に入り（端末内にだけ残る）
+  const [history, setHistory] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [shelf, setShelf] = useState<"none" | "history" | "favorites">("none");
+  useEffect(() => {
+    loadHistory().then(setHistory).catch(() => {});
+    loadFavorites().then(setFavorites).catch(() => {});
+  }, []);
+
+  const remember = (ch: string) => {
+    setHistory(h => {
+      const next = pushHistory(h, ch);
+      saveHistory(next);
+      return next;
+    });
+  };
+
+  const toggleFav = (ch: string) => {
+    haptic("commit");
+    setFavorites(f => {
+      const next = toggleFavorite(f, ch);
+      saveFavorites(next);
+      return next;
+    });
+  };
+
+  const clearHistory = () => {
+    haptic("delete");
+    setHistory([]);
+    saveHistory([]);
+  };
 
   const [engine, setEngine] = useState<Engine | null>(null);
   const [query, setQuery] = useState("");
@@ -241,6 +281,24 @@ function Screen() {
           </Text>
           <Pressable
             onPressIn={() => haptic("toggle")}
+            onPress={() => setShelf(v => (v === "history" ? "none" : "history"))}
+            hitSlop={8}
+            accessibilityLabel="履歴"
+            style={[s.themeBtn, { borderColor: shelf === "history" ? t.accent : t.border }]}
+          >
+            <Text style={{ fontSize: 13 }}>🕘</Text>
+          </Pressable>
+          <Pressable
+            onPressIn={() => haptic("toggle")}
+            onPress={() => setShelf(v => (v === "favorites" ? "none" : "favorites"))}
+            hitSlop={8}
+            accessibilityLabel="お気に入り"
+            style={[s.themeBtn, { borderColor: shelf === "favorites" ? t.accent : t.border }]}
+          >
+            <Text style={{ fontSize: 13 }}>★</Text>
+          </Pressable>
+          <Pressable
+            onPressIn={() => haptic("toggle")}
             onPress={() => setShowThemes(v => !v)}
             hitSlop={8}
             accessibilityLabel="着せ替え"
@@ -355,6 +413,56 @@ function Screen() {
         </View>
       </View>
 
+      {/* ── 履歴 / お気に入り ── */}
+      {shelf !== "none" && (
+        <View style={[s.shelf, { backgroundColor: t.card, borderBottomColor: t.border }]}>
+          <View style={s.shelfHead}>
+            <Text style={{ fontSize: 11, color: t.sub, flex: 1 }}>
+              {shelf === "history"
+                ? `使った字の履歴（新しい順・最大60字）`
+                : "お気に入り"}
+            </Text>
+            {shelf === "history" && history.length > 0 && (
+              <Pressable onPress={clearHistory} hitSlop={6}>
+                <Text style={{ fontSize: 11, color: t.accent }}>履歴を消す</Text>
+              </Pressable>
+            )}
+          </View>
+          {(shelf === "history" ? history : favorites).length === 0 ? (
+            <Text style={{ fontSize: 11, color: t.faint, paddingVertical: 10 }}>
+              {shelf === "history"
+                ? "まだありません。候補を選ぶとここに残ります。"
+                : "まだありません。字を選んで★を押すと入ります。"}
+            </Text>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="always"
+              contentContainerStyle={{ gap: 4, paddingVertical: 4 }}
+            >
+              {(shelf === "history" ? history : favorites).map(ch => (
+                <Pressable
+                  key={ch}
+                  onPressIn={() => haptic("commit")}
+                  onPress={() => {
+                    setOutput(o => o + ch);
+                    setSelected(ch);
+                    setCharCopied(false);
+                    remember(ch);
+                  }}
+                  style={[s.shelfKey, { borderColor: t.border, backgroundColor: t.key }]}
+                >
+                  <Text style={{ fontFamily: fontFor(ch), fontSize: 24, color: t.text }}>
+                    {ch}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      )}
+
       {/* ── 中段: 候補 ── */}
       <View style={{ flex: 1 }}>
         {!engine && (
@@ -417,6 +525,7 @@ function Screen() {
                 setOutput(o => o + item.ch);
                 setSelected(item.ch);
                 setCharCopied(false);
+                remember(item.ch);
               }}
               style={({ pressed }) => [
                 s.candidate,
@@ -486,6 +595,22 @@ function Screen() {
               )}
             </View>
             <View style={{ alignItems: "center", gap: 8 }}>
+              <Pressable
+                onPress={() => toggleFav(selected)}
+                hitSlop={6}
+                accessibilityLabel={
+                  favorites.includes(selected) ? "お気に入りから外す" : "お気に入りに入れる"
+                }
+              >
+                <Text
+                  style={{
+                    fontSize: 20,
+                    color: favorites.includes(selected) ? t.accent : t.faint,
+                  }}
+                >
+                  {favorites.includes(selected) ? "★" : "☆"}
+                </Text>
+              </Pressable>
               <Pressable
                 onPress={copySelected}
                 style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: t.accent }}
@@ -613,6 +738,16 @@ const s = StyleSheet.create({
     fontSize: 18,
   },
   outputInner: { alignItems: "center", minHeight: 26 },
+  shelf: { paddingHorizontal: 12, paddingBottom: 6, borderBottomWidth: 1 },
+  shelfHead: { flexDirection: "row", alignItems: "center", paddingTop: 6 },
+  shelfKey: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 8,
+  },
   reopenBar: {
     alignItems: "center",
     paddingVertical: 12,
