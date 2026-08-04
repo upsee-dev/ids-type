@@ -59,7 +59,11 @@
     ],
     "updates": {
       "url": "https://u.expo.dev/f16a9cca-5309-499e-8324-c46580f7942e",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "//": "OTAの配信先チャンネル。EAS Build なら自動で焼き込まれるが、このプロジェクトは ローカルビルドなので自分で指定する必要がある。これが無いとアプリは expo-channel-name ヘッダを送らず、EAS 側がどのブランチを返せばよいか決められないため 更新が一切届かない（1.0.0〜1.0.2 のビルドがこの状態）",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "runtimeVersion": {
       "policy": "appVersion"

@@ -9,57 +9,29 @@
 LR日月 → 明     UD宀子 → 字     OC囗玉 → 国     RU辶刀 → 辺
 ```
 
+Web版・Expoアプリ・システムキーボード（Android IME / iOSキーボード拡張）の3つがあり、
+検索エンジンと辞書は `core/` の1か所を共有している。
+
 ## 構成
 
 ```
-katachi-ime/
-├── core/                       # 依存なしの共有コア（Web版・アプリ版で同じものを使う）
-│   ├── index.ts                #   公開API。web/native はこれだけ見る
-│   ├── engine.ts               #   検索エンジン(構造マッチ・部品包含・一覧)
-│   ├── ids/                    #   IDS(漢字の空間構造記述)まわり
-│   │   ├── operators.ts        #     かたちコード ⇄ IDC、配置図の矩形データ
-│   │   ├── normalize.ts        #     同じ形で符号位置が違う部品を寄せる
-│   │   └── parse.ts            #     IDS文字列 → 構文木
-│   ├── data/
-│   │   ├── blocks.ts           #     Unicodeブロック表（★ビルドと実行時で共有）
-│   │   ├── palettes.ts         #     キーボードに並べる部品
-│   │   ├── themes.ts           #     着せ替え（Kotlin/Swift へは build:data が生成）
-│   │   └── types.ts            #     辞書の型
-│   └── kanji-data.json         #   生成済み辞書(102,998字・2.7MB / gzip 0.9MB)
-├── data-src/                   # 元データ（加工しない。README/sources.json に出典）
-│   ├── ids/                    #   BabelStone / CHISE拡張G〜J / CJKVI
-│   ├── kanjidic2/
-│   └── fetch.mjs               #   sources.json のとおりに取り直す
-├── web/                        # Webプロトタイプ (Next.js + React + Tailwind)
-│   ├── src/app/page.tsx        #   入力画面
-│   ├── src/app/chars/page.tsx  #   収録漢字一覧（?q= と ?block= で共有できる）
-│   ├── src/components/         #   KatachiKeyboard / OperatorIcon / KanjiGrid / CharDetail
-│   ├── src/lib/                #   engine 再エクスポート・useEngine・表示文言
-│   └── scripts/
-│       ├── build-data.mts      #   辞書ビルド（工程は build-data/ に分割）
-│       └── test-engine.mts     #   エンジンテスト
-├── native/                     # Expoネイティブアプリ (iOS / Android)
-│   ├── App.tsx                 #   コンテナーアプリの画面（設定・お試し入力）
-│   ├── src/                    #   KatachiKeyboard / OperatorIcon / theme
-│   ├── ime/                    #   ★システムキーボード本体（OSに入力方式として登録される）
-│   │   ├── android/java/...    #     Kotlin: IMEサービス・キーボードUI・エンジン移植
-│   │   ├── android/res/xml/    #     method.xml（入力方式の宣言）
-│   │   └── assets/*.tsv        #     IME用辞書（build:data が生成）
-│   ├── plugins/
-│   │   └── withKatachiIme.js   #   ime/ を prebuild後の android/ へ注入する config plugin
-│   └── scripts/
-│       ├── sync-core.mjs       #   ../core を src/core/ へ複製（Metro制約の回避）
-│       └── build-android.sh    #   ローカルAPKビルド
-├── scripts/
-│   ├── build-icons.py          # ロゴ1枚から配布用アイコン一式を書き出す
-│   ├── build-font-subset.py    # 部品パレット541字のサブセットフォント(旧・IME用に残置)
-│   ├── build-font-slices.py    # 全CJK字形の分割Webフォント(unicode-range・Web専用)
-│   └── build-font-app.py       # アプリ同梱フォント(KatachiExt1/2 + 各言語の範囲表)
-├── assets-archive/logo/        # 採用ロゴのマスター
-└── docs/
-    ├── katachi-strategy.pdf    # 事業戦略ドキュメント(A4・6ページ)
-    ├── strategy.html           # ↑のソース(編集後Chromeで再PDF化)
-    └── technical-roadmap.md    # システムIME化の技術方針(iOS/Android/PC)
+├── core/                  # 依存なしの共有コア（Web版・アプリ版で同じものを使う）
+│   ├── index.ts           #   公開API。web/native はこれだけ見る
+│   ├── engine.ts          #   検索エンジン(構造マッチ・部品包含・一覧)
+│   ├── ids/               #   かたちコード⇄IDC・字形の正規化・IDS構文解析
+│   ├── data/              #   ブロック表・部品パレット・着せ替え・辞書の型
+│   └── kanji-data.json    #   生成済み辞書(102,998字・2.7MB / gzip 0.9MB)
+├── data-src/              # 元データ（加工しない。出典は sources.json）
+├── web/                   # Webプロトタイプ (Next.js + React + Tailwind)
+│   ├── src/app/           #   入力画面・収録漢字一覧(?q= と ?block= で共有できる)
+│   └── scripts/           #   辞書ビルド・エンジンテスト
+├── native/                # Expoネイティブアプリ (iOS / Android)
+│   ├── App.tsx            #   コンテナーアプリの画面（設定・お試し入力）
+│   ├── ime/               #   ★Androidシステムキーボード本体（Kotlin）
+│   ├── targets/keyboard/  #   ★iOSキーボード拡張（Swift）
+│   └── plugins/           #   prebuild後の android/ へ ime/ を注入する config plugin
+├── scripts/               # フォント・アイコンの生成、ストア提出
+└── docs/                  # 事業戦略・技術ロードマップ
 ```
 
 エンジンと辞書は `core/` の1か所だけにある。Web版は相対パスで直接読み
@@ -68,115 +40,90 @@ katachi-ime/
 （Metro がプロジェクト外を解決できないため）。
 
 `core/` 内の相対 import には `.ts` を付けている。Turbopack・Metro・Node の
-型ストリッピング（`--experimental-strip-types`）のどれでも同じコードが動くようにするため。
-辞書ビルドが `core/data/blocks.ts` を直接 import できるのはこの形のおかげで、
+型ストリッピングのどれでも同じコードが動くようにするため。辞書ビルドが
+`core/data/blocks.ts` を直接 import できるのはこの形のおかげで、
 **ブロック表がビルドと実行時で二重管理にならない**（以前これがずれて、拡張C/Eの
 末尾18字が黙って辞書から落ちていた）。
+
+同じ理由で、**Kotlin と Swift のテーブルは手で書かず生成する**。
+部品パレットと着せ替えは `core/` の定義から `build:data` が
+`Palettes.{kt,swift}` `Themes.{kt,swift}` を、フォントの範囲表は
+`build-font-app.py` が実際の収録字から `ExtFonts.{kt,swift}` を書き出す。
 
 ## 収録範囲（[zi.tools](https://zi.tools/?secondary=character_set) と同じ全CJK漢字）
 
 **Unicode 17.0 が定義するCJK漢字 102,998字（統合漢字 101,984 + 互換漢字 1,014）を、過不足なく全部**収録している。UCD の `UnicodeData.txt` と突き合わせて収録もれ0字・余分0字を確認済み。
 
-| ブロック | 字数 | | ブロック | 字数 |
-|---|---:|---|---|---:|
-| 基本(URO) | 20,992 | | 拡張F | 7,473 |
-| 拡張A | 6,592 | | 拡張G | 4,939 |
-| 拡張B | 42,720 | | 拡張H | 4,192 |
-| 拡張C | 4,160 | | 拡張I | 622 |
-| 拡張D | 222 | | 拡張J | 4,298 |
-| 拡張E | 5,774 | | 互換漢字・互換補助 | 1,014 |
+| ブロック  |   字数 |     | ブロック           |  字数 |
+| --------- | -----: | --- | ------------------ | ----: |
+| 基本(URO) | 20,992 |     | 拡張F              | 7,473 |
+| 拡張A     |  6,592 |     | 拡張G              | 4,939 |
+| 拡張B     | 42,720 |     | 拡張H              | 4,192 |
+| 拡張C     |  4,160 |     | 拡張I              |   622 |
+| 拡張D     |    222 |     | 拡張J              | 4,298 |
+| 拡張E     |  5,774 |     | 互換漢字・互換補助 | 1,014 |
 
 - **99.88%（102,871字）に分解データが付いている**。残る127字は、そもそも分解できない基本字（`一` `口` `女` `人` `乙` など）と、どの表にも分解が無い字（拡張Jの6字ほか）。候補としては収録されているが構造検索には出ない
 - 収録漏れが出ないよう、`build:data` は毎回ブロックごとの収録数を検証し、1字でも欠けるとビルドを失敗させる（範囲表は `core/data/blocks.ts` の1か所）
-- 収録字は `/chars`（Web版の「収録一覧」）でブロック別に閲覧できる。読み（`あお`）や符号位置（`U+3134A`）でも引ける
 
 ### 日本語入力としての扱い
 
 10万字をそのまま並べると日本語入力として使えなくなるため、候補は2階層に分けている。
 
-- **KANJIDIC2 収録の 13,108字**（JIS X 0208/0212/0213）… 読み・学年・頻度つき。常に先に出る
+- **KANJIDIC2 収録の 13,108字**（JIS X 0208/0212/0213）… 読み・学年・頻度・画数・部首つき。常に先に出る
 - **それ以外の 89,890字**（拡張A〜Jほか）… 常に後ろ。UIでは破線の枠で区別する
 
 「よく使う部品」パレット（`Engine#commonParts`）も KANJIDIC2 収録字だけを数えている。10万字全部で数えると簡体字の部品が上位を占めてしまうため。
 
-なお拡張B以降の字は**端末に対応フォントが無いと □ で表示される**（データとしては入っており、コピーすれば正しく貼り付けられる）。
-ただし**部品パレットの541件だけはサブセットフォントを同梱して □ を解消済み**（下記「アイコン・配布素材」参照）。
+## 字形の表示（フォント）
+
+端末の標準フォントは拡張B以降を持っていないため、何もしないと候補も部品パレットも
+☒ で埋まり「見て選ぶ」という方式そのものが成立しない。
+[Plangothic](https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project)（SIL OFL 1.1）から
+**端末が持っていない範囲だけ**を切り出して配っている（URO・拡張A・互換漢字は
+Hiragino も Noto も持っているので入れない）。
+
+|             | 方式                                                       | 量                                         |
+| ----------- | ---------------------------------------------------------- | ------------------------------------------ |
+| Web         | 符号位置1024ごとに124枚へ分割し `unicode-range` で出し分け | 計11.7MB（画面に出た字を含む枚だけ落ちる） |
+| アプリ・IME | TTFを同梱し、1字ごとに `fontFamily` を選ぶ                 | 21.7MB（75,292字）                         |
+
+Web は画面に出た字を含むスライスしか取りに行かないので初期ロードは変わらない。
+React Native と Android/iOS のネイティブビューには `unicode-range` が無く
+`fontFamily` を1つしか指定できないので、同梱のほうは
+**符号位置→どちらのフォントか**の範囲表を引いて1字ずつ切り替える。
+7.5万字は TrueType の65,535グリフ上限に収まらないため2つに分けてある。
+
+Android は expo-font の静的バンドルで `assets/fonts/` に置かれるので、
+**RNアプリとシステムIMEが同じ1部を共有**する（iOSの拡張は自分のバンドルしか
+読めないため複製が要る）。生成は `scripts/build-font-app.py` と
+`scripts/build-font-slices.py`。元フォント32MBは `.gitignore` 済みで、
+切り出したほうをリポジトリに置いている（EAS Build も Vercel も Python を回さないため）。
 
 ## システムキーボード（IME）
 
-**Android は「設定 > 言語と入力 > 画面キーボード」に「カタチ入力」として登録され、
-どのアプリのテキスト欄でも使える**（Simeji などと同じ仕組み）。エミュレータで
-Settings の検索欄に `左右→日→月` と打って `明` が入力されるところまで確認済み。
-
-```bash
-cd native && npm run build:android      # -> build/katachi-ime-1.0.0.apk
-adb install -r build/katachi-ime-1.0.0.apk
-adb shell ime enable com.upsee.idskanjitype/com.upsee.katachi.ime.KatachiImeService
-adb shell ime set    com.upsee.idskanjitype/com.upsee.katachi.ime.KatachiImeService
-```
+**Android は「設定 > 言語と入力 > 画面キーボード」に登録され、どのアプリの
+テキスト欄でも使える**（Simeji などと同じ仕組み）。iOS も「設定 > 一般 >
+キーボード」に追加される Keyboard Extension として入っている。
 
 ### 構成上のポイント
 
-- **キーボード本体は Kotlin**。`InputMethodService` は React Native を載せられないので、
-  エンジン(`core/`)を Kotlin へ移植している（`native/ime/android/java/.../Engine.kt`）。
+- **キーボード本体は Kotlin / Swift**。`InputMethodService` にも App Extension にも
+  React Native は載せられないので、エンジン（`core/`）を両方へ移植している。
   TypeScript 版と候補の並びまで一致させてある
-- **`android/` は prebuild の生成物**（.gitignore 済み）なので、ネイティブのソースは
-  `native/ime/` に置き、`plugins/withKatachiIme.js` が毎回コピー＋Manifest へ service 追記する。
+- **`android/` と `ios/` は prebuild の生成物**（.gitignore 済み）。ネイティブのソースは
+  `native/ime/` と `native/targets/keyboard/` に置き、config plugin が毎回コピーする。
   こうしないと `expo prebuild --clean` のたびに消える
-- **辞書は tsv**。2.4MB の JSON を起動のたびに構文解析するとキーボードが出るまで1〜2秒かかるため。
-  日本語の13,108字を先に読んで即検索可能にし、拡張漢字89,890字は後から読み足す2段構え
-- **部品パレットのフォントも同梱**。`assets/KatachiParts.ttf` を `Typeface.createFromAsset`
-  で読む（RN 側の expo-font とは別経路になるため）
+- **辞書は tsv**。2.7MB の JSON を起動のたびに構文解析するとキーボードが出るまで
+  1〜2秒かかるため。日本語13,108字を先に読んで即検索可能にし、拡張漢字89,890字は
+  後から読み足す2段構え
+- **iOSのメモリ対策**: 拡張の上限は約60MB。10万字を Swift の String で持つと危ないので、
+  読み込んだ UTF-8 を1本の `Data` のまま抱え、各字・各IDSは**バイト範囲(Int32)だけ**を
+  覚える。String を作るのは画面に出す数十件だけ（読み込みは全10万字で29ms）
+- **フルアクセス不要**（`RequestsOpenAccess = false`）。ネットワークを使わない設計。
+  代償として iOS の拡張では触覚を出せない（フルアクセスが要るため）ので、キー音のみ
 
-### iOS
-
-Keyboard Extension（Swift）も入っている。`targets/keyboard/` が拡張ターゲットの実体で、
-`@bacons/apple-targets` が prebuild 時に Xcode ターゲットとして追加する。
-
-```bash
-cd native && npx expo prebuild -p ios --clean
-cd ios && xcodebuild -workspace app.xcworkspace -scheme app \
-  -configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
-```
-
-- **メモリ対策**: 拡張の上限は約60MB。10万字を Swift の String で持つと危ないので、
-  読み込んだ UTF-8 を1本の `Data` のまま抱え、各字・各IDSは**バイト範囲(Int32)だけ**を覚える。
-  String を作るのは画面に出す数十件だけ。辞書の読み込みは日本語13,108字が6ms、全10万字で29ms
-- **フルアクセス不要**（`RequestsOpenAccess = false`）。ネットワークを使わない設計
-- エンジンは `swiftc` でコマンドラインからも検証できる（`native/ime/test/main.swift`）。
-  Web/Android と同じ問いに同じ候補・同じ順で答えることを確認済み
-
-#### TestFlight へ出す
-
-配布署名済みの IPA を作って上げるところまで、コマンドラインで完結する
-（`ExportOptions.plist` は `native/` 直下に置いてある。プロファイルは持っていないので
-`-allowProvisioningUpdates` と ASC の APIキーで自動生成させる）。
-アップロード前に `--validate-app` を通しておくと、弾かれる原因を先に潰せる。
-
-```bash
-cd native && npx expo prebuild -p ios --clean
-cd ios && xcodebuild -workspace app.xcworkspace -scheme app -configuration Release \
-  -destination 'generic/platform=iOS' -archivePath /tmp/katachi.xcarchive \
-  -allowProvisioningUpdates \
-  -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8 \
-  -authenticationKeyID <KEYID> -authenticationKeyIssuerID <ISSUER> \
-  DEVELOPMENT_TEAM=W8P3V5NG4R archive
-xcodebuild -exportArchive -archivePath /tmp/katachi.xcarchive \
-  -exportOptionsPlist ExportOptions.plist -exportPath /tmp/katachi-export \
-  -allowProvisioningUpdates -authenticationKey...   # method: app-store-connect
-xcrun altool --upload-app -f /tmp/katachi-export/app.ipa -t ios \
-  --apiKey <KEYID> --apiIssuer <ISSUER>
-```
-
-**ただしアプリレコードだけは App Store Connect の Web UI で作る必要がある。**
-App Store Connect API は `apps` の作成を許可していない
-（`The resource 'apps' does not allow 'CREATE'`。許可されるのは GET と UPDATE だけ）。
-レコードが無いと `altool` は
-`Cannot determine the Apple ID from Bundle ID` で止まる。
-
-Bundle ID（`com.upsee.idskanjitype` と `.keyboard`）は API から登録済み。
-
-#### Swift 特有の落とし穴
+### Swift 特有の落とし穴
 
 **Swift の `String` は正規等価で比較・ハッシュする**。互換漢字 U+F902（車）と統合漢字
 U+8ECA（車）が同じキーとして扱われるため、素直に辞書索引を作ると後から読む拡張漢字が
@@ -189,112 +136,95 @@ U+8ECA（車）が同じキーとして扱われるため、素直に辞書索�
 漢字の部品（辶・阝・氵…）はスマホのかなキーボードでは打てないため、**アプリ側にキーボードを持つ**構成にしている。
 
 - **かたち**タブ … 位置関係17種。「左右」「上下」「全かこみ」など。IDC文字（⿰⿱⿴…）は端末のフォントによって豆腐(□)になるので、**文字ではなく矩形の配置図を描画**している
-- **よく使う部品**タブ … 辞書内で構成要素として登場する回数が多い順に180件（`Engine#commonParts`）。木・氵・艹・口・金… と並ぶ
+- **よく使う部品**タブ … 辞書内で構成要素として登場する回数が多い順に180件。木・氵・艹・口・金… と並ぶ
 - **部首・偏旁**タブ … かなキーボードでは変換できない偏旁・筆画
 - **あ**ボタン … 端末のIMEに切り替え（任意の部品を読みから直接入力したいとき）
 
-自前キーボード使用中は入力欄の `inputMode="none"`（Webの場合。アプリは `showSoftInputOnFocus={false}`）でOSキーボードを出さず、画面が隠れないようにしている。
+自前キーボード使用中は OSキーボードを出さない（Webは `inputMode="none"`、アプリは
+`showSoftInputOnFocus={false}`）。逆に「あ」で端末のキーボードに切り替えたときは、
+入力欄が隠れないよう画面を縮め（Webは `interactive-widget` と visualViewport 追従、
+アプリは `KeyboardAvoidingView`）、自前パレットは畳んで候補の面積を確保する。
 
-## Webプロトタイプの起動
+### 打鍵の触覚
 
-```bash
-cd web
-npm install
-npm run dev       # http://localhost:3000
-```
+気持ちよさは「指が触れた瞬間に返ること」と「動作ごとに手触りが違うこと」で決まるので、
+触覚は押し下げ（`onPressIn` / `ACTION_DOWN` / `.touchDown`）で返し、
+キー・確定・削除・連射・切替・成功・該当なしで種類を変えている。
+連打で重なる触覚は間引き、⌫長押しの連射は軽い刻みにして音も間引く
+（毎回フル強度で返すと手のひらが震えるだけの不快な連続振動になる）。
+Android は汎用の Vibrator ではなくキーボード用の触覚定数を使う（端末の設定を
+尊重し、VIBRATE 権限も要らない）。強さはアプリの🎨パネルで オフ／ふつう／強め。
 
-ワイルドカード `?`、部品のみ検索（例: `日月`）にも対応。PCではキーボードから `LR日月` のように直接打てる。
+### 着せ替え
 
-## ネイティブアプリ（Expo）
+7種＋おまかせ（端末のライト/ダーク設定に追従）。定義は `core/data/themes.ts` の1か所で、
+Kotlin・Swift へは `build:data` が生成する。アプリは🎨パネル、システムIMEは🎨キーで
+切り替え、選択はそれぞれの端末側（AsyncStorage / SharedPreferences / UserDefaults）に残る。
 
-```bash
-cd native
-npm install
-npm start              # Expo Go・開発ビルドで確認
-npm run typecheck
-```
-
-### ローカルビルド（Android APK・EAS不使用）
-
-```bash
-cd native
-npm run build:android
-# -> native/build/katachi-ime-1.0.0.apk
-```
-
-必要な環境（このマシンでは設定済み）:
-
-- JDK 17 … `/opt/homebrew/opt/openjdk@17`（`/usr/libexec/java_home` には未登録なので `JAVA_HOME` を直接指定している）
-- Android SDK … `~/Library/Android/sdk`
-
-生成されるAPKは端末にインストールして試す用途のもの。ストアに出すのは AAB のほうで、
-`withReleaseSigning` プラグインが `store/AuthKey/keystore.properties` を読んで
-アップロード鍵で署名する（鍵が無いとデバッグ署名のままになり Play に弾かれる）。
-
-### Google Play に出す（ローカルビルド → 提出まで）
+## 開発
 
 ```bash
-cd native && npx expo prebuild -p android --clean --no-install
-cd android && ./gradlew bundleRelease          # -> app/build/outputs/bundle/release/app-release.aab
-cd ../.. && python3 scripts/submit-play.py \
-  native/android/app/build/outputs/bundle/release/app-release.aab "リリースノート"
+cd web    && npm install && npm run dev     # http://localhost:3000
+cd native && npm install && npm start       # Expo Go・開発ビルド
+
+npm run typecheck                           # web / native それぞれにある
+cd web && npm run test:engine               # エンジンテスト
+cd web && npm run build:data                # 辞書と各言語の生成物を作り直す
 ```
 
-`submit-play.py` は Play Developer API を直接叩く（`store/AuthKey/GPC_AuthKey.json`）。
-edit を作る → AAB を上げる → internal トラックに割り当てる → commit の順で、
-commit するまで Play 側には反映されないので途中で失敗しても中途半端にならない。
-製品版へはそこから Play Console で昇格させる。
+`build:data` は `core/kanji-data.json` と `web/public/data/` に加えて、
+IME用のtsv辞書と Kotlin/Swift のテーブル（パレット・着せ替え）を書き出す。
 
-### iOS
+生成物を作り直すスクリプト（元データや定義を変えたときだけ）:
 
-```bash
-cd native
-npx expo prebuild -p ios --clean
-npx expo run:ios          # シミュレータ
-```
+| スクリプト                     | 何を作るか                 | 要るもの                      |
+| ------------------------------ | -------------------------- | ----------------------------- |
+| `data-src/fetch.mjs`           | 元データの取り直し         | —                             |
+| `scripts/build-font-app.py`    | アプリ同梱フォント＋範囲表 | fonttools・元フォント         |
+| `scripts/build-font-slices.py` | Web用の分割フォント        | fonttools・brotli・元フォント |
+| `scripts/build-icons.py`       | アイコン一式               | pillow                        |
 
-実機・ストア提出には Apple Developer の署名が必要。
+Android のローカルビルドは `cd native && npm run build:android`（動作確認用のAPK）。
+JDK 17 は `/opt/homebrew/opt/openjdk@17`、Android SDK は `~/Library/Android/sdk`。
 
-## 開発コマンド
+## リリース
 
-```bash
-# 元データを取り直す（sources.json のとおりに）
-node data-src/fetch.mjs
+ストア提出はこのマシンだけで完結する（EAS のクラウドビルドは使わない）。
+バージョンは `native/app.json` の `version` / `buildNumber` / `versionCode` を上げる。
+`runtimeVersion` は appVersion 連動なので、`version` を上げると OTA の系列が変わる
+（＝旧ビルドには以後の `eas update` が届かない）。
 
-# 辞書の再生成。core/ と web/public/data/ の両方に書き出す
-cd web && npm run build:data
+- **JSだけの変更は OTA で配れる**（`eas update --channel production`）。ネイティブの
+  変更（フォント同梱・触覚・IMEのKotlin/Swift・config plugin）は新しいビルドが要る。
+  ただし**OTAを受け取れるのは、配信チャンネルを焼き込んだビルドだけ**。
+  EAS Build ならチャンネルは自動で入るが、ローカルビルドでは
+  `updates.requestHeaders` の `expo-channel-name` を自分で指定しないと入らず、
+  アプリの更新リクエストは `expo-channel-name` 不足でサーバーに 400 で弾かれる
+  （**1.0.0〜1.0.2 のビルドがこの状態**で、OTAは一切届かない。1.0.2 より後の
+  ビルドから有効になる）
+- **Android**: `gradlew bundleRelease` で AAB を作り、`scripts/submit-play.py` で
+  internal トラックへ。`withReleaseSigning` プラグインが `store/AuthKey/` の
+  アップロード鍵で署名する（鍵が無いとデバッグ署名のままになり Play に弾かれる）。
+  提出は edit を作る→上げる→トラックに割り当て→commit の順で、commit するまで
+  Play 側に反映されないので途中で失敗しても中途半端にならない
+- **iOS**: `xcodebuild archive` → `-exportArchive`（`native/ExportOptions.plist`）→
+  `xcrun altool --upload-app`。プロファイルは持っていないので
+  `-allowProvisioningUpdates` と ASC の APIキーで自動生成させる。
+  上げる前に `--validate-app` を通すと、弾かれる原因を先に潰せる
 
-# エンジンテスト・型チェック
-npm run test:engine
-npm run typecheck
+**アプリレコードだけは App Store Connect の Web UI で作る必要がある**
+（API は `apps` の CREATE を許可していない。レコードが無いと `altool` は
+`Cannot determine the Apple ID from Bundle ID` で止まる）。
+審査への提出と、Play の製品版への昇格も各コンソールでの操作になる。
 
-# アイコン一式の再生成(ロゴを差し替えたとき)
-pip install pillow && python3 scripts/build-icons.py
+鍵類は `store/AuthKey/`（.gitignore 済み）。**アップロード鍵を失うと同じアプリを
+更新できなくなるので、必ず別途バックアップすること。**
 
-# 部品パレット用サブセットフォントの再生成(部品を足したとき)
-pip install fonttools brotli && python3 scripts/build-font-subset.py
+## アイコン
 
-# 戦略PDFの再生成
-cd ../docs && "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --headless --no-pdf-header-footer --print-to-pdf=katachi-strategy.pdf strategy.html
-```
-
-## アイコン・配布素材
-
-ロゴ（生成りの地に、インディゴとスカイで組んだ字形。中の余白に「漢」が浮かぶ）
-1枚から、`scripts/build-icons.py` が配布用アイコンを全部書き出す。マスターは
-`assets-archive/logo/`。ブランド色は インディゴ `#4437D1` / スカイ `#34B5FC` / 生成り `#FBFBF9`。
-
-| 出力先 | ファイル | 用途 |
-|---|---|---|
-| `web/src/app/` | `favicon.ico`（16/32/48） | ブラウザのタブ |
-| | `icon.png` 512 / `apple-icon.png` 180 | ブックマーク・ホーム画面 |
-| | `opengraph-image.png` 1200×630 | SNS カード |
-| | `manifest.webmanifest` | PWA（`standalone`・`theme_color`） |
-| `web/public/` | `icon-192/512.png`, `icon-maskable-512.png` | マニフェストから参照 |
-| `native/assets/` | `icon.png` 1024（不透過） | iOS アプリアイコン |
-| | `android-icon-{foreground,background,monochrome}.png` 1024 | Android アダプティブ／Android 13+ テーマ |
-| | `splash-icon.png`, `favicon.png` | スプラッシュ・Expo Web |
+ロゴ（生成りの地に、インディゴとスカイで組んだ字形。中の余白に「漢」が浮かぶ）1枚から、
+`scripts/build-icons.py` が配布用アイコンを全部書き出す。マスターは `assets-archive/logo/`。
+ブランド色は インディゴ `#4437D1` / スカイ `#34B5FC` / 生成り `#FBFBF9`。
 
 用途ごとにキャンバスに対するロゴの比率を変えている（小さいアイコンほど大きく、
 マスクで外周が削られるものほど小さく）。iOS は透過を持てないので生成り地に焼き込み、
@@ -302,27 +232,18 @@ Android の前景・モノクロだけ背景を抜いている。ロゴ中央の
 つながっているため、そのまま背景を抜くと窓まで穴になる。クロージングで隙間だけ塞いでから
 抜いているので、ダークなスプラッシュ地でも窓の中の「漢」が沈まない。
 
-### 部品パレット用サブセットフォント
-
-「難輸入部件」541件は拡張B〜Hの字が多く、**macOS でも117件が □ になる**（Androidはもっと多い）。
-「見て選ぶ」ための画面なので □ が並ぶと機能しない。[Plangothic](https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project)（SIL OFL 1.1・拡張A〜I収録）から
-**パレットの字だけ**を切り出して同梱している。全部入れると32MBだが、この用途なら
-`web/public/fonts/KatachiParts.woff2` が **29KB**、`native/assets/fonts/KatachiParts.ttf` が 67KB で済む。
-サブセットに無い字は端末のフォントへ自動でフォールバックする。**541件すべてが □ にならないことを実ブラウザで確認済み**。
-
-一覧画面（10万字）の □ はこの方法では解決しない（全字ぶんのフォントは数十MB必要）。
-
 ## データ出典・ライセンス
 
 分解データは3つの表を優先順位つきで重ねている（`web/scripts/build-data/merge.mts`）。出典の一覧は `data-src/sources.json`。
 
-| 出典 | 使いどころ | ライセンス |
-|---|---|---|
-| [BabelStone IDS](https://www.babelstone.co.uk/CJK/IDS.TXT)（Andrew West） | 土台。Unicode 16.0 の全97,680字。字源タグ(G/H/T/**J**/K/P/V)を持つので日本字体を選べる | 作者が著作権を主張せず、用途・帰属の制限なしと明記 |
-| [CHISE IDS Database](https://gitlab.chise.org/CHISE/ids) | 穴埋め。BabelStone は Unicode 16.0 準拠で 17.0 の**拡張Jを1字も持たない**。加えて拡張C/Eの末尾18字など他の表に分解が無い20字も埋まる | GPLv2 |
-| [CJKVI IDS Database](https://github.com/cjkvi/cjkvi-ids) | KANJIDIC2 収録字の日本字体。従来の検索結果を変えないため優先している | GPLv2 |
+| 出典                                                                      | 使いどころ                                                                                                                           | ライセンス                                         |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| [BabelStone IDS](https://www.babelstone.co.uk/CJK/IDS.TXT)（Andrew West） | 土台。Unicode 16.0 の全97,680字。字源タグ(G/H/T/**J**/K/P/V)を持つので日本字体を選べる                                               | 作者が著作権を主張せず、用途・帰属の制限なしと明記 |
+| [CHISE IDS Database](https://gitlab.chise.org/CHISE/ids)                  | 穴埋め。BabelStone は Unicode 16.0 準拠で 17.0 の**拡張Jを1字も持たない**。加えて拡張C/Eの末尾18字など他の表に分解が無い20字も埋まる | GPLv2                                              |
+| [CJKVI IDS Database](https://github.com/cjkvi/cjkvi-ids)                  | KANJIDIC2 収録字の日本字体。従来の検索結果を変えないため優先している                                                                 | GPLv2                                              |
 
-- 漢字情報（読み・学年・頻度）: [KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project)（EDRDG、CC BY-SA 4.0）
+- 漢字情報（読み・学年・頻度・画数・部首・意味）: [KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project)（EDRDG、CC BY-SA 4.0）
+- 字形表示: [Plangothic](https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project)（SIL OFL 1.1）
 - 互換漢字（U+F900〜/U+2F800〜）の分解は、正規等価な統合漢字の IDS を NFC 経由で借りている（元データ側に無いため）
 
-`IDS_SOURCE=babelstone npm run build:data` で GPLv2 の2つを外し、BabelStone だけでビルドできる。字数は 102,998 のままだが、拡張J 4,298字の分解データが丸ごと落ちて構造検索に出てこなくなる（BabelStone が Unicode 16.0 準拠のため）。製品化時のライセンス方針は docs/technical-roadmap.md 参照。
+`IDS_SOURCE=babelstone npm run build:data` で GPLv2 の2つを外し、BabelStone だけでビルドできる。字数は 102,998 のままだが、拡張J 4,298字の分解データが丸ごと落ちて構造検索に出てこなくなる（BabelStone が Unicode 16.0 準拠のため）。製品化時のライセンス方針は `docs/technical-roadmap.md` 参照。
