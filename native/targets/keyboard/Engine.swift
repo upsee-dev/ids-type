@@ -185,4 +185,29 @@ final class Engine {
         hits.sort { score($0.index, $0.exact) < score($1.index, $1.exact) }
         return Result(hits: Array(hits.prefix(limit)), mode: .parts)
     }
+
+    /// 読みから字を引く。「つち」→ 土 圭 塩 … のように、部品として使いたい字を
+    /// パレットに無くても出せるようにするためのもの。
+    ///
+    /// 音読み(カタカナ)・訓読み(ひらがな)の両方を1本に見て部分一致で拾う。
+    /// 訓読みの「あか.るい」「-がわ」の . と - は送り仮名・接辞の目印なので落とす。
+    /// 突き合わせ方は core/engine.ts の list({query}) と同じ。
+    /// 読みを持つのは KANJIDIC2 収録字だけなので、走査も jaCount までで済む。
+    func byReading(_ query: String, limit: Int = 60) -> [String] {
+        let kana = Kana.toHiragana(query.trimmingCharacters(in: .whitespaces))
+        if kana.isEmpty { return [] }
+        var hits: [Int] = []
+        hits.reserveCapacity(limit * 4)
+        for i in 0..<dict.jaCount {
+            let raw = dict.readings(at: i)
+            if raw.isEmpty { continue }
+            let r = Kana.toHiragana(raw)
+                .replacingOccurrences(of: ".", with: "")
+                .replacingOccurrences(of: "-", with: "")
+            if r.contains(kana) { hits.append(i) }
+        }
+        // 常用に近い字・よく使う字を先に
+        hits.sort { score($0, false) < score($1, false) }
+        return hits.prefix(limit).map { dict.char(at: $0) }
+    }
 }

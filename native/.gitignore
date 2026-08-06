@@ -45,3 +45,6 @@ yarn-error.*
 
 # ローカルビルドの成果物
 /build/
+
+# ローカル Expo モジュールの gradle 生成物(ソースは modules/*/android/src/)
+modules/*/android/build/

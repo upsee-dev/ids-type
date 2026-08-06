@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getItem, setItem } from "../modules/katachi-shared";
 
 /**
  * 使った字の履歴と、お気に入り。
@@ -6,6 +7,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * 読めない字を調べる道具なので、「さっき出した字」をもう一度出したい場面が多い。
  * 毎回かたちと部品を組み直させないよう、確定した字を新しい順に覚えておく。
  * お気に入りは履歴と別に持つ（履歴を消してもお気に入りは残る）。
+ *
+ * 保存先は**アプリとキーボードで共有する領域**（modules/katachi-shared）。
+ * アプリで調べた字をキーボードで打つのがこのアプリの筋道なので、
+ * アプリ専用の AsyncStorage に置くとキーボードから見えず橋が架からない。
  *
  * 端末内にしか保存しない（このアプリはネットワークを使わない）。
  */
@@ -16,21 +21,40 @@ const FAVORITES_KEY = "katachi.favorites";
 /** 履歴の上限。これ以上は古いものから落とす */
 export const HISTORY_LIMIT = 60;
 
+/** 壊れた値を読んでも落ちないようにする（1字ぶんの文字列だけ通す） */
+function parse(raw: string | null): string[] | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 1.0.6 までの履歴は AsyncStorage にある。共有領域が空のときだけ引き取る
+ * （移した後も元は消さない。古いビルドに戻したときに履歴が消えると困る）。
+ */
 async function load(key: string): Promise<string[]> {
   try {
-    const raw = await AsyncStorage.getItem(key);
-    if (!raw) return [];
-    const v = JSON.parse(raw);
-    // 壊れた値を読んでも落ちないようにする（1字ぶんの文字列だけ通す）
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+    const shared = parse(getItem(key));
+    if (shared) return shared;
+
+    const old = parse(await AsyncStorage.getItem(key));
+    if (old && old.length > 0) {
+      setItem(key, JSON.stringify(old));
+      return old;
+    }
+    return [];
   } catch {
     return [];
   }
 }
 
-async function save(key: string, list: string[]): Promise<void> {
+function save(key: string, list: string[]): void {
   try {
-    await AsyncStorage.setItem(key, JSON.stringify(list));
+    setItem(key, JSON.stringify(list));
   } catch {
     /* 保存できなくても入力は続けられるので握りつぶす */
   }

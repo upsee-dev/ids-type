@@ -44,8 +44,8 @@ Expo/RNやElectron/Tauriが担えるのは「コンテナーアプリ」（設�
 
 ### iOS — **ビルド可能な状態まで完了**
 - **キーボード本体**: Swift + Keyboard Extension（`native/targets/keyboard/`）。`@bacons/apple-targets` でターゲット追加
-- **メモリ**: 上限約60MB。辞書は UTF-8 の `Data` 1本＋バイト範囲(Int32)の配列で持ち、String 化は表示分だけ。App Group ではなく拡張に同梱（ネットワーク・共有領域とも不要にするため）
-- **審査対策**: `RequestsOpenAccess = false`。フルアクセスを要求しない
+- **メモリ**: 上限約60MB。辞書は UTF-8 の `Data` 1本＋バイト範囲(Int32)の配列で持ち、String 化は表示分だけ。辞書そのものは拡張に同梱（App Group には置かない）
+- **フルアクセス**: 1.0.7 から `RequestsOpenAccess = true`。用途は履歴・お気に入りをアプリと共有すること1点のみで、通信は引き続き一切しない。許可されないときは拡張自身の UserDefaults に落ちる（機能は失われない）。審査で用途を聞かれたら「App Group 経由の履歴共有のみ」と答える
 - 残: 実機での動作確認、App Store Connect のアプリレコード作成、提出
 
 ### Android — **完了**

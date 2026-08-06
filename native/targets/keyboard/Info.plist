@@ -18,8 +18,14 @@
       <string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
       <key>NSExtensionAttributes</key>
       <dict>
+        <!-- フルアクセス。iOS のキーボード拡張が App Group の入れ物を触れるのは
+             これが true で、かつ使う人が設定で許したときだけ。
+             履歴・お気に入りをアプリと1つにするために要求している。
+             許可されなくてもキーボードは動く（そのときは拡張自身の入れ物に
+             落ちて、履歴がアプリと別々になるだけ。SharedStore.swift 参照）。
+             通信は従来どおり一切しない -->
         <key>RequestsOpenAccess</key>
-        <false/>
+        <true/>
         <key>IsASCIICapable</key>
         <false/>
         <key>PrefersRightToLeft</key>

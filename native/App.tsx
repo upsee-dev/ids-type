@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppState,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -13,6 +14,10 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+// 絵文字(🕘★⚙…)は端末ごとに絵柄も大きさも変わり、白黒のUIの中で1つだけ
+// 色付きの絵が浮く。アイコンは字形のそろったフォントから引く。
+// 静的読み込み(/static)なので app.json の config plugin で native に焼き込む
+import { Ionicons } from "@react-native-vector-icons/ionicons/static";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -132,9 +137,18 @@ function Screen() {
   const [history, setHistory] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [shelf, setShelf] = useState<"none" | "history" | "favorites">("none");
+  // 履歴とお気に入りはキーボード側とも共有している。キーボードで打った字が
+  // アプリに戻ったとき出ていないと「消えた」と見えるので、前面に戻るたび読み直す
   useEffect(() => {
-    loadHistory().then(setHistory).catch(() => {});
-    loadFavorites().then(setFavorites).catch(() => {});
+    const reload = () => {
+      loadHistory().then(setHistory).catch(() => {});
+      loadFavorites().then(setFavorites).catch(() => {});
+    };
+    reload();
+    const sub = AppState.addEventListener("change", s => {
+      if (s === "active") reload();
+    });
+    return () => sub.remove();
   }, []);
 
   const remember = (ch: string) => {
@@ -254,7 +268,7 @@ function Screen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={["top", "bottom"]}>
       <StatusBar style={t.dark ? "light" : "dark"} />
 
-      {/* 「あ」で端末のキーボードに切り替えたとき、下段の入力欄が
+      {/* ⌨ で端末のキーボードに切り替えたとき、下段の入力欄が
           キーボードに隠れて打っている文字が見えなくならないよう持ち上げる。
           Android は OS の adjustResize が同じことをするので iOS だけ */}
       <KeyboardAvoidingView
@@ -274,18 +288,38 @@ function Screen() {
             onPress={() => setShelf(v => (v === "history" ? "none" : "history"))}
             hitSlop={8}
             accessibilityLabel="履歴"
-            style={[s.themeBtn, { borderColor: shelf === "history" ? t.accent : t.border }]}
+            style={[
+              s.themeBtn,
+              {
+                borderColor: shelf === "history" ? t.accent : t.border,
+                backgroundColor: shelf === "history" ? t.accentBg : "transparent",
+              },
+            ]}
           >
-            <Text style={{ fontSize: 13 }}>🕘</Text>
+            <Ionicons
+              name="time-outline"
+              size={20}
+              color={shelf === "history" ? t.accent : t.sub}
+            />
           </Pressable>
           <Pressable
             onPressIn={() => haptic("toggle")}
             onPress={() => setShelf(v => (v === "favorites" ? "none" : "favorites"))}
             hitSlop={8}
             accessibilityLabel="お気に入り"
-            style={[s.themeBtn, { borderColor: shelf === "favorites" ? t.accent : t.border }]}
+            style={[
+              s.themeBtn,
+              {
+                borderColor: shelf === "favorites" ? t.accent : t.border,
+                backgroundColor: shelf === "favorites" ? t.accentBg : "transparent",
+              },
+            ]}
           >
-            <Text style={{ fontSize: 13 }}>★</Text>
+            <Ionicons
+              name={shelf === "favorites" ? "star" : "star-outline"}
+              size={20}
+              color={shelf === "favorites" ? t.accent : t.sub}
+            />
           </Pressable>
           <Pressable
             onPressIn={() => haptic("toggle")}
@@ -294,37 +328,48 @@ function Screen() {
             accessibilityLabel="設定"
             style={[s.themeBtn, { borderColor: t.border }]}
           >
-            <Text style={{ fontSize: 13 }}>⚙</Text>
+            <Ionicons name="settings-outline" size={20} color={t.sub} />
           </Pressable>
         </View>
 
         <View style={s.row}>
           {/* 確定テキストは読むだけなので Text で組む。TextInput と違って
-              1字ずつフォントを選べる＝拡張漢字が ☒ にならない */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            ref={outputScroll}
-            onContentSizeChange={() => outputScroll.current?.scrollToEnd({ animated: false })}
-            style={[s.field, { borderColor: t.border, backgroundColor: t.bg }]}
-            contentContainerStyle={s.outputInner}
-          >
-            {output ? (
-              <Kanji text={output} size={18} color={t.text} />
-            ) : (
-              <Text style={{ fontSize: 18, color: t.faint }}>
-                ここに確定した文字が入ります
-              </Text>
-            )}
-          </ScrollView>
+              1字ずつフォントを選べる＝拡張漢字が ☒ にならない。
+              下段の入力欄と同じ「枠のある欄」に見えると打ちに行ってしまうので、
+              枠は持たせず、左の帯と「出力」の見出しが付いた面として見せる */}
+          <View style={[s.output, { backgroundColor: t.accentBg, borderLeftColor: t.accent }]}>
+            <Text style={[s.outputTag, { color: t.accent }]}>出力</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              ref={outputScroll}
+              onContentSizeChange={() => outputScroll.current?.scrollToEnd({ animated: false })}
+              style={{ flex: 1, minWidth: 0 }}
+              contentContainerStyle={s.outputInner}
+            >
+              {output ? (
+                <Kanji text={output} size={20} color={t.text} />
+              ) : (
+                <Text style={{ fontSize: 12, color: t.sub }}>
+                  選んだ字がここにたまります（コピーして使えます）
+                </Text>
+              )}
+            </ScrollView>
+          </View>
           <Pressable
             onPressIn={() => haptic("delete")}
             onPress={() => setOutput(o => [...o].slice(0, -1).join(""))}
+            accessibilityLabel="出力を1字消す"
             style={[s.smallBtn, { borderColor: t.border }]}
           >
-            <Text style={{ color: t.sub, fontSize: 16 }}>⌫</Text>
+            <Ionicons name="backspace-outline" size={20} color={t.sub} />
           </Pressable>
           <Pressable onPress={copy} style={[s.primaryBtn, { backgroundColor: t.accent }]}>
+            <Ionicons
+              name={copied ? "checkmark" : "copy-outline"}
+              size={14}
+              color={t.onAccent}
+            />
             <Text style={{ color: t.onAccent, fontSize: 12, fontWeight: "600" }}>
               {copied ? "コピー済" : "コピー"}
             </Text>
@@ -521,19 +566,29 @@ function Screen() {
                   favorites.includes(selected) ? "お気に入りから外す" : "お気に入りに入れる"
                 }
               >
-                <Text
-                  style={{
-                    fontSize: 20,
-                    color: favorites.includes(selected) ? t.accent : t.faint,
-                  }}
-                >
-                  {favorites.includes(selected) ? "★" : "☆"}
-                </Text>
+                <Ionicons
+                  name={favorites.includes(selected) ? "star" : "star-outline"}
+                  size={22}
+                  color={favorites.includes(selected) ? t.accent : t.faint}
+                />
               </Pressable>
               <Pressable
                 onPress={copySelected}
-                style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: t.accent }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  backgroundColor: t.accent,
+                }}
               >
+                <Ionicons
+                  name={charCopied ? "checkmark" : "copy-outline"}
+                  size={13}
+                  color={t.onAccent}
+                />
                 <Text style={{ color: t.onAccent, fontSize: 11, fontWeight: "600" }}>
                   {charCopied ? "コピー済" : "コピー"}
                 </Text>
@@ -544,7 +599,7 @@ function Screen() {
                 hitSlop={8}
                 accessibilityLabel="詳細を閉じる"
               >
-                <Text style={{ color: t.faint, fontSize: 14 }}>✕</Text>
+                <Ionicons name="close" size={18} color={t.faint} />
               </Pressable>
             </View>
           </View>
@@ -590,11 +645,14 @@ function Screen() {
             },
           ]}
         >
-          <Text style={{ color: directInput ? t.accent : t.sub, fontSize: 16 }}>⌨</Text>
+          <Ionicons name="keypad-outline" size={19} color={directInput ? t.accent : t.sub} />
         </Pressable>
+        {/* ? は「任意の1字」として欄にそのまま入る文字なので、アイコンに
+            置き換えず打てる字のまま見せる */}
         <Pressable
           onPressIn={() => haptic("key")}
           onPress={() => insert("?")}
+          accessibilityLabel="任意の1字(?)を入れる"
           style={[s.smallBtn, { borderColor: t.border }]}
         >
           <Text style={{ color: t.sub, fontSize: 16 }}>?</Text>
@@ -602,16 +660,18 @@ function Screen() {
         <Pressable
           onPressIn={() => haptic("delete")}
           onPress={backspace}
+          accessibilityLabel="1字消す"
           style={[s.smallBtn, { borderColor: t.border }]}
         >
-          <Text style={{ color: t.sub, fontSize: 16 }}>⌫</Text>
+          <Ionicons name="backspace-outline" size={20} color={t.sub} />
         </Pressable>
         <Pressable
           onPressIn={() => haptic("delete")}
           onPress={() => setQuery("")}
+          accessibilityLabel="入力を全部消す"
           style={[s.smallBtn, { borderColor: t.border }]}
         >
-          <Text style={{ color: t.sub, fontSize: 16 }}>✕</Text>
+          <Ionicons name="close" size={20} color={t.sub} />
         </Pressable>
       </View>
 
@@ -651,11 +711,14 @@ function Screen() {
 const s = StyleSheet.create({
   header: { paddingHorizontal: 12, paddingBottom: 8, paddingTop: 4, borderBottomWidth: 1 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  // 履歴・お気に入り・設定。指で狙える大きさ(38pt角)を確保する
   themeBtn: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderRadius: 10,
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: { fontSize: 16, fontWeight: "700" },
   subtitle: { fontSize: 10 },
@@ -669,6 +732,22 @@ const s = StyleSheet.create({
     paddingVertical: Platform.OS === "ios" ? 10 : 6,
     fontSize: 18,
   },
+  // 出力(結果)の面。入力欄(field)とは別物と一目で分かるよう、枠を持たせず
+  // 左に帯を立てて塗りで見せる
+  output: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderLeftWidth: 3,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+    paddingLeft: 8,
+    paddingRight: 10,
+    paddingVertical: Platform.OS === "ios" ? 8 : 5,
+  },
+  outputTag: { fontSize: 10, fontWeight: "700", letterSpacing: 1 },
   outputInner: { alignItems: "center", minHeight: 26 },
   shelf: { paddingHorizontal: 12, paddingBottom: 6, borderBottomWidth: 1 },
   shelfHead: { flexDirection: "row", alignItems: "center", paddingTop: 6 },
@@ -688,7 +767,14 @@ const s = StyleSheet.create({
     minWidth: 44,
     alignItems: "center",
   },
-  primaryBtn: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11 },
+  primaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
   notice: { textAlign: "center", paddingVertical: 24, fontSize: 13 },
   status: { fontSize: 11, paddingHorizontal: 12, paddingVertical: 6 },
   emptyState: { paddingHorizontal: 24, paddingVertical: 24, gap: 12 },

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["KatachiSharedModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.katachishared.KatachiSharedModule"]
+  }
+}

@@ -3,13 +3,23 @@ import UIKit
 /// 漢字カタチ入力の iOS キーボード拡張。
 ///
 /// 設定 > 一般 > キーボード > キーボード に「漢字カタチ入力」として追加される。
-/// ネットワークを使わない設計なので「フルアクセス」は要求しない
-/// (審査でもプライバシー訴求でも有利。docs/technical-roadmap.md 参照)。
+/// 通信は一切しない。「フルアクセス」は履歴・お気に入りをアプリと共有するため
+/// (App Group を触る条件)だけにお願いしていて、許可されなくても入力はできる
+/// (SharedStore.swift / docs/technical-roadmap.md 参照)。
 ///
 /// 拡張のメモリ上限は約60MB。RN は載せず、UI もエンジンもここで完結させる。
 /// UIInputViewAudioFeedback に準拠して enableInputClicksWhenVisible を true に
 /// しないと、playInputClick() を呼んでもキー音は鳴らない。
-final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedback {
+///
+///   [ 履歴 ★ 着せ替え                     🌐 ]  ← 道具の帯(打つ場所ではない)
+///   [ (棚) 使った字 / お気に入りの字          ]
+///   [ 入力中のかたち ]                [⌫] [消]
+///   [ 候補 ] [ かたち ]
+///   [ よく使う部品 | 部首・偏旁 | 読みでさがす ]
+///   [ 部品の並び / 読みのフリック面            ]
+final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedback,
+    FlickKanaViewDelegate
+{
 
     var enableInputClicksWhenVisible: Bool { true }
 
@@ -17,20 +27,38 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private let dict = Dict()
     private lazy var engine = Engine(dict: dict)
 
-    /// 入力中のかたちコード(例: "LR日")
+    /// 履歴・お気に入り(アプリと App Group で共有)
+    private let store = SharedStore()
+
+    /// 入力中のかたちコード(例: "LR日")。相手の欄には触らず、ここだけで持つ
     private var composing = "" {
         didSet { onComposingChanged() }
     }
 
-    /// 部品パレットの種類。**かたち(操作子)はタブに含めない**。
+    /// キー面の種類。**かたち(操作子)はタブに含めない**。
     /// 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
     /// かたちは候補の下に常時出しておき、タブは部品の出し分けだけに使う。
-    private enum Tab: Int { case common, radical }
+    ///
+    /// search は読みから部品を引く面。他のかなキーボードへ移らずに読みを
+    /// 打てるよう、フリックのかな面をこの中に持つ。
+    private enum Tab: Int { case common, radical, search }
     private var currentTab: Tab = .common
     private var strokeGroup = "common"
     private var searchSeq = 0
+    private var readingSeq = 0
     /// ⌫長押しの連射タイマー
     private var repeatTimer: Timer?
+
+    /// 棚(履歴・お気に入り)の開き方
+    private enum Shelf { case none, history, favorites }
+    private var shelf: Shelf = .none
+
+    /// 読みでさがす面の状態。読みそのものと、指を置いている間の仮の1字
+    private var reading = ""
+    private var readingPreview: String?
+    private weak var readingLabel: UILabel?
+    private weak var readingHits: UIStackView?
+    private weak var flick: FlickKanaView?
 
     private static func rgb(_ hex: UInt32) -> UIColor {
         UIColor(
@@ -65,7 +93,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private var colAccent: UIColor { themeColor { $0.accent } }
     private var colAccentBg: UIColor { themeColor { $0.accentBg } }
 
-    /// テーマ変更時に塗り直す常設ボタン(⌫・消・🎨・あ)。キーや候補と違って
+    /// テーマ変更時に塗り直す常設ボタン(⌫・消・道具の帯)。キーや候補と違って
     /// 作り直されないので、ここで持っておいて applyTheme が直接塗り直す
     private var chromeButtons: [UIButton] = []
 
@@ -82,9 +110,16 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             b.setTitleColor(colSub, for: .normal)
             style(b, fill: colCard, stroke: colBorder)
         }
+        for b in toolButtons {
+            b.tintColor = colSub
+            style(b, fill: .clear, stroke: colBorder)
+        }
+        toolSeparator.backgroundColor = colBorder
+        shelfScroll.backgroundColor = colCard
         buildOperators()
         buildStrokeChips()
         rebuildKeys()
+        refreshShelf()
         onComposingChanged() // ラベルの色を直し、候補も引き直す
     }
 
@@ -92,6 +127,16 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private let candidateScroll = UIScrollView()
     private let candidateRow = UIStackView()
     private let tabRow = UIStackView()
+    /// 道具の帯。打つ場所ではないので線で区切って上端にまとめる
+    private let toolSeparator = UIView()
+    private let shelfScroll = UIScrollView()
+    private let shelfRow = UIStackView()
+    private var historyButton: UIButton?
+    private var favoritesButton: UIButton?
+    /// 道具の帯のボタン。塗りを持たないので chromeButtons とは別に塗り直す
+    private var toolButtons: [UIButton] = []
+    /// キーボードの最低の高さ。読みの面(フリック4段)のときだけ伸ばす
+    private var minHeight: NSLayoutConstraint!
     /// かたち(操作子)の行。タブに関係なく常に出す
     private let opScroll = UIScrollView()
     private let opRow = UIStackView()
@@ -123,6 +168,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         super.viewDidLoad()
         view.backgroundColor = colBg
         buildLayout()
+        refreshShelf() // 棚は閉じた状態。道具の帯のボタンの色をここで当てる
 
         // 辞書はキーボードの表示をブロックしないよう別スレッドで読む。
         // 日本語の字を読み終えた時点でいったん検索可能にし、拡張漢字は後追い。
@@ -143,13 +189,41 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         root.spacing = 4
         root.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(root)
+        minHeight = view.heightAnchor.constraint(greaterThanOrEqualToConstant: 300)
         NSLayoutConstraint.activate([
             root.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
-            view.heightAnchor.constraint(greaterThanOrEqualToConstant: 300),
+            minHeight,
         ])
+
+        // ── 道具の帯 ──
+        // 履歴・お気に入り・着せ替えは「打つための場所」ではないので、いちばん上に
+        // まとめ、下に線を引いて打鍵の面から切り離す。入力欄のすぐ隣に置くと、
+        // 打つつもりで触ってしまう
+        root.addArrangedSubview(buildToolRow())
+        toolSeparator.backgroundColor = colBorder
+        toolSeparator.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        root.addArrangedSubview(toolSeparator)
+
+        // ── 棚(履歴・お気に入り) ──
+        shelfRow.axis = .horizontal
+        shelfRow.spacing = 4
+        shelfRow.translatesAutoresizingMaskIntoConstraints = false
+        shelfScroll.addSubview(shelfRow)
+        shelfScroll.showsHorizontalScrollIndicator = false
+        shelfScroll.backgroundColor = colCard
+        shelfScroll.isHidden = true
+        NSLayoutConstraint.activate([
+            shelfRow.topAnchor.constraint(equalTo: shelfScroll.topAnchor),
+            shelfRow.bottomAnchor.constraint(equalTo: shelfScroll.bottomAnchor),
+            shelfRow.leadingAnchor.constraint(equalTo: shelfScroll.leadingAnchor),
+            shelfRow.trailingAnchor.constraint(equalTo: shelfScroll.trailingAnchor),
+            shelfRow.heightAnchor.constraint(equalTo: shelfScroll.heightAnchor),
+            shelfScroll.heightAnchor.constraint(equalToConstant: 46),
+        ])
+        root.addArrangedSubview(shelfScroll)
 
         // ── 入力中の表示 ──
         let top = UIStackView()
@@ -208,7 +282,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         tabRow.axis = .horizontal
         tabRow.spacing = 4
         tabRow.distribution = .fillEqually
-        for (i, label) in ["よく使う部品", "部首・偏旁"].enumerated() {
+        for (i, label) in ["よく使う部品", "部首・偏旁", "読みでさがす"].enumerated() {
             let b = UIButton(type: .system)
             b.setTitle(label, for: .normal)
             b.titleLabel?.font = .systemFont(ofSize: 12)
@@ -216,17 +290,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             b.addTarget(self, action: #selector(onTab(_:)), for: .touchUpInside)
             tabRow.addArrangedSubview(b)
         }
-        let themeBtn = smallButton("🎨", #selector(onCycleTheme))
-        let switchBtn = smallButton("あ", #selector(onSwitchKeyboard(_:event:)))
-        // handleInputModeList は event が要るので、この1つだけ event 付きで受ける
-        switchBtn.removeTarget(self, action: #selector(onSwitchKeyboard(_:event:)), for: .touchUpInside)
-        switchBtn.addTarget(
-            self, action: #selector(onSwitchKeyboard(_:event:)), for: .allTouchEvents,
-        )
-        let tabWrap = UIStackView(arrangedSubviews: [tabRow, themeBtn, switchBtn])
-        tabWrap.axis = .horizontal
-        tabWrap.spacing = 4
-        root.addArrangedSubview(tabWrap)
+        root.addArrangedSubview(tabRow)
 
         // ── 画数チップ ──
         strokeRow.axis = .horizontal
@@ -261,6 +325,106 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
         buildStrokeChips()
         rebuildKeys()
+    }
+
+    // MARK: - 道具の帯(履歴・お気に入り・着せ替え)
+
+    /// 打つための場所ではないものを上端にまとめた帯。
+    /// 塗りを持たせず、下に線を引いて打鍵の面と切り離してある。
+    private func buildToolRow() -> UIView {
+        let history = toolButton("clock", "履歴", #selector(onToggleHistory))
+        let favorites = toolButton("star", "お気に入り", #selector(onToggleFavorites))
+        historyButton = history
+        favoritesButton = favorites
+        let theme = toolButton("paintpalette", "着せ替え", #selector(onCycleTheme))
+
+        // 「他のキーボード」。handleInputModeList は event が要るので
+        // これだけ .allTouchEvents で受ける(地球儀キーと同じ選択リストが出る)
+        let switchBtn = toolButton("globe", "他のキーボードへ", #selector(onSwitchKeyboard(_:event:)))
+        switchBtn.removeTarget(self, action: #selector(onSwitchKeyboard(_:event:)), for: .touchUpInside)
+        switchBtn.addTarget(self, action: #selector(onSwitchKeyboard(_:event:)), for: .allTouchEvents)
+
+        let spacer = UIView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let row = UIStackView(arrangedSubviews: [history, favorites, theme, spacer, switchBtn])
+        row.axis = .horizontal
+        row.spacing = 4
+        return row
+    }
+
+    private func toolButton(_ symbol: String, _ label: String, _ action: Selector) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setImage(UIImage(systemName: symbol), for: .normal)
+        b.tintColor = colSub
+        b.accessibilityLabel = label
+        b.contentEdgeInsets = UIEdgeInsets(top: 5, left: 10, bottom: 5, right: 10)
+        style(b, fill: .clear, stroke: colBorder)
+        b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+        b.addTarget(self, action: action, for: .touchUpInside)
+        toolButtons.append(b)
+        return b
+    }
+
+    @objc private func onToggleHistory() {
+        shelf = shelf == .history ? .none : .history
+        refreshShelf()
+    }
+
+    @objc private func onToggleFavorites() {
+        shelf = shelf == .favorites ? .none : .favorites
+        refreshShelf()
+    }
+
+    /// 棚の中身。タップでその字をそのまま相手の欄へ入れる
+    /// (もう一度かたちから組み直させないための近道)。長押しでお気に入りの入り切り。
+    private func refreshShelf() {
+        historyButton?.tintColor = shelf == .history ? colAccent : colSub
+        favoritesButton?.tintColor = shelf == .favorites ? colAccent : colSub
+        favoritesButton?.setImage(
+            UIImage(systemName: shelf == .favorites ? "star.fill" : "star"), for: .normal,
+        )
+        shelfScroll.isHidden = shelf == .none
+        shelfRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        guard shelf != .none else { return }
+
+        let chars = shelf == .history ? store.history : store.favorites
+        guard !chars.isEmpty else {
+            let l = UILabel()
+            l.text = shelf == .history
+                ? "まだありません。字を確定するとここに残ります"
+                : "まだありません。候補を長押しすると入ります"
+            l.textColor = colSub
+            l.font = .systemFont(ofSize: 11)
+            shelfRow.addArrangedSubview(l)
+            return
+        }
+        for ch in chars {
+            let b = UIButton(type: .system)
+            b.setTitle(ch, for: .normal)
+            b.titleLabel?.font = font(for: ch, size: 22)
+            b.setTitleColor(colText, for: .normal)
+            style(b, fill: colCard, stroke: colBorder)
+            b.widthAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
+            b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+            b.addAction(UIAction { [weak self] _ in self?.commit(ch) }, for: .touchUpInside)
+            addFavoriteLongPress(to: b, ch: ch)
+            shelfRow.addArrangedSubview(b)
+        }
+    }
+
+    /// 長押しでお気に入りの入り切り。棚(★)から呼び出せるようになる
+    private func addFavoriteLongPress(to view: UIView, ch: String) {
+        let g = UILongPressGestureRecognizer(target: self, action: #selector(onFavoriteLongPress(_:)))
+        view.addGestureRecognizer(g)
+        view.accessibilityValue = ch // ジェスチャからどの字か引くため
+    }
+
+    @objc private func onFavoriteLongPress(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began, let ch = g.view?.accessibilityValue else { return }
+        store.toggleFavorite(ch)
+        if shelf != .none { refreshShelf() }
+        tapFeedback()
     }
 
     // MARK: - 操作
@@ -312,14 +476,13 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     @objc private func onClear() { composing = "" }
 
-    /// 「あ」キー。かな入力など別のキーボードへ移りたいときに押す。
+    /// 道具の帯の地球儀キー。かな入力など別のキーボードへ移りたいときに押す。
     ///
     /// advanceToNextInputMode() だと有効なキーボードを順送りするだけなので、
     /// 絵文字に飛んでしまう。どれに移るかは本人に選ばせる
     /// (handleInputModeList は地球儀キーと同じ選択リストを出す)。
     ///
-    /// 移る前に未確定の「かたちコード」を消しておく。残したままだと相手の
-    /// テキスト欄に LR日 のような文字列が居座り、カーソルの位置も分からなくなる。
+    /// 組み立て途中のかたちコードは持って行けないので捨てる。
     /// .allTouchEvents で受けるので何度も呼ばれる。空にする処理は1回で足りる
     @objc private func onSwitchKeyboard(_ sender: UIButton, event: UIEvent) {
         if !composing.isEmpty { composing = "" }
@@ -328,9 +491,15 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     private func insert(_ s: String) { composing += s }
 
+    /// 組み立てた結果を相手のカーソルへ転記する。かたちコードそのものは
+    /// キーボードの中だけの持ち物なので、外へ出るのはこの1文字だけ
     private func commit(_ ch: String) {
         composing = ""
         textDocumentProxy.insertText(ch)
+        // 使った字はアプリと共有の履歴へ。アプリで調べた字をキーボードで打つ／
+        // キーボードで打った字をアプリで見返す、を両方向でつなぐ
+        store.remember(ch)
+        if shelf != .none { refreshShelf() }
     }
 
     private func onComposingChanged() {
@@ -382,6 +551,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             b.accessibilityLabel = h.ch
             b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
             b.addAction(UIAction { [weak self] _ in self?.commit(h.ch) }, for: .touchUpInside)
+            addFavoriteLongPress(to: b, ch: h.ch)
             candidateRow.addArrangedSubview(b)
         }
     }
@@ -469,8 +639,16 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         }
         strokeScroll.isHidden = currentTab != .radical
         keyArea.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        readingLabel = nil
+        readingHits = nil
+        flick = nil
+
+        // 読みの面はフリック4段(と読みの欄・引けた字)が入る高さが要る
+        minHeight?.constant = currentTab == .search ? 400 : 300
 
         switch currentTab {
+        case .search:
+            buildReadingArea()
         case .common:
             let parts = commonParts()
             if parts.isEmpty {
@@ -511,6 +689,182 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         cachedCommon = out
         return out
     }
+
+    // MARK: - 読みでさがす
+
+    /// 読みの面。読みの欄・引けた字・フリックのかな面の3段。
+    ///
+    /// 引けた字はタップで**かたちコードに部品として足す**（つち→土 を足して
+    /// 〈左右〉土… と組む）。長押しはその字をそのまま相手の欄へ入れる
+    /// （読みが分かっている字はこれが最短で、組み直す必要がない）。
+    private func buildReadingArea() {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 16)
+        label.numberOfLines = 1
+        readingLabel = label
+
+        let clear = UIButton(type: .system)
+        clear.setTitle("消", for: .normal)
+        clear.titleLabel?.font = .systemFont(ofSize: 13)
+        clear.setTitleColor(colSub, for: .normal)
+        clear.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        style(clear, fill: colCard, stroke: colBorder)
+        clear.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+        clear.addTarget(self, action: #selector(onClearReading), for: .touchUpInside)
+
+        let head = UIStackView(arrangedSubviews: [label, clear])
+        head.axis = .horizontal
+        head.spacing = 6
+        keyArea.addArrangedSubview(head)
+
+        let hits = UIStackView()
+        hits.axis = .horizontal
+        hits.spacing = 4
+        hits.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = UIScrollView()
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.addSubview(hits)
+        NSLayoutConstraint.activate([
+            hits.topAnchor.constraint(equalTo: scroll.topAnchor),
+            hits.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
+            hits.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
+            hits.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
+            hits.heightAnchor.constraint(equalTo: scroll.heightAnchor),
+            scroll.heightAnchor.constraint(equalToConstant: 46),
+        ])
+        readingHits = hits
+        keyArea.addArrangedSubview(scroll)
+
+        let pad = FlickKanaView(
+            text: colText, sub: colSub, card: colCard, border: colBorder, accentBg: colAccentBg,
+        )
+        pad.delegate = self
+        pad.heightAnchor.constraint(equalToConstant: 188).isActive = true
+        flick = pad
+        keyArea.addArrangedSubview(pad)
+
+        refreshReadingLabel()
+        runReadingSearch()
+    }
+
+    /// 打った読みと、指を置いているあいだの仮の1字(色を変えて後ろに付ける)
+    private func refreshReadingLabel() {
+        guard let label = readingLabel else { return }
+        if reading.isEmpty, readingPreview == nil {
+            label.text = "読みを打つと部品が出ます（例: つち）"
+            label.textColor = colSub
+            return
+        }
+        label.textColor = colText
+        guard let preview = readingPreview else {
+            label.text = reading
+            return
+        }
+        let s = NSMutableAttributedString(string: reading)
+        s.append(NSAttributedString(string: preview, attributes: [.foregroundColor: colAccent]))
+        label.attributedText = s
+    }
+
+    @objc private func onClearReading() {
+        reading = ""
+        flick?.resetToggle()
+        afterReadingChanged()
+    }
+
+    private func afterReadingChanged() {
+        readingPreview = nil
+        refreshReadingLabel()
+        runReadingSearch()
+    }
+
+    private func runReadingSearch() {
+        guard let hits = readingHits else { return }
+        let q = reading
+        readingSeq += 1
+        let seq = readingSeq
+        guard !q.isEmpty else {
+            hits.arrangedSubviews.forEach { $0.removeFromSuperview() }
+            return
+        }
+        // 1万3千字ぶんの読みを走査するので UI スレッドではやらない
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let r = self.engine.byReading(q, limit: 60)
+            DispatchQueue.main.async {
+                guard seq == self.readingSeq else { return } // 古い結果は捨てる
+                self.showReadingHits(r)
+            }
+        }
+    }
+
+    private func showReadingHits(_ chars: [String]) {
+        guard let hits = readingHits else { return }
+        hits.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        guard !chars.isEmpty else {
+            let l = UILabel()
+            l.text = dict.jaCount == 0 ? "辞書を読み込み中…" : "該当なし"
+            l.textColor = colSub
+            l.font = .systemFont(ofSize: 12)
+            hits.addArrangedSubview(l)
+            return
+        }
+        for ch in chars {
+            let b = UIButton(type: .system)
+            b.setTitle(ch, for: .normal)
+            b.titleLabel?.font = font(for: ch, size: 22)
+            b.setTitleColor(colText, for: .normal)
+            style(b, fill: colCard, stroke: colBorder)
+            b.widthAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
+            b.accessibilityLabel = ch
+            b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+            b.addAction(UIAction { [weak self] _ in self?.insert(ch) }, for: .touchUpInside)
+            // 長押しはそのまま入力。読みが分かっている字はこれが最短
+            let g = UILongPressGestureRecognizer(target: self, action: #selector(onReadingHitLongPress(_:)))
+            b.addGestureRecognizer(g)
+            b.accessibilityValue = ch
+            hits.addArrangedSubview(b)
+        }
+    }
+
+    @objc private func onReadingHitLongPress(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began, let ch = g.view?.accessibilityValue else { return }
+        tapFeedback()
+        commit(ch)
+    }
+
+    // MARK: - フリックのかな面から呼ばれる
+
+    func flickAppend(_ ch: String) {
+        reading += ch
+        afterReadingChanged()
+    }
+
+    func flickReplaceLast(_ ch: String) {
+        if !reading.isEmpty { reading.removeLast() }
+        reading += ch
+        afterReadingChanged()
+    }
+
+    func flickCycleLast() {
+        guard let last = reading.last, let next = Kana.cycle(last) else { return }
+        reading.removeLast()
+        reading += next
+        afterReadingChanged()
+    }
+
+    func flickBackspace() {
+        guard !reading.isEmpty else { return }
+        reading.removeLast()
+        flick?.resetToggle()
+        afterReadingChanged()
+    }
+
+    func flickPreview(_ ch: String?) {
+        readingPreview = ch
+        refreshReadingLabel()
+    }
+
+    func flickTapFeedback() { tapFeedback() }
 
     // MARK: - 部品
 

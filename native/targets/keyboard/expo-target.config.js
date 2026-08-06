@@ -11,4 +11,10 @@ module.exports = {
   icon: "../../assets/icon.png",
   colors: { $accent: "#4437D1" },
   deploymentTarget: "15.1",
+  // 履歴・お気に入りを本体アプリと共有するための App Group。
+  // 拡張は別サンドボックスで動くので、これが無いとアプリで調べた字が
+  // キーボードに出ない。app.json の ios.entitlements と同じ文字列にすること。
+  entitlements: {
+    "com.apple.security.application-groups": ["group.com.upsee.idskanjitype"],
+  },
 };

@@ -150,6 +150,31 @@ class Engine(private val dict: Dict) {
         return Result(hits.take(limit), Mode.PARTS)
     }
 
+    /**
+     * 読みから字を引く。「つち」→ 土 圭 塩 … のように、部品として使いたい字を
+     * パレットに無くても出せるようにするためのもの。
+     *
+     * 音読み(カタカナ)・訓読み(ひらがな)の両方を1本につないで部分一致で見る。
+     * 訓読みの「あか.るい」「-がわ」の . と - は送り仮名・接辞の目印なので落とす。
+     * 突き合わせ方は core/engine.ts の list({query}) と同じ。
+     * 読みを持つのは KANJIDIC2 収録字だけなので、走査も jaCount までで済む。
+     */
+    fun byReading(query: String, limit: Int = 60): List<String> {
+        val kana = Kana.toHiragana(query.trim())
+        if (kana.isEmpty()) return emptyList()
+        val hits = ArrayList<Int>(limit * 4)
+        for (i in 0 until dict.jaCount) {
+            val on = dict.onAt(i)
+            val kun = dict.kunAt(i)
+            if (on.isEmpty() && kun.isEmpty()) continue
+            val r = Kana.toHiragana("$on $kun").replace(".", "").replace("-", "")
+            if (r.contains(kana)) hits.add(i)
+        }
+        // 常用に近い字・よく使う字を先に。score は exact でない前提でよい
+        hits.sortBy { score(it, false) }
+        return hits.take(limit).map { dict.chars[it] }
+    }
+
     /** 表示用: 1段ずつ分解を展開する(例: 課 → [課 = 〈左右〉言果, 果 = 〈重なり〉日木]) */
     fun decompose(ch: String, maxLines: Int = 4): List<String> {
         val out = ArrayList<String>(maxLines)

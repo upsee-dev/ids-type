@@ -14,24 +14,31 @@ import kotlin.concurrent.thread
  * （設定 > 言語と入力 > 画面キーボード に出るのはこれ）。
  * Expo/React Native はここでは使えないので、UI もエンジンもネイティブで持つ。
  *
- * 打った内容は currentInputConnection 経由で相手のテキスト欄へ直接入れる。
- * 変換前の「かたちコード」は composing text として下線つきで見せ、
- * 候補を選んだ時点で漢字1文字に置き換える。
+ * 組み立てている「かたちコード」は**キーボードの中だけ**に置き、相手の
+ * テキスト欄へは触らない。候補を選んで漢字1文字になった時点ではじめて
+ * カーソル位置へ転記する。
+ *
+ * 以前は composing text として相手の欄に下線つきで出していたが、
+ * 「LR日」のような組み立て途中の記号が相手のアプリの本文に見えてしまい、
+ * 検索欄などでは打っている端から誤変換・オートコンプリートに巻き込まれた。
+ * 見せる場所はキーボードの入力中の行1か所でよい。
  */
 class KatachiImeService : InputMethodService() {
 
     private lateinit var dict: Dict
     private lateinit var engine: Engine
+    private lateinit var sharedStore: Store
     private var view: KeyboardView? = null
     private val main = Handler(Looper.getMainLooper())
 
-    /** 入力中のかたちコード(例: "LR日") */
+    /** 入力中のかたちコード(例: "LR日")。相手の欄には出さない */
     private var composing = StringBuilder()
 
     override fun onCreate() {
         super.onCreate()
         dict = Dict()
         engine = Engine(dict)
+        sharedStore = Store(applicationContext)
         // 辞書はキーボードの表示をブロックしないよう別スレッドで読む。
         // 日本語の字を読み終えた時点でいったん検索可能にし、拡張漢字は後追い。
         thread(name = "katachi-dict") {
@@ -46,6 +53,7 @@ class KatachiImeService : InputMethodService() {
         val v = KeyboardView(this, object : KeyboardView.Host {
             override val engine get() = this@KatachiImeService.engine
             override val dict get() = this@KatachiImeService.dict
+            override val store get() = this@KatachiImeService.sharedStore
             override val composingText get() = composing.toString()
 
             override fun insert(s: String) {
@@ -73,22 +81,20 @@ class KatachiImeService : InputMethodService() {
             override fun commit(ch: String) {
                 composing.setLength(0)
                 currentInputConnection?.commitText(ch, 1)
+                // 使った字はアプリと共有の履歴へ。アプリで調べた字をキーボードで
+                // 打つ／キーボードで打った字をアプリで見返す、を両方向でつなぐ
+                sharedStore.remember(ch)
                 view?.onComposingChanged()
+                view?.onCommitted()
             }
 
             override fun switchToOtherIme() {
-                // 「あ」キー。かな入力など別のキーボードへ移りたいときに押す。
+                // 「他のキーボード」。かな入力など別のキーボードへ移りたいときに押す。
                 //
                 // switchToNextInputMethod だと有効なIMEを順送りするだけなので、
                 // 絵文字や音声入力に飛んでしまう。どれに移るかは本人に選ばせる。
                 //
-                // 移る前に未確定の「かたちコード」を消しておく。残したままだと
-                // 相手のテキスト欄に LR日 のような文字列と下線が居座り、
-                // カーソルの位置も分からなくなる。
-                currentInputConnection?.apply {
-                    setComposingText("", 1)
-                    finishComposingText()
-                }
+                // 組み立て途中のかたちコードは持って行けないので捨てる
                 composing.setLength(0)
                 view?.onComposingChanged()
 
@@ -106,15 +112,14 @@ class KatachiImeService : InputMethodService() {
     }
 
     private fun updateComposing() {
-        // 未確定文字として下線つきで見せる。確定は候補タップのとき
-        currentInputConnection?.setComposingText(composing.toString(), 1)
+        // 相手の欄には出さない。組み立て途中はキーボードの「入力中」の行だけで見せ、
+        // 確定した漢字1文字だけを commitText でカーソルへ送る
         view?.onComposingChanged()
     }
 
     override fun onFinishInput() {
         super.onFinishInput()
         composing.setLength(0)
-        currentInputConnection?.finishComposingText()
         view?.onComposingChanged()
     }
 

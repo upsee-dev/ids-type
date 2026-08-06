@@ -2,7 +2,7 @@
   "expo": {
     "name": "漢字カタチ入力",
     "slug": "ids-kanji-type",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "ids-kanji-type",
@@ -14,11 +14,17 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.upsee.idskanjitype",
       "appleTeamId": "W8P3V5NG4R",
-      "buildNumber": "7"
+      "buildNumber": "8",
+      "//": "履歴・お気に入りをキーボード拡張と共有するための App Group。拡張は別サンドボックスなので、これが無いとアプリで調べた字がキーボードに出ない。targets/keyboard/expo-target.config.js にも同じグループを書く（両方に無いと片側が空になる）。Apple Developer 側でも両方の App ID にこのグループを有効化しておく必要がある",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.upsee.idskanjitype"
+        ]
+      }
     },
     "android": {
       "package": "com.upsee.idskanjitype",
-      "versionCode": 7,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#FBFBF9",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -55,7 +61,8 @@
         }
       ],
       "./plugins/withKatachiIme",
-      "./plugins/withReleaseSigning"
+      "./plugins/withReleaseSigning",
+      "@react-native-vector-icons/ionicons"
     ],
     "updates": {
       "url": "https://u.expo.dev/f16a9cca-5309-499e-8324-c46580f7942e",

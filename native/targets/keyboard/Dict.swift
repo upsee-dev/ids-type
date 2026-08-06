@@ -20,6 +20,11 @@ final class Dict {
     private var grade: [UInt8] = []
     private var freq: [Int32] = []
 
+    /// 音読み＋訓読みの範囲(KANJIDIC2 収録字だけ)。読みから部品を引くのに使う。
+    /// 中はタブ区切りのまま持ち、String にするのは突き合わせるときだけにする
+    private var readStart: [Int32] = []
+    private var readEnd: [Int32] = []
+
     /// 字(String) -> 添字。検索の閉包計算で引くので、これは作らざるを得ない
     private var index: [String: Int] = [:]
 
@@ -39,6 +44,12 @@ final class Dict {
     func isExt(_ i: Int) -> Bool { i >= jaCount }
     func grade(at i: Int) -> Int { i < jaCount ? Int(grade[i]) : 0 }
     func freq(at i: Int) -> Int { i < jaCount ? Int(freq[i]) : 0 }
+
+    /// 音読み・訓読みをつないだもの(例: "メイ ミョウ\tあ.かり あか.るい")。
+    /// 拡張漢字は KANJIDIC2 に無いので空
+    func readings(at i: Int) -> String {
+        i < jaCount ? string(readStart[i], readEnd[i]) : ""
+    }
     func index(of ch: String) -> Int? { index[ch] }
 
     func ids(of ch: String) -> String? {
@@ -138,6 +149,10 @@ final class Dict {
         if hasMeta {
             grade.append(UInt8(clamping: int(p, cuts[1] + 1, cuts[2])))
             freq.append(Int32(clamping: int(p, cuts[2] + 1, cuts[3])))
+            // 音読み(cuts[3]の次)から行末までが読み。訓読みとの間のタブは
+            // 突き合わせのときに空白と同じ「区切り」として効くので残しておく
+            readStart.append(Int32(cuts[3] + 1) + base)
+            readEnd.append(Int32(to) + base)
         }
         // Swift の String は正規等価で比較・ハッシュする。互換漢字(U+F902 車)は
         // 統合漢字(U+8ECA 車)と等価判定されるので、素直に代入すると後から読む

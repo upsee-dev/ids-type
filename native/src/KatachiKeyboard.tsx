@@ -65,13 +65,60 @@ export function KatachiKeyboard({
 
   const common = useMemo(() => engine?.commonParts(180) ?? [], [engine]);
 
-  // 直接入力中は端末のキーボードが下半分を占めるので、パレットは畳んでおく
+  /**
+   * かたち(操作子)の行。**端末のキーボードを出しているあいだも出しておく**。
+   * 文字は端末のキーボードで、かたちはここをタップで──と同時に打てないと、
+   * 〈左右〉を足すたびにキーボードを引っ込める往復が要る。
+   */
+  const opRow = (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="always"
+      contentContainerStyle={[styles.opRow, { paddingHorizontal: SIDE_PADDING }]}
+      style={{ backgroundColor: theme.card }}
+    >
+      {ops.map(op => (
+        <Pressable
+          key={op.code}
+          // 触覚は指が触れた瞬間に返す(離してからだと一拍遅れて感じる)
+          onPressIn={() => haptic("key")}
+          onPress={() => onInsert(op.code)}
+          style={({ pressed }) => [
+            styles.opKey,
+            {
+              backgroundColor: pressed ? theme.accentBg : theme.key,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <OperatorIcon code={op.code} color={theme.text} size={18} />
+          <Text style={{ fontSize: 9, color: theme.sub, marginTop: 2 }}>{op.label}</Text>
+        </Pressable>
+      ))}
+      <Pressable
+        onPressIn={() => haptic("toggle")}
+        onPress={() => setShowAllOps(s => !s)}
+        style={[
+          styles.opKey,
+          { backgroundColor: "transparent", borderColor: theme.border, borderStyle: "dashed" },
+        ]}
+      >
+        <Text style={{ fontSize: 11, color: theme.sub }}>
+          {showAllOps ? "少なく" : "その他"}
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
+
+  // 直接入力中は端末のキーボードが下半分を占めるので、部品パレットは畳む。
+  // かたちの行だけは残して、文字入力とかたちのショートカットを両立させる
   if (collapsed) {
     return (
       <View style={{ backgroundColor: theme.bg, borderTopWidth: 1, borderTopColor: theme.border }}>
         <View style={[styles.collapsedRow, { paddingHorizontal: SIDE_PADDING }]}>
           <Text numberOfLines={1} style={{ flex: 1, fontSize: 11, color: theme.sub }}>
-            端末のキーボードで直接打てます（LR・UD などのコードも文字も）
+            文字は端末のキーボード、かたちは下の行から
           </Text>
           <Pressable
             onPress={onExpand}
@@ -82,6 +129,7 @@ export function KatachiKeyboard({
             </Text>
           </Pressable>
         </View>
+        {opRow}
       </View>
     );
   }
@@ -113,71 +161,12 @@ export function KatachiKeyboard({
             </Text>
           </Pressable>
         ))}
-        <Pressable
-          onPressIn={() => haptic("toggle")}
-          onPress={() => setTab("search")}
-          accessibilityLabel="読みから部品をさがす"
-          style={[
-            styles.imeToggle,
-            {
-              backgroundColor: tab === "search" ? theme.accent : "transparent",
-              borderColor: tab === "search" ? theme.accent : theme.border,
-            },
-          ]}
-        >
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "600",
-              color: tab === "search" ? theme.onAccent : theme.sub,
-            }}
-          >
-            あ
-          </Text>
-        </Pressable>
       </View>
 
       {/* ── かたち(常時表示) ──
           タブの外に出しておく。「かたち→部品→部品」と続けて打つのに
           タブ往復が要らなくなる */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="always"
-        contentContainerStyle={[styles.opRow, { paddingHorizontal: SIDE_PADDING }]}
-        style={{ backgroundColor: theme.card }}
-      >
-        {ops.map(op => (
-          <Pressable
-            key={op.code}
-            // 触覚は指が触れた瞬間に返す(離してからだと一拍遅れて感じる)
-            onPressIn={() => haptic("key")}
-            onPress={() => onInsert(op.code)}
-            style={({ pressed }) => [
-              styles.opKey,
-              {
-                backgroundColor: pressed ? theme.accentBg : theme.key,
-                borderColor: theme.border,
-              },
-            ]}
-          >
-            <OperatorIcon code={op.code} color={theme.text} size={18} />
-            <Text style={{ fontSize: 9, color: theme.sub, marginTop: 2 }}>{op.label}</Text>
-          </Pressable>
-        ))}
-        <Pressable
-          onPressIn={() => haptic("toggle")}
-          onPress={() => setShowAllOps(s => !s)}
-          style={[
-            styles.opKey,
-            { backgroundColor: "transparent", borderColor: theme.border, borderStyle: "dashed" },
-          ]}
-        >
-          <Text style={{ fontSize: 11, color: theme.sub }}>
-            {showAllOps ? "少なく" : "その他"}
-          </Text>
-        </Pressable>
-      </ScrollView>
+      {opRow}
 
       <ScrollView
         style={{ maxHeight, backgroundColor: theme.card }}
@@ -275,7 +264,7 @@ function RadicalTab({
 /**
  * 読みから部品をさがすタブ。
  *
- * 「あ」で端末のキーボードに切り替えて**かたちコードの欄に直接**打たせると、
+ * 端末のキーボードで**かたちコードの欄に直接**打たせると、
  * 日本語IMEが変換を始めた瞬間に欄ごと持っていかれ、先に選んだ〈左右〉などが
  * 消える（RN の制御された TextInput と IME の変換は相性が悪い）。
  * そこで探す用の欄をキーボードの中に別に持ち、**かたちコードの欄には
@@ -383,13 +372,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
-  },
-  imeToggle: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginLeft: 4,
   },
   chipRow: { flexDirection: "row", gap: 4, paddingBottom: 6 },
   chip: {

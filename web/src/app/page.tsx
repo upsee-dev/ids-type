@@ -32,7 +32,7 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const outputRef = useRef<HTMLInputElement>(null);
+  const outputRef = useRef<HTMLDivElement>(null);
   const pendingCaret = useRef<number | null>(null);
 
   // 確定文字が欄からあふれたら、打ったばかりの字(末尾)が見える位置へ送る
@@ -190,13 +190,23 @@ export default function Home() {
           </div>
 
           <div className="mt-1.5 flex items-center gap-1.5">
-            <input
-              ref={outputRef}
-              value={output}
-              readOnly
-              placeholder="ここに確定した文字が入ります"
-              className="kanji min-w-0 flex-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-lg dark:border-stone-700 dark:bg-stone-950"
-            />
+            {/* 打つ欄ではなく結果の面。下の入力欄と同じ「枠のある欄」に見えると
+                打ちに行ってしまうので、枠を持たせず左の帯と見出しで見せる */}
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-r-lg border-l-4 border-indigo-500 bg-indigo-50 py-2 pr-3 pl-2 dark:bg-indigo-500/10">
+              <span className="shrink-0 text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-300">
+                出力
+              </span>
+              <div
+                ref={outputRef}
+                className="kanji min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-xl leading-7"
+              >
+                {output || (
+                  <span className="text-xs text-stone-500 dark:text-stone-400">
+                    選んだ字がここにたまります（コピーして使えます）
+                  </span>
+                )}
+              </div>
+            </div>
             <button
               onPointerDown={keepFocus}
               onClick={() => setOutput((o) => [...o].slice(0, -1).join(""))}

@@ -62,18 +62,6 @@ export function KatachiKeyboard({
               {t.label}
             </button>
           ))}
-          <button
-            onPointerDown={keepFocus}
-            onClick={() => setTab("search")}
-            title="読みから部品をさがす"
-            className={`ml-1 shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
-              tab === "search"
-                ? "bg-indigo-600 text-white"
-                : "border border-stone-300 text-stone-600 dark:border-stone-700 dark:text-stone-300"
-            }`}
-          >
-            あ
-          </button>
         </div>
 
         {/* ── かたち(常時表示) ──
