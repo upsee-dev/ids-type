@@ -157,9 +157,11 @@ console.log(
   `続け書き(画のつながり)耐性: ${mergedTotal} 字  top5 ${(mergedRate * 100).toFixed(1)}%`,
 );
 
-// しきい値: ここを下回ったら照合かパターン生成のどこかが壊れている
-if (top1 / total < 0.9 || top5 / total < 0.97 || mergedRate < 0.75) {
-  console.error("\n精度がしきい値(top1 90% / top5 97% / 続け書きtop5 75%)を下回った");
+// しきい値: ここを下回ったら照合かパターン生成のどこかが壊れている。
+// **実力を測るものではない**(自分のパターンを少し揺らして引き直しているだけ)。
+// 実力は bench:handwriting（KanjiVG の異体字を使った held-out）で測ること
+if (top1 / total < 0.95 || top5 / total < 0.98 || mergedRate < 0.9) {
+  console.error("\n精度がしきい値(top1 95% / top5 98% / 続け書きtop5 90%)を下回った");
   process.exit(1);
 }
 console.log("OK");

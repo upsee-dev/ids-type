@@ -28,16 +28,26 @@ class Handwriting {
 
     private companion object {
         /** 逆向きに書いた画への加点 */
-        const val REVERSE_PENALTY = 0.12
+        const val REVERSE_PENALTY = 0.2
 
-        /** 書き順が参照とずれている対応への、1画あたりの弱い加点 */
-        const val ORDER_BIAS = 0.012
+        /**
+         * 書き順が参照とずれている対応への弱い加点。
+         * 見るのは画の**番号の差ではなく、書き進みの割合の差**(続け書きで画が
+         * つながると番号だけが遅れるので、番号で測ると続けて書いた人ほど損をする)
+         */
+        const val ORDER_BIAS = 0.4
 
-        /** 描かれずに余った参照1画あたりの加点 */
-        const val EXTRA_REF = 0.05
+        /** 描かれずに余った参照1画あたりの加点。重くすると画数ぴったりの字ばかり上に来る */
+        const val EXTRA_REF = 0.02
 
         /** 対応相手が無い(参照より多く描いた)画の距離 */
-        const val UNMATCHED = 0.6
+        const val UNMATCHED = 0.4
+
+        /**
+         * 置き場所のずれをどれだけ重く見るか(形の違いを 1.0 としたとき)。
+         * 1画の距離は「重心を合わせたときの形の違い」と「重心のずれ」に分けて測る
+         */
+        const val POS_WEIGHT = 1.3
 
         /** 描いた画数との差をどこまで候補にするか */
         const val FEWER_OK = 2
@@ -272,13 +282,16 @@ class Handwriting {
             var total = 0.0
             var consumed = 0 // 対応づいた参照側の画数(続け書きは2と数える)
             java.util.Arrays.fill(used, 0, m, false)
+            val jStep = if (m > 1) 1.0 / (m - 1) else 0.0
+            val iStep = if (k > 1) 1.0 / (k - 1) else 0.0
             for (i in 0 until k) {
+                val iAt = i * iStep
                 var best = UNMATCHED
                 var bestJ = -1
                 var bestMerge = false
                 for (j in 0 until m) {
                     if (used[j]) continue
-                    val bias = ORDER_BIAS * abs(i - j)
+                    val bias = ORDER_BIAS * abs(iAt - j * jStep)
                     val c = strokeDist(q, i * per, pts, pAt + j * per) + bias
                     if (c < best) {
                         best = c
@@ -315,22 +328,45 @@ class Handwriting {
             .map { hits[it] }
     }
 
-    /** 1画の距離。逆向きに書いた画も小さな加点で許す */
+    /**
+     * 1画の距離。逆向きに書いた画も小さな加点で許す。
+     * 形の違い(重心を合わせたときの点どうしの差)と、重心そのもののずれに分けて測る
+     */
     private fun strokeDist(q: DoubleArray, qAt: Int, ref: ByteArray, refAt: Int): Double {
+        // それぞれの重心
+        var qx = 0.0
+        var qy = 0.0
+        var rx = 0.0
+        var ry = 0.0
+        for (k in 0 until n) {
+            qx += q[qAt + k * 2]
+            qy += q[qAt + k * 2 + 1]
+            rx += ref[refAt + k * 2].toInt()
+            ry += ref[refAt + k * 2 + 1].toInt()
+        }
+        qx /= n
+        qy /= n
+        rx = (rx / n) * INV63
+        ry = (ry / n) * INV63
+        val ox = qx - rx
+        val oy = qy - ry
+        val pos = sqrt(ox * ox + oy * oy)
+
+        // 重心を合わせたうえでの形の違い(前向き・逆向きの近いほう)
         var fwd = 0.0
         var rev = 0.0
         for (k in 0 until n) {
-            val ax = q[qAt + k * 2]
-            val ay = q[qAt + k * 2 + 1]
-            var dx = ax - ref[refAt + k * 2].toInt() * INV63
-            var dy = ay - ref[refAt + k * 2 + 1].toInt() * INV63
+            val ax = q[qAt + k * 2] - qx
+            val ay = q[qAt + k * 2 + 1] - qy
+            var dx = ax - (ref[refAt + k * 2].toInt() * INV63 - rx)
+            var dy = ay - (ref[refAt + k * 2 + 1].toInt() * INV63 - ry)
             fwd += sqrt(dx * dx + dy * dy)
             val r = refAt + (n - 1 - k) * 2
-            dx = ax - ref[r].toInt() * INV63
-            dy = ay - ref[r + 1].toInt() * INV63
+            dx = ax - (ref[r].toInt() * INV63 - rx)
+            dy = ay - (ref[r + 1].toInt() * INV63 - ry)
             rev += sqrt(dx * dx + dy * dy)
         }
-        return min(fwd / n, rev / n + REVERSE_PENALTY)
+        return min(fwd / n, rev / n + REVERSE_PENALTY) + POS_WEIGHT * pos
     }
 
     /**

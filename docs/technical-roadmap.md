@@ -67,8 +67,12 @@ Expo/RNやElectron/Tauriが担えるのは「コンテナーアプリ」（設�
 ### 手書き検索と内蔵フリック（Web・アプリ・両IME、1.0.8〜）
 
 - **手書き検索**を4実装すべてに搭載した。KanjiVG 由来のストローク特徴
-  （`build:handwriting` が生成、1.26MB）を照合する。通信なし・端末内のみ。
-  精度は `test:handwriting` がしきい値（top1 90% / top5 97% / 続け書き 75%）で見張る
+  （`build:handwriting` が生成、1.26MB）を照合する。通信なし・端末内のみ
+- **精度は測って決める**。KanjiVG の異体字（楷書体・別筆順。辞書には1字も
+  入っていない）4,959枚に乱雑な筆づかいを模した崩しを重ねた問題集を
+  `bench:handwriting` が解き、上位1件 96.9% / 上位5件 99.4%。しきい値つきなので
+  重みを触って下がれば落ちる。自己照合の `test:handwriting` は実装が壊れて
+  いないかを見るだけ（実力は測れない）。この測り方に変えて 87.5% → 96.9% に上げた
 - 照合エンジンは TypeScript（`core/handwriting.ts`）・Kotlin（`Handwriting.kt`）・
   Swift（`Handwriting.swift`）の3本。**同じ問いに同じ順で答える**ことを機械で
   確かめている（`build:handwriting` が問題と期待値を

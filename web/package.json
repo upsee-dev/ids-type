@@ -10,7 +10,9 @@
     "build:handwriting": "node --experimental-strip-types scripts/build-handwriting.mts",
     "test:engine": "node --experimental-strip-types scripts/test-engine.mts",
     "test:handwriting": "node --experimental-strip-types scripts/test-handwriting.mts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bench:handwriting": "node --experimental-strip-types scripts/bench-handwriting.mts",
+    "build:handwriting-bench": "node --experimental-strip-types scripts/build-handwriting-bench.mts"
   },
   "dependencies": {
     "next": "16.2.11",

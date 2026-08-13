@@ -24,13 +24,18 @@ final class Handwriting {
     }
 
     /// 逆向きに書いた画への加点
-    private static let reversePenalty = 0.12
-    /// 書き順が参照とずれている対応への、1画あたりの弱い加点
-    private static let orderBias = 0.012
-    /// 描かれずに余った参照1画あたりの加点
-    private static let extraRef = 0.05
+    private static let reversePenalty = 0.2
+    /// 書き順が参照とずれている対応への弱い加点。
+    /// 見るのは画の**番号の差ではなく、書き進みの割合の差**(続け書きで画が
+    /// つながると番号だけが遅れるので、番号で測ると続けて書いた人ほど損をする)
+    private static let orderBias = 0.4
+    /// 描かれずに余った参照1画あたりの加点。重くすると画数ぴったりの字ばかり上に来る
+    private static let extraRef = 0.02
     /// 対応相手が無い(参照より多く描いた)画の距離
-    private static let unmatched = 0.6
+    private static let unmatched = 0.4
+    /// 置き場所のずれをどれだけ重く見るか(形の違いを 1.0 としたとき)。
+    /// 1画の距離は「重心を合わせたときの形の違い」と「重心のずれ」に分けて測る
+    private static let posWeight = 1.3
     /// 描いた画数との差をどこまで候補にするか
     private static let fewerOK = 2
     private static let moreOK = 6
@@ -269,13 +274,16 @@ final class Handwriting {
                         var total = 0.0
                         var consumed = 0 // 対応づいた参照側の画数(続け書きは2と数える)
                         for j in 0..<m { used[j] = false }
+                        let jStep = m > 1 ? 1.0 / Double(m - 1) : 0.0
+                        let iStep = k > 1 ? 1.0 / Double(k - 1) : 0.0
                         for i in 0..<k {
+                            let iAt = Double(i) * iStep
                             var best = Self.unmatched
                             var bestJ = -1
                             var bestMerge = false
                             for j in 0..<m {
                                 if used[j] { continue }
-                                let bias = Self.orderBias * Double(abs(i - j))
+                                let bias = Self.orderBias * abs(iAt - Double(j) * jStep)
                                 let c = strokeDist(qp, i * per, pp, pAt + j * per) + bias
                                 if c < best {
                                     best = c
@@ -315,25 +323,47 @@ final class Handwriting {
         }
     }
 
-    /// 1画の距離。逆向きに書いた画も小さな加点で許す
+    /// 1画の距離。逆向きに書いた画も小さな加点で許す。
+    /// 形の違い(重心を合わせたときの点どうしの差)と、重心そのもののずれに分けて測る
     private func strokeDist(
         _ q: UnsafeBufferPointer<Double>, _ qAt: Int,
         _ ref: UnsafeBufferPointer<UInt8>, _ refAt: Int,
     ) -> Double {
+        // それぞれの重心
+        var qx = 0.0
+        var qy = 0.0
+        var rx = 0.0
+        var ry = 0.0
+        for k in 0..<n {
+            qx += q[qAt + k * 2]
+            qy += q[qAt + k * 2 + 1]
+            rx += Double(ref[refAt + k * 2])
+            ry += Double(ref[refAt + k * 2 + 1])
+        }
+        qx /= Double(n)
+        qy /= Double(n)
+        rx = (rx / Double(n)) * Self.inv63
+        ry = (ry / Double(n)) * Self.inv63
+        let ox = qx - rx
+        let oy = qy - ry
+        let pos = (ox * ox + oy * oy).squareRoot()
+
+        // 重心を合わせたうえでの形の違い(前向き・逆向きの近いほう)
         var fwd = 0.0
         var rev = 0.0
         for k in 0..<n {
-            let ax = q[qAt + k * 2]
-            let ay = q[qAt + k * 2 + 1]
-            var dx = ax - Double(ref[refAt + k * 2]) * Self.inv63
-            var dy = ay - Double(ref[refAt + k * 2 + 1]) * Self.inv63
+            let ax = q[qAt + k * 2] - qx
+            let ay = q[qAt + k * 2 + 1] - qy
+            var dx = ax - (Double(ref[refAt + k * 2]) * Self.inv63 - rx)
+            var dy = ay - (Double(ref[refAt + k * 2 + 1]) * Self.inv63 - ry)
             fwd += (dx * dx + dy * dy).squareRoot()
             let r = refAt + (n - 1 - k) * 2
-            dx = ax - Double(ref[r]) * Self.inv63
-            dy = ay - Double(ref[r + 1]) * Self.inv63
+            dx = ax - (Double(ref[r]) * Self.inv63 - rx)
+            dy = ay - (Double(ref[r + 1]) * Self.inv63 - ry)
             rev += (dx * dx + dy * dy).squareRoot()
         }
         return Swift.min(fwd / Double(n), rev / Double(n) + Self.reversePenalty)
+            + Self.posWeight * pos
     }
 
     /// 折れ線(x,y の交互)を弧長で等間隔 n 点に間引く。

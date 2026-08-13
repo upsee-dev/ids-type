@@ -8,7 +8,7 @@
 // 仕組み:
 //   1. 描いた各画を弧長等間隔の8点に間引く(参照側と同じ)
 //   2. 字全体の外接枠で正規化(等倍・中央寄せ。書く大きさ・位置に依存しない)
-//   3. 候補字ごとに「描いた画 → 参照の画」を貪欲に対応づけ、点どうしの距離を合計
+//   3. 候補字ごとに「描いた画 → 参照の画」を貪欲に対応づけ、1画ずつの距離を合計
 //      - 書き順が多少違っても引けるよう、対応相手は先頭からではなく全画から選ぶ
 //      - 逆向きに書いた画(下から上など)も、小さな加点つきで許す
 //      - 続け書きで画がつながった字(口を2画で書くなど)も、参照側の隣り合う2画を
@@ -17,6 +17,12 @@
 // 画数で足切りし、重心だけの粗選別を挟むので、全6,400字が相手でも数ms〜十数msで返る。
 // スコアは小さいほど似ている。並べ替え・拡張漢字の後回しは呼び出し側で行う
 // (このファイルは辞書(Engine)を知らないため)。
+//
+// **加点の重みは当てずっぽうではなく測って決めてある**。KanjiVG の異体字
+// (楷書体・別筆順。本体の辞書には1字も入っていない)4,959枚に、乱雑な筆づかいを
+// 模した崩しを重ねたものが問題集で、web の `npm run bench:handwriting` が測る。
+// この値で 上位1件 96.9% / 上位5件 99.4%。重みをいじったら必ず測り直すこと
+// (自己照合の test:handwriting は実装が壊れていないかを見るだけで、実力は測れない)。
 //
 // **Kotlin(Handwriting.kt)・Swift(Handwriting.swift)へ移植してある**。
 // 3つが同じ候補を同じ順で返せるよう、数値の扱いを次の3点に揃えてある。
@@ -80,13 +86,26 @@ export function resampleStroke(pts: readonly HwPoint[], n: number): number[][] {
 }
 
 /** 逆向きに書いた画への加点 */
-const REVERSE_PENALTY = 0.12;
-/** 書き順が参照とずれている対応への、1画あたりの弱い加点 */
-const ORDER_BIAS = 0.012;
-/** 描かれずに余った参照1画あたりの加点 */
-const EXTRA_REF = 0.05;
-/** 対応相手が無い(参照より多く描いた)画の距離 */
-const UNMATCHED = 0.6;
+const REVERSE_PENALTY = 0.2;
+/**
+ * 書き順が参照とずれている対応への弱い加点。
+ * 見るのは画の**番号の差ではなく、書き進みの割合の差**。続け書きで画がつながると
+ * 描いた側の番号だけが遅れていくので、番号で測ると「続けて書いた人」ほど
+ * 正解が重くなってしまう(卿を8画で書くと参照12画との差が4つぶん罰になる)。
+ */
+const ORDER_BIAS = 0.4;
+/**
+ * 描かれずに余った参照1画あたりの加点。
+ * ここを重くすると「画数がぴったり合う字」ばかりが上に来る。乱雑に書くと画は
+ * つながったり足りなかったりするのが普通なので、軽くしたほうがよく当たる
+ * (0.05→0.02 で 上位1件が 93→96% に上がった)。
+ */
+const EXTRA_REF = 0.02;
+/**
+ * 対応相手が見つからなかった(参照より多く描いた)画の距離。
+ * 余計な1画を描いてしまっても、他がよく合っていれば候補に残す
+ */
+const UNMATCHED = 0.4;
 /**
  * 描いた画数との差をどこまで候補にするか。
  * 多い側(MORE_OK)は「口を2画で続け書きした」の類。描きかけの字を先読みするための
@@ -115,7 +134,20 @@ interface Ref {
   cents: Float64Array;
 }
 
-/** 1画の距離。逆向きに書いた画も小さな加点で許す */
+/**
+ * 置き場所のずれをどれだけ重く見るか(形の違いを 1.0 としたとき)。
+ *
+ * 1画の距離は「重心を合わせたときの形の違い」と「重心そのもののずれ」に分けて
+ * 測る。素朴に点どうしの距離を測るとこの2つが混ざり、とくに**逆向きに書いた画の
+ * 判定が置き場所に邪魔される**(位置がずれていると、前向きも逆向きも等しく遠いと
+ * 出てしまう)。分けてから測るようにしただけで 上位1件が 87→93% に上がった。
+ */
+const POS_WEIGHT = 1.3;
+
+/**
+ * 1画の距離。逆向きに書いた画も小さな加点で許す。
+ * 形の違い(重心を合わせたときの点どうしの差)と、重心そのもののずれに分けて測る。
+ */
 function strokeDist(
   q: Float64Array,
   qAt: number,
@@ -123,20 +155,37 @@ function strokeDist(
   refAt: number,
   n: number,
 ): number {
+  // それぞれの重心
+  let qx = 0, qy = 0, rx = 0, ry = 0;
+  for (let k = 0; k < n; k++) {
+    qx += q[qAt + k * 2];
+    qy += q[qAt + k * 2 + 1];
+    rx += ref[refAt + k * 2];
+    ry += ref[refAt + k * 2 + 1];
+  }
+  qx /= n;
+  qy /= n;
+  rx = (rx / n) * INV63;
+  ry = (ry / n) * INV63;
+  const ox = qx - rx;
+  const oy = qy - ry;
+  const pos = Math.sqrt(ox * ox + oy * oy);
+
+  // 重心を合わせたうえでの形の違い(前向き・逆向きの近いほう)
   let fwd = 0;
   let rev = 0;
   for (let k = 0; k < n; k++) {
-    const ax = q[qAt + k * 2];
-    const ay = q[qAt + k * 2 + 1];
-    let dx = ax - ref[refAt + k * 2] * INV63;
-    let dy = ay - ref[refAt + k * 2 + 1] * INV63;
+    const ax = q[qAt + k * 2] - qx;
+    const ay = q[qAt + k * 2 + 1] - qy;
+    let dx = ax - (ref[refAt + k * 2] * INV63 - rx);
+    let dy = ay - (ref[refAt + k * 2 + 1] * INV63 - ry);
     fwd += Math.sqrt(dx * dx + dy * dy);
     const r = refAt + (n - 1 - k) * 2;
-    dx = ax - ref[r] * INV63;
-    dy = ay - ref[r + 1] * INV63;
+    dx = ax - (ref[r] * INV63 - rx);
+    dy = ay - (ref[r + 1] * INV63 - ry);
     rev += Math.sqrt(dx * dx + dy * dy);
   }
-  return Math.min(fwd / n, rev / n + REVERSE_PENALTY);
+  return Math.min(fwd / n, rev / n + REVERSE_PENALTY) + POS_WEIGHT * pos;
 }
 
 export class HandwritingIndex {
@@ -283,13 +332,16 @@ export class HandwritingIndex {
       let total = 0;
       let consumed = 0; // 対応づいた参照側の画数(続け書きは2と数える)
       used.fill(0, 0, m);
+      const jStep = m > 1 ? 1 / (m - 1) : 0;
+      const iStep = k > 1 ? 1 / (k - 1) : 0;
       for (let i = 0; i < k; i++) {
+        const iAt = i * iStep;
         let best = UNMATCHED;
         let bestJ = -1;
         let bestMerge = false;
         for (let j = 0; j < m; j++) {
           if (used[j]) continue;
-          const bias = ORDER_BIAS * Math.abs(i - j);
+          const bias = ORDER_BIAS * Math.abs(iAt - j * jStep);
           const c = strokeDist(q, i * per, ref.pts, j * per, n) + bias;
           if (c < best) {
             best = c;
