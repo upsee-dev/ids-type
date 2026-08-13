@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "build:data": "node --experimental-strip-types scripts/build-data.mts",
+    "build:handwriting": "node --experimental-strip-types scripts/build-handwriting.mts",
     "test:engine": "node --experimental-strip-types scripts/test-engine.mts",
+    "test:handwriting": "node --experimental-strip-types scripts/test-handwriting.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

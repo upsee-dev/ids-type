@@ -322,7 +322,8 @@ export default function Home() {
             + 互換漢字)。分解データ: BabelStone IDS (Andrew West, 著作権主張なし)
             / CHISE IDS Database / CJKVI IDS Database (GPLv2) / 漢字情報:
             KANJIDIC2 (EDRDG, CC BY-SA 4.0) / 字形表示: Plangothic (SIL OFL
-            1.1)。本アプリはプロトタイプです。
+            1.1) / 手書き認識の筆順パターン: KanjiVG (Ulrich Apel, CC BY-SA
+            3.0)。本アプリはプロトタイプです。
           </footer>
         </div>
       </main>
@@ -401,7 +402,7 @@ export default function Home() {
           </div>
         </div>
 
-        <KatachiKeyboard engine={engine} onInsert={insert} />
+        <KatachiKeyboard engine={engine} onInsert={insert} onPick={pick} />
       </div>
     </div>
   );

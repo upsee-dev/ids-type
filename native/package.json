@@ -5,16 +5,18 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-vector-icons/ionicons": "^13.1.2",
-    "expo": "~57.0.8",
+    "@react-native-vector-icons/material-design-icons": "^13.1.2",
+    "expo": "~57.0.12",
     "expo-clipboard": "~57.0.1",
     "expo-font": "~57.0.1",
     "expo-haptics": "^57.0.1",
-    "expo-splash-screen": "~57.0.5",
+    "expo-splash-screen": "~57.0.6",
     "expo-status-bar": "~57.0.1",
-    "expo-updates": "~57.0.11",
+    "expo-updates": "~57.0.13",
     "react": "19.2.3",
-    "react-native": "0.86.0",
-    "react-native-safe-area-context": "~5.7.0"
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4"
   },
   "devDependencies": {
     "@bacons/apple-targets": "^5.0.0",

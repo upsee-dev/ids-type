@@ -23,10 +23,28 @@ struct SharedStore {
     private static let appGroup = "group.com.upsee.idskanjitype"
     private static let historyKey = "katachi.history"
     private static let favoritesKey = "katachi.favorites"
+    private static let pendingKey = "katachi.pending"
     private static let probeKey = "katachi.sharedProbe"
 
     /// 履歴の上限。アプリ側(HISTORY_LIMIT)と同じ
     private static let limit = 60
+
+    /// 組みかけを覚えておく時間。往復のあいだは残すが、翌日に開いて知らない字が
+    /// 残っているのは事故に見えるので10分で捨てる(Kotlin 側と同じ)
+    private static let pendingTTL: TimeInterval = 10 * 60
+
+    /// 組みかけの状態。他のキーボードへ移って戻ってきたときに続きから打てるようにする。
+    /// **iOS の拡張は予告なく落とされる**ので、終了時の口には頼らず変わるたびに書く。
+    struct Pending {
+        /// 組み立て中のかたちコード(例: "LR日")
+        let code: String
+        /// 送る欄。候補から選んだ字
+        let outbox: String
+        /// 打ちかけの読み
+        let reading: String
+        /// かなの面を出していたか
+        let kana: Bool
+    }
 
     /// 共有の入れ物が本当に使えるかは書いて読み直すまで分からない。
     /// 判定は1度だけでよいので型の側に持つ
@@ -81,5 +99,46 @@ struct SharedStore {
         }
         write(Self.favoritesKey, list)
         return added
+    }
+
+    // MARK: - 組みかけ
+
+    /// 何も無ければ消す。打鍵のたびに呼ばれるので中身は小さく保つ
+    func savePending(_ p: Pending) {
+        if p.code.isEmpty, p.outbox.isEmpty, p.reading.isEmpty {
+            defaults.removeObject(forKey: Self.pendingKey)
+            return
+        }
+        let o: [String: Any] = [
+            "code": p.code,
+            "out": p.outbox,
+            "reading": p.reading,
+            "kana": p.kana,
+            "at": Date().timeIntervalSince1970,
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: o),
+              let raw = String(data: data, encoding: .utf8)
+        else { return }
+        defaults.set(raw, forKey: Self.pendingKey)
+    }
+
+    /// 10分より古いものは無かったことにする
+    func loadPending() -> Pending? {
+        guard let raw = defaults.string(forKey: Self.pendingKey),
+              let data = raw.data(using: .utf8),
+              let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        let at = o["at"] as? TimeInterval ?? 0
+        guard Date().timeIntervalSince1970 - at <= Self.pendingTTL else { return nil }
+        return Pending(
+            code: o["code"] as? String ?? "",
+            outbox: o["out"] as? String ?? "",
+            reading: o["reading"] as? String ?? "",
+            kana: o["kana"] as? Bool ?? false,
+        )
+    }
+
+    func clearPending() {
+        defaults.removeObject(forKey: Self.pendingKey)
     }
 }

@@ -129,7 +129,8 @@ export function Settings({
             </Note>
             <Note theme={t}>
               分解データ: BabelStone IDS ／ CHISE IDS ／ CJKVI IDS、
-              漢字情報: KANJIDIC2 (CC BY-SA 4.0)、字形: Plangothic (SIL OFL 1.1)
+              漢字情報: KANJIDIC2 (CC BY-SA 4.0)、字形: Plangothic (SIL OFL 1.1)、
+              手書き認識の筆順パターン: KanjiVG (Ulrich Apel、CC BY-SA 3.0)
             </Note>
           </Section>
         </ScrollView>

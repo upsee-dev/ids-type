@@ -2,20 +2,21 @@
   "expo": {
     "name": "漢字カタチ入力",
     "slug": "ids-kanji-type",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "ids-kanji-type",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "backgroundColor": "#FBFBF9",
     "primaryColor": "#4437D1",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.upsee.idskanjitype",
       "appleTeamId": "W8P3V5NG4R",
-      "buildNumber": "8",
-      "//": "履歴・お気に入りをキーボード拡張と共有するための App Group。拡張は別サンドボックスなので、これが無いとアプリで調べた字がキーボードに出ない。targets/keyboard/expo-target.config.js にも同じグループを書く（両方に無いと片側が空になる）。Apple Developer 側でも両方の App ID にこのグループを有効化しておく必要がある",
+      "buildNumber": "10",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.upsee.idskanjitype"
@@ -24,7 +25,7 @@
     },
     "android": {
       "package": "com.upsee.idskanjitype",
-      "versionCode": 8,
+      "versionCode": 10,
       "adaptiveIcon": {
         "backgroundColor": "#FBFBF9",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -62,12 +63,12 @@
       ],
       "./plugins/withKatachiIme",
       "./plugins/withReleaseSigning",
-      "@react-native-vector-icons/ionicons"
+      "@react-native-vector-icons/ionicons",
+      "@react-native-vector-icons/material-design-icons"
     ],
     "updates": {
       "url": "https://u.expo.dev/f16a9cca-5309-499e-8324-c46580f7942e",
       "fallbackToCacheTimeout": 0,
-      "//": "OTAの配信先チャンネル。EAS Build なら自動で焼き込まれるが、このプロジェクトは ローカルビルドなので自分で指定する必要がある。これが無いとアプリは expo-channel-name ヘッダを送らず、EAS 側がどのブランチを返せばよいか決められないため 更新が一切届かない（1.0.0〜1.0.2 のビルドがこの状態）",
       "requestHeaders": {
         "expo-channel-name": "production"
       }

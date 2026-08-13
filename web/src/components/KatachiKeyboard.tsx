@@ -9,18 +9,20 @@ import {
   type Engine,
 } from "@/lib/engine";
 import { OperatorIcon } from "./OperatorIcon";
+import { HandwritingPad } from "./HandwritingPad";
 
 /**
  * 部品パレットの種類。**かたち(操作子)はタブに含めない**。
  * 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
  * かたちは常時表示の行に出し、タブは部品の出し分けだけに使う。
  */
-type Tab = "common" | "radical" | "search";
+type Tab = "common" | "radical" | "search" | "draw";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "common", label: "よく使う部品" },
   { id: "radical", label: "部首・偏旁" },
   { id: "search", label: "読みでさがす" },
+  { id: "draw", label: "手書き" },
 ];
 
 /** タップでフォーカスを奪わない＝ソフトキーボードを閉じさせないためのハンドラ */
@@ -29,9 +31,12 @@ const keepFocus = (e: React.PointerEvent) => e.preventDefault();
 export function KatachiKeyboard({
   engine,
   onInsert,
+  onPick,
 }: {
   engine: Engine | null;
   onInsert: (s: string) => void;
+  /** 字を出力へ入れる(手書き候補のクリック)。無ければ onInsert に落とす */
+  onPick?: (ch: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("common");
   const [showAllOps, setShowAllOps] = useState(false);
@@ -98,6 +103,14 @@ export function KatachiKeyboard({
           {tab === "radical" && <RadicalTab onInsert={onInsert} />}
 
           {tab === "search" && <SearchTab engine={engine} onInsert={onInsert} />}
+
+          {tab === "draw" && (
+            <HandwritingPad
+              engine={engine}
+              onInsert={onInsert}
+              onPick={onPick ?? onInsert}
+            />
+          )}
         </div>
       </div>
     </div>

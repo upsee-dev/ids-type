@@ -55,6 +55,7 @@ export default function About() {
           分解データ: BabelStone IDS / CHISE IDS Database / CJKVI IDS Database。
           漢字情報: KANJIDIC2（EDRDG、CC BY-SA 4.0）。
           部品パレットのフォント: Plangothic（SIL OFL 1.1）。
+          手書き認識の筆順パターン: KanjiVG（Ulrich Apel、CC BY-SA 3.0）。
         </p>
       </Section>
     </StorePage>

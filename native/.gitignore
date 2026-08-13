@@ -48,3 +48,4 @@ yarn-error.*
 
 # ローカル Expo モジュールの gradle 生成物(ソースは modules/*/android/src/)
 modules/*/android/build/
+modules/*/android/.gradle/

@@ -27,13 +27,18 @@ import kotlin.concurrent.thread
 /**
  * キーボードの画面。Web版・アプリ版と同じ構成をビューで組む。
  *
- *   [ 履歴 ★ 着せ替え            他のキーボード ]  ← 道具の帯(打つ場所ではない)
+ *   [ 履歴 ★ 着せ替え                      戻る ]  ← 道具の帯(打つ場所ではない)
  *   [ (棚) 使った字 / お気に入りの字            ]
- *   [ 入力中のかたち ]                 [⌫] [消]
+ *   [ 組み立て中のかたち ]             [⌫] [消]
+ *   [ 送る: 明 ]                  [取消] [送る]
  *   [ 候補: 明 朝 晴 …                          ]
  *   [ かたち: 左右 上下 …                        ]
- *   [ よく使う部品 | 部首・偏旁 | 読みでさがす    ]
- *   [ キーの並び / 読みのフリック面               ]
+ *   [ よく使う部品 | 部首・偏旁 |          読み ]
+ *   [ 部品の並び / 読みのフリック面               ]
+ *
+ * 流れは **組む → 選ぶ → 送る → 戻る**。候補をタップしても入るのは「送る欄」までで、
+ * 相手のテキスト欄に触るのは「送る」を押したときだけ。押し間違いが相手の本文に
+ * 残らないようにするため、組み立て中と送る欄は行を分けてラベルを付けてある。
  *
  * 上の帯だけは打つための場所ではないので、間に線を引いて色も落とし、
  * 打鍵の面から視覚的に切り離してある。
@@ -42,33 +47,49 @@ import kotlin.concurrent.thread
  */
 @SuppressLint("ViewConstructor")
 class KeyboardView(context: Context, private val host: Host) :
-    LinearLayout(context), FlickKanaView.Host {
+    LinearLayout(context), FlickKanaView.Host, HandwritingView.Host {
 
     interface Host {
         val engine: Engine
         val dict: Dict
+        /** 手書き照合。1.2MBのパターンを持つのでサービス側に置き、面を開くまで読まない */
+        val handwriting: Handwriting
         val composingText: String
+        /** 送る欄。候補から選んだ字 */
+        val outboxText: String
         /** 履歴・お気に入り(アプリと共有) */
         val store: Store
         fun insert(s: String)
         fun backspace()
         fun clear()
-        fun commit(ch: String)
-        fun switchToOtherIme()
+        /** 候補を選ぶ。相手の欄にはまだ触らない */
+        fun select(ch: String)
+        /** 送る欄の末尾1字を取り消す */
+        fun dropSelected()
+        fun clearSelected()
+        /** 送る欄の中身を相手のカーソル位置へ */
+        fun send()
+        /** 元の入力方法へ戻る */
+        fun goBack()
+        /** 入力方法の選択リスト(「戻る」の長押し) */
+        fun openImePicker()
+        /** 組みかけを覚えておく(読み・かな面の状態が変わったとき) */
+        fun persist()
         /** 着せ替えの反映。色は生成時に決まるので、ビューを作り直してもらう */
         fun recreateKeyboard()
     }
 
     /**
-     * キー面の種類。**かたち(操作子)はタブに含めない**。
+     * 部品パレットの種類。**かたち(操作子)はタブに含めない**。
      * 「⿰の左右」を選んでから部品を2つ選ぶ、という打ち方をするので、
      * かたちと部品が別タブにあると1字打つたびに往復させられる。
      * かたちは候補の下に常時出しておき、タブは部品の出し分けだけに使う。
      *
-     * SEARCH は読みから部品を引く面。他のかなキーボードへ移らずに読みを
-     * 打てるよう、フリックのかな面をこの中に持つ。
+     * 読みのかな面もタブにしない。タブにするとかたちの行も候補も引っ込んでしまい、
+     * 「〈左右〉→ 日 → 月」の途中で部品を1つ読みから出したいだけなのに、
+     * 面ごと往復させられる。かな面は**パレットの上に重ねる出し入れ**にしてある。
      */
-    private enum class Tab { COMMON, RADICAL, SEARCH }
+    private enum class Tab { COMMON, RADICAL }
 
     private companion object {
         /** ⌫長押しの連射間隔。標準のキーボードと同じくらいの速さ */
@@ -105,6 +126,7 @@ class KeyboardView(context: Context, private val host: Host) :
     private val colSub = Color.parseColor(palette.sub)
     private val colAccent = Color.parseColor(palette.accent)
     private val colAccentBg = Color.parseColor(palette.accentBg)
+    private val colOnAccent = Color.parseColor(palette.onAccent)
 
     private fun cycleTheme() {
         val order = listOf(THEME_AUTO) + Themes.ALL.map { it.key }
@@ -131,12 +153,33 @@ class KeyboardView(context: Context, private val host: Host) :
     private lateinit var shelfInner: LinearLayout
     private lateinit var shelfButtons: Map<Shelf, TextView>
 
-    /** 読みでさがす面の状態。読みそのものと、指を置いている間の仮の1字 */
+    /** 読みの面の状態。読みそのものと、指を置いている間の仮の1字 */
     private val reading = StringBuilder()
     private var readingPreview: String? = null
     private var readingLabel: TextView? = null
     private var readingHits: LinearLayout? = null
     private var flick: FlickKanaView? = null
+
+    /** かなの面を出しているか。出しているあいだ部品パレットは隠れる */
+    var kanaOpen = false
+        private set
+
+    /** 手書きの面を出しているか。かなの面とは同時に出さない */
+    private var hwOpen = false
+    private var hwSeq = 0
+    private var hwHits: LinearLayout? = null
+    private var hwPad: HandwritingView? = null
+    private var hwCount: TextView? = null
+
+    /** 組みかけを覚えるためにサービスが読む */
+    val readingText: String get() = reading.toString()
+
+    private lateinit var kanaToggle: TextView
+    private lateinit var hwToggle: TextView
+    private lateinit var outboxLabel: TextView
+    private lateinit var sendButton: TextView
+    private lateinit var backButton: TextView
+    private var resumedNote: TextView? = null
 
     private val composingLabel: TextView
     private val candidateRow: LinearLayout
@@ -222,6 +265,60 @@ class KeyboardView(context: Context, private val host: Host) :
         top.addView(smallButton("消") { host.clear() })
         addView(top)
 
+        // ── 送る欄 ──
+        // 組み立て中のかたちコードとは別物なので、行を分けてラベルを付ける。
+        // 候補を選んでもここに入るだけで、相手のテキスト欄はまだ変わらない
+        // （押し間違いが相手の本文に残らないようにするため）。
+        // 「送る」を押したときだけカーソル位置へ入る
+        val outRow = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), 0, dp(8), dp(4))
+        }
+        outRow.addView(
+            TextView(context).apply {
+                text = "送る"
+                setTextColor(colSub)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setPadding(0, 0, dp(6), 0)
+            },
+        )
+        outboxLabel = TextView(context).apply {
+            setTextColor(colText)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            hint = "候補を選ぶとここに入ります"
+            setHintTextColor(colSub)
+            setSingleLine()
+            layoutParams = LayoutParams(0, wrap, 1f)
+        }
+        outRow.addView(outboxLabel)
+        // 選び直しは1字ずつ。全部やめたいときは長押し
+        // (上の「消」は組み立て中のかたちコードだけを消す。選んだ字まで一緒に
+        //  消えると、3字選んだあとに1字組み間違えただけで全部やり直しになる)
+        outRow.addView(
+            smallButton("取消") { host.dropSelected() }.apply {
+                setOnLongClickListener {
+                    host.clearSelected()
+                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    true
+                }
+            },
+        )
+        sendButton = smallButton("送る") { host.send() }
+        outRow.addView(sendButton)
+        addView(outRow)
+
+        // 他のキーボードから戻ってきたとき、勝手に字が残っているように見えないよう
+        // 1行だけ断る。打ち始めれば消える
+        resumedNote = TextView(context).apply {
+            text = "前回の続きです"
+            setTextColor(colAccent)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+            setPadding(dp(8), 0, dp(8), dp(2))
+            visibility = View.GONE
+        }
+        addView(resumedNote)
+
         // ── 候補 ──
         candidateRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -251,18 +348,30 @@ class KeyboardView(context: Context, private val host: Host) :
         )
         buildOperators()
 
-        // ── タブ(部品パレットの出し分けだけ) ──
+        // ── タブ(部品パレットの出し分け)＋かなの面の出し入れ ──
         val tabs = LinearLayout(context).apply {
             orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), dp(2), dp(6), dp(2))
         }
         tabViews = listOf(
             Tab.COMMON to "よく使う部品",
             Tab.RADICAL to "部首・偏旁",
-            Tab.SEARCH to "読みでさがす",
         ).map { (t, label) ->
-            tabButton(label) { tab = t; rebuildKeys() }.also { tabs.addView(it) }
+            tabButton(label) {
+                tab = t
+                kanaOpen = false
+                hwOpen = false
+                rebuildKeys()
+            }.also { tabs.addView(it) }
         }
+        // パレットに無い部品を読みから出すための面。タブではなく出し入れなので、
+        // 出しても消してもかたちの行・候補・組み立て中の表示はそのまま残る。
+        // 手書きも同じ扱い(読みも部品の見当もつかない字は、書いて引く)
+        kanaToggle = smallButton("読み") { toggleFace(kana = true) }
+        tabs.addView(kanaToggle)
+        hwToggle = smallButton("手書き") { toggleFace(kana = false) }
+        tabs.addView(hwToggle)
         addView(tabs)
 
         // ── 画数チップ(部首タブのときだけ) ──
@@ -294,6 +403,7 @@ class KeyboardView(context: Context, private val host: Host) :
         buildStrokeChips()
         rebuildKeys()
         onComposingChanged()
+        onOutboxChanged()
         refreshShelf() // 棚は閉じた状態。道具の帯のボタンの色をここで当てる
 
         // フォントは合計21MBある。最初のタップで読むとキーボードが固まるので、
@@ -313,19 +423,98 @@ class KeyboardView(context: Context, private val host: Host) :
 
     fun onDictReady() {
         cachedCommon = null
-        if (tab == Tab.COMMON) rebuildKeys()
+        if (!kanaOpen && tab == Tab.COMMON) rebuildKeys()
         runSearch()
-        if (tab == Tab.SEARCH) runReadingSearch()
+        if (kanaOpen) runReadingSearch()
     }
 
     fun onComposingChanged() {
         composingLabel.text = readableComposing(host.composingText)
+        if (host.composingText.isNotEmpty()) {
+            clearResumedNote()
+            calmBackButton()
+        }
         runSearch()
     }
 
-    /** 字を確定した。履歴が増えているので棚を開いていれば追いつかせる */
-    fun onCommitted() {
+    /** 送る欄が変わった。中身が無いあいだ「送る」は押せない見た目にする */
+    fun onOutboxChanged() {
+        val out = host.outboxText
+        outboxLabel.text = out
+        outboxLabel.typeface = if (out.isEmpty()) Typeface.DEFAULT else fontFor(out)
+        val ready = out.isNotEmpty()
+        sendButton.isEnabled = ready
+        sendButton.setTextColor(if (ready) colOnAccent else colSub)
+        sendButton.background = keyBg(
+            if (ready) colAccent else Color.TRANSPARENT,
+            if (ready) colAccent else colBorder,
+        )
+    }
+
+    /** 字を選んだ。履歴が増えているので棚を開いていれば追いつかせる */
+    fun onSelected() {
+        clearResumedNote()
         if (shelf != Shelf.NONE) refreshShelf()
+    }
+
+    /**
+     * 送った。読みは残す（同じ読みで次の字を探すことがある）。
+     * 自動では戻らない代わりに「戻る」の色を上げて、次の一手を示す
+     */
+    fun onSent() {
+        clearResumedNote()
+        backButton.setTextColor(colAccent)
+        backButton.background = keyBg(colAccentBg, colAccent)
+    }
+
+    /** 打ち始めたら「戻る」の強調は引っ込める（続けて組んでいる最中なので） */
+    private fun calmBackButton() {
+        backButton.setTextColor(colSub)
+        backButton.background = keyBg(Color.TRANSPARENT, colBorder)
+    }
+
+    /**
+     * 他のキーボードから戻ってきた。前の続きを画面に戻す。
+     * 勝手に字が残っているように見えないよう、1行「前回の続き」と出す。
+     */
+    fun restore(p: Store.Pending) {
+        reading.setLength(0)
+        reading.append(p.reading)
+        readingPreview = null
+        kanaOpen = p.kana
+        // 書いた画までは覚えていない。読みの面に戻すときは手書きの面を閉じる
+        if (p.kana) hwOpen = false
+        rebuildKeys()
+        onComposingChanged()
+        onOutboxChanged()
+        if (p.code.isNotEmpty() || p.outbox.isNotEmpty() || p.reading.isNotEmpty()) {
+            showResumedNote()
+        }
+    }
+
+    private fun showResumedNote() {
+        resumedNote?.visibility = View.VISIBLE
+    }
+
+    private fun clearResumedNote() {
+        resumedNote?.visibility = View.GONE
+    }
+
+    /**
+     * 読み／手書きの面の出し入れ。出すと部品パレットの代わりにその面が入る。
+     * 2つは場所を取り合うので同時には出さない(押した方だけが開く)。
+     */
+    private fun toggleFace(kana: Boolean) {
+        if (kana) {
+            kanaOpen = !kanaOpen
+            hwOpen = false
+        } else {
+            hwOpen = !hwOpen
+            kanaOpen = false
+        }
+        clearResumedNote()
+        rebuildKeys()
+        host.persist()
     }
 
     // ---- 道具の帯(履歴・お気に入り・着せ替え) ----
@@ -347,9 +536,14 @@ class KeyboardView(context: Context, private val host: Host) :
         row.addView(history)
         row.addView(favorites)
         row.addView(toolButton(Icons.PALETTE, "着せ替え") { cycleTheme() })
-        // 残りを押し広げて「他のキーボード」を右端へ
+        // 残りを押し広げて「戻る」を右端へ
         row.addView(View(context), LayoutParams(0, dp(1), 1f))
-        row.addView(toolButton(Icons.GLOBE, "他のキーボード") { host.switchToOtherIme() })
+        // 文章の続きは普段のキーボードで打つ道具立てなので、帰り道を必ず出しておく。
+        // 長押しなら入力方法の選択リスト(戻り先を自分で選びたいとき)
+        backButton = toolButton(Icons.BACK, "戻る", onLongTap = { host.openImePicker() }) {
+            host.goBack()
+        }
+        row.addView(backButton)
         return row
     }
 
@@ -362,7 +556,9 @@ class KeyboardView(context: Context, private val host: Host) :
         const val STAR = 0xF595
         const val STAR_OUTLINE = 0xF599
         const val PALETTE = 0xF27E
-        const val GLOBE = 0xF350
+
+        /** 「戻る」(arrow-undo-outline)。元の入力方法へ帰る */
+        const val BACK = 0xF143
     }
 
     /**
@@ -376,7 +572,12 @@ class KeyboardView(context: Context, private val host: Host) :
         runCatching { Typeface.createFromAsset(context.assets, "fonts/Ionicons.ttf") }.getOrNull()
     }
 
-    private fun toolButton(icon: Int, label: String, onTap: () -> Unit): TextView =
+    private fun toolButton(
+        icon: Int,
+        label: String,
+        onLongTap: (() -> Unit)? = null,
+        onTap: () -> Unit,
+    ): TextView =
         TextView(context).apply {
             val font = iconFont
             if (font != null) {
@@ -394,6 +595,13 @@ class KeyboardView(context: Context, private val host: Host) :
             background = keyBg(Color.TRANSPARENT, colBorder)
             isClickable = true
             setOnClickListener { onTap() }
+            if (onLongTap != null) {
+                setOnLongClickListener {
+                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    onLongTap()
+                    true
+                }
+            }
             feedbackOnPress()
             layoutParams = LinearLayout.LayoutParams(wrap, wrap).apply { marginEnd = dp(4) }
         }
@@ -452,7 +660,8 @@ class KeyboardView(context: Context, private val host: Host) :
                     setPadding(dp(4), dp(2), dp(4), dp(2))
                     background = keyBg(colCard, colBorder)
                     isClickable = true
-                    setOnClickListener { host.commit(ch) }
+                    // 棚の字も「選ぶ」まで。相手の欄へ入るのは「送る」のとき
+                    setOnClickListener { host.select(ch) }
                     setOnLongClickListener { host.store.toggleFavorite(ch); refreshShelf(); true }
                     feedbackOnPress()
                     layoutParams = LinearLayout.LayoutParams(wrap, dp(42)).apply { marginEnd = dp(4) }
@@ -510,7 +719,8 @@ class KeyboardView(context: Context, private val host: Host) :
                         if (h.exact) colAccent else colBorder,
                     )
                     isClickable = true
-                    setOnClickListener { host.commit(h.ch) }
+                    // タップは「選ぶ」だけ。相手のテキスト欄に入るのは「送る」のとき
+                    setOnClickListener { host.select(h.ch) }
                     // 長押しでお気に入り。上の★の棚から呼び出せるようになる
                     setOnLongClickListener {
                         host.store.toggleFavorite(h.ch)
@@ -593,22 +803,45 @@ class KeyboardView(context: Context, private val host: Host) :
     }
 
     private fun rebuildKeys() {
+        val faceOpen = kanaOpen || hwOpen
         tabViews.forEachIndexed { i, v ->
-            val active = i == tab.ordinal
+            val active = !faceOpen && i == tab.ordinal
             v.setTextColor(if (active) colAccent else colSub)
             v.background = keyBg(
                 if (active) colCard else Color.TRANSPARENT,
                 if (active) colBorder else Color.TRANSPARENT,
             )
         }
-        strokeRow.visibility = if (tab == Tab.RADICAL) View.VISIBLE else View.GONE
+        // 読み・手書きの面を出しているあいだ、部品パレットのタブは効いていない
+        for ((toggle, on) in listOf(kanaToggle to kanaOpen, hwToggle to hwOpen)) {
+            toggle.setTextColor(if (on) colOnAccent else colSub)
+            toggle.background = keyBg(
+                if (on) colAccent else Color.TRANSPARENT,
+                if (on) colAccent else colBorder,
+            )
+        }
+        strokeRow.visibility =
+            if (!faceOpen && tab == Tab.RADICAL) View.VISIBLE else View.GONE
         keyArea.removeAllViews()
         readingLabel = null
         readingHits = null
         flick = null
+        hwHits = null
+        hwPad = null
+        hwCount = null
 
-        // 読みの面はフリック4段(と読みの欄・結果)が入る高さが要る
-        keyScroll.layoutParams = LayoutParams(matchParent, dp(if (tab == Tab.SEARCH) 250 else 168))
+        // 読みの面はフリック4段(と読みの欄・結果)、手書きの面は書く枠が入る高さが要る
+        keyScroll.layoutParams =
+            LayoutParams(matchParent, dp(if (kanaOpen) 250 else if (hwOpen) 260 else 168))
+
+        if (kanaOpen) {
+            buildReadingArea()
+            return
+        }
+        if (hwOpen) {
+            buildHandwritingArea()
+            return
+        }
 
         when (tab) {
             Tab.COMMON -> {
@@ -625,7 +858,6 @@ class KeyboardView(context: Context, private val host: Host) :
                     grid(parts.size, 8) { i -> keyButton(parts[i], 20f) { host.insert(parts[i]) } }
                 }
             }
-            Tab.SEARCH -> buildReadingArea()
             Tab.RADICAL -> {
                 val parts = if (strokeGroup == "common") {
                     Ids.tokens(Palettes.RADICAL)
@@ -662,13 +894,27 @@ class KeyboardView(context: Context, private val host: Host) :
     // ---- 読みでさがす ----
 
     /**
-     * 読みの面。読みの欄・引けた字・フリックのかな面の3段。
+     * 読みの面。断り書き・読みの欄・引けた字・フリックのかな面の4段。
      *
      * 引けた字はタップで**かたちコードに部品として足す**（つち→土 を足して
-     * 〈左右〉土… と組む）。長押しはその字をそのまま相手の欄へ入れる
+     * 〈左右〉土… と組む）。長押しはその字を送る欄へ入れる
      * （読みが分かっている字はこれが最短で、組み直す必要がない）。
+     *
+     * **文章を打つ面ではない**。ここで打ったかなが相手の欄に入ることはなく、
+     * 部品を読みから引くためだけにある。標準のかなキーボードに見えてしまうので、
+     * 面の頭にそれを1行で断っておく。
      */
     private fun buildReadingArea() {
+        keyArea.addView(
+            TextView(context).apply {
+                text = "部品を読みから出す面です。文章は普段のキーボードで"
+                setTextColor(colSub)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setPadding(dp(2), dp(2), dp(2), 0)
+            },
+            LayoutParams(matchParent, wrap),
+        )
+
         val head = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -732,10 +978,13 @@ class KeyboardView(context: Context, private val host: Host) :
         flick?.resetToggle()
         refreshReadingLabel()
         runReadingSearch()
+        host.persist()
     }
 
     private fun afterReadingChanged() {
         readingPreview = null
+        clearResumedNote()
+        host.persist() // 読みも組みかけのうち。切り替えて戻ったら続きから打てる
         refreshReadingLabel()
         runReadingSearch()
     }
@@ -782,9 +1031,150 @@ class KeyboardView(context: Context, private val host: Host) :
                     minWidth = dp(42)
                     background = keyBg(colCard, colBorder)
                     isClickable = true
+                    // タップはかたちコードへ部品として足す(読みで部品を出すのが目的)。
+                    // その字そのものを入れたいときは長押しで送る欄へ
                     setOnClickListener { host.insert(ch) }
                     setOnLongClickListener {
-                        host.commit(ch)
+                        host.select(ch)
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        true
+                    }
+                    feedbackOnPress()
+                    layoutParams = LinearLayout.LayoutParams(wrap, dp(42)).apply { marginEnd = dp(4) }
+                },
+            )
+        }
+    }
+
+    // ---- 手書きでさがす ----
+
+    /**
+     * 手書きの面。断り書き・引けた字・書く枠の3段。
+     *
+     * 読みも部品の見当もつかない字は、書いて引く。認識は端末の中だけで完結する
+     * （通信はしない）。パターンは KanjiVG 由来の約6,400字で、常用・人名用・
+     * JIS第1〜2水準を覆う。ここに無い拡張漢字はかたちコードで組んで引く。
+     *
+     * 引けた字は**タップで送る欄へ**。読みの面（タップで部品に足す）と逆なのは、
+     * 手書きは「その字そのものが欲しい」から書くため。部品として使いたいときは
+     * 長押しでかたちコードに足せる。
+     */
+    private fun buildHandwritingArea() {
+        keyArea.addView(
+            TextView(context).apply {
+                text = "読めない字は書いて引けます。タップで送る欄へ・長押しで部品に"
+                setTextColor(colSub)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setPadding(dp(2), dp(2), dp(2), 0)
+            },
+            LayoutParams(matchParent, wrap),
+        )
+
+        val hits = LinearLayout(context).apply { orientation = HORIZONTAL }
+        hwHits = hits
+        keyArea.addView(
+            HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(hits)
+            },
+            LayoutParams(matchParent, dp(48)),
+        )
+
+        val row = LinearLayout(context).apply { orientation = HORIZONTAL }
+        val pad = HandwritingView(context, colText, colBorder, colAccent, this)
+        hwPad = pad
+        row.addView(pad, LinearLayout.LayoutParams(0, dp(150), 1f))
+
+        val tools = LinearLayout(context).apply {
+            orientation = VERTICAL
+            setPadding(dp(4), 0, 0, 0)
+        }
+        hwCount = TextView(context).apply {
+            text = "手書き"
+            setTextColor(colSub)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(4))
+        }
+        tools.addView(hwCount, LinearLayout.LayoutParams(matchParent, wrap))
+        tools.addView(
+            smallButton("1画消す") { hwPad?.undo() }
+                .apply { layoutParams = LinearLayout.LayoutParams(wrap, wrap) },
+        )
+        tools.addView(
+            smallButton("全部消す") { hwPad?.clear() }.apply {
+                layoutParams = LinearLayout.LayoutParams(wrap, wrap)
+                    .apply { topMargin = dp(4) }
+            },
+        )
+        row.addView(tools, LinearLayout.LayoutParams(wrap, wrap))
+        keyArea.addView(row, LayoutParams(matchParent, wrap))
+
+        showHandwritingNote(if (host.handwriting.ready) "枠に字を書いてください" else "手書きの辞書を準備中…")
+        // パターン(1.2MB)は手書きの面を初めて開いたときにだけ読む。
+        // 使わない人にこの読み込みを払わせない
+        if (!host.handwriting.ready) {
+            thread(name = "katachi-hw") {
+                host.handwriting.load(context.assets.open("hw.tsv"))
+                main.post { if (hwOpen) showHandwritingNote("枠に字を書いてください") }
+            }
+        }
+    }
+
+    /** 1画描き終えるたびに引き直す。描いた画がそのまま問いになる */
+    override fun onStrokesChanged(strokes: List<DoubleArray>) {
+        clearResumedNote()
+        hwCount?.text = if (strokes.isEmpty()) "手書き" else "${strokes.size}画"
+        val seq = ++hwSeq
+        if (strokes.isEmpty()) {
+            showHandwritingNote(if (host.handwriting.ready) "枠に字を書いてください" else "手書きの辞書を準備中…")
+            return
+        }
+        if (!host.handwriting.ready) return
+        // 6,400字ぶんの照合は数msだが、端末によっては十数msかかる。
+        // 描いた直後の指の動きを妨げないよう UI スレッドから外す
+        thread(name = "katachi-hw-match") {
+            val hits = host.handwriting.match(strokes, 24)
+            main.post { if (seq == hwSeq && hwOpen) showHandwritingHits(hits) }
+        }
+    }
+
+    private fun showHandwritingNote(text: String) {
+        val hits = hwHits ?: return
+        hits.removeAllViews()
+        hits.addView(
+            TextView(context).apply {
+                setText(text)
+                setTextColor(colSub)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setPadding(dp(4), dp(12), dp(4), 0)
+            },
+        )
+    }
+
+    private fun showHandwritingHits(matches: List<Handwriting.Match>) {
+        val hits = hwHits ?: return
+        hits.removeAllViews()
+        if (matches.isEmpty()) {
+            showHandwritingNote("似ている字が見つかりません")
+            return
+        }
+        for (m in matches) {
+            hits.addView(
+                TextView(context).apply {
+                    text = m.ch
+                    setTextColor(colText)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+                    typeface = fontFor(m.ch)
+                    gravity = Gravity.CENTER
+                    minWidth = dp(42)
+                    background = keyBg(colCard, colBorder)
+                    isClickable = true
+                    // タップは送る欄へ(手書きは「その字が欲しい」から書く)。
+                    // 部品として組みに使いたいときは長押しでかたちコードへ
+                    setOnClickListener { host.select(m.ch) }
+                    setOnLongClickListener {
+                        host.insert(m.ch)
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         true
                     }
@@ -863,7 +1253,8 @@ class KeyboardView(context: Context, private val host: Host) :
             feedbackOnPress()
         }
 
-    private fun smallButton(label: String, onTap: () -> Unit): View =
+    // 「送る」やかな面の出し入れは、状態で色を塗り替えるので TextView のまま返す
+    private fun smallButton(label: String, onTap: () -> Unit): TextView =
         TextView(context).apply {
             text = label
             setTextColor(colSub)

@@ -53,6 +53,18 @@
       "role": "KANJIDIC2収録字の日本字体([J]タグ)。従来の検索結果を変えないため最優先で上書きする"
     },
     {
+      "id": "kanjivg",
+      "file": "kanjivg/kanjivg.xml.gz",
+      "url": "https://github.com/KanjiVG/kanjivg/releases/download/r20250816/kanjivg-20250816.xml.gz",
+      "title": "KanjiVG",
+      "author": "Ulrich Apel",
+      "version": "r20250816",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://github.com/KanjiVG/kanjivg?tab=readme-ov-file#licence",
+      "role": "手書き検索の筆順・字形パターン。全字形1本のXML(釈: kanji要素ごとにストロークのSVGパス)。build:handwriting がストローク特徴に圧縮する",
+      "note": "常用・人名用・JIS第1〜2水準を含む約6,700字。収録10万字の全部は無いが、「読めない日本の漢字を書いて引く」には十分"
+    },
+    {
       "id": "kanjidic2",
       "file": "kanjidic2/kanjidic2.xml.gz",
       "url": "https://www.edrdg.org/kanjidic/kanjidic2.xml.gz",

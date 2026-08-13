@@ -18,6 +18,9 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 // 色付きの絵が浮く。アイコンは字形のそろったフォントから引く。
 // 静的読み込み(/static)なので app.json の config plugin で native に焼き込む
 import { Ionicons } from "@react-native-vector-icons/ionicons/static";
+// キーボードの絵は Ionicons に無い(keypad は電話のダイヤル面)。
+// 「押すと端末のキーボードが出る」ボタンだけ Material の keyboard を使う
+import MaterialDesignIcons from "@react-native-vector-icons/material-design-icons/static";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -636,16 +639,34 @@ function Screen() {
             setTimeout(() => inputRef.current?.focus(), 0);
             if (!next) Keyboard.dismiss();
           }}
-          accessibilityLabel="かたちコードを直接打つ"
+          accessibilityLabel={
+            directInput ? "端末のキーボードを閉じる" : "端末のキーボードを出して直接打つ"
+          }
           style={[
-            s.smallBtn,
+            // ここだけは「押せば端末のキーボードが出る」と分かってほしいので、
+            // 他の小さなキー(? ⌫ ✕)より横に広く取り、常に色を敷いて浮かせる
+            s.keyboardBtn,
             {
-              borderColor: directInput ? t.accent : t.border,
-              backgroundColor: directInput ? t.accentBg : "transparent",
+              borderColor: t.accent,
+              backgroundColor: directInput ? t.accent : t.accentBg,
             },
           ]}
         >
-          <Ionicons name="keypad-outline" size={19} color={directInput ? t.accent : t.sub} />
+          <MaterialDesignIcons
+            name={directInput ? "keyboard-off-outline" : "keyboard-outline"}
+            size={22}
+            color={directInput ? t.onAccent : t.accent}
+          />
+          <Text
+            style={{
+              fontSize: 9,
+              fontWeight: "600",
+              marginTop: 1,
+              color: directInput ? t.onAccent : t.accent,
+            }}
+          >
+            {directInput ? "閉じる" : "キーボード"}
+          </Text>
         </Pressable>
         {/* ? は「任意の1字」として欄にそのまま入る文字なので、アイコンに
             置き換えず打てる字のまま見せる */}
@@ -682,6 +703,14 @@ function Screen() {
         engine={engine}
         theme={t}
         onInsert={insert}
+        // 手書き候補のタップ・読み候補の長押しは、候補一覧のタップと同じ扱いで
+        // 出力へためる(履歴にも残す)。詳細も開くので、書いた字の読みがすぐ分かる
+        onCommit={ch => {
+          setOutput(o => o + ch);
+          setSelected(ch);
+          setCharCopied(false);
+          remember(ch);
+        }}
         maxHeight={keyboardMaxHeight}
         collapsed={directInput}
         onExpand={() => {
@@ -766,6 +795,17 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     minWidth: 44,
     alignItems: "center",
+  },
+  // 端末のキーボードを出すボタン。? ⌫ ✕ と同じ見た目だと埋もれるので、
+  // 幅は1.5倍、色は常にアクセントを敷いて他と別物に見せる
+  keyboardBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    minWidth: 66,
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryBtn: {
     flexDirection: "row",
