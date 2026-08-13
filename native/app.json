@@ -13,7 +13,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.upsee.idskanjitype",
       "appleTeamId": "W8P3V5NG4R",
-      "buildNumber": "11",
+      "buildNumber": "12",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.upsee.idskanjitype",
-      "versionCode": 11,
+      "versionCode": 12,
       "adaptiveIcon": {
         "backgroundColor": "#FBFBF9",
         "foregroundImage": "./assets/android-icon-foreground.png",
