@@ -67,18 +67,18 @@ class FlickKanaView(
 
     init {
         orientation = VERTICAL
+        // 段は面の高さを等分する。固定の高さにすると、画面の小さい端末で
+        // 下の段がはみ出して打てなくなる
         for (row in Kana.ROWS) {
             val line = LinearLayout(context).apply { orientation = HORIZONTAL }
             for (key in row) {
                 line.addView(
                     keyView(key),
-                    LayoutParams(0, dp(44), 1f).apply { setMargins(dp(2), dp(2), dp(2), dp(2)) },
+                    LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+                        .apply { setMargins(dp(2), dp(2), dp(2), dp(2)) },
                 )
             }
-            addView(
-                line,
-                LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
-            )
+            addView(line, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
     }
 

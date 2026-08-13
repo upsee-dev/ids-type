@@ -149,8 +149,10 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     }
 
     private let composingLabel = UILabel()
-    /// 送る欄と、その中身を相手の欄へ入れるボタン
+    /// 送る欄と、その中身を相手の欄へ入れるボタン。
+    /// 行ごと畳めるようにしてある(空のあいだは案内文しか出ないので場所がもったいない)
     private let outboxLabel = UILabel()
+    private weak var outboxRow: UIStackView?
     private var sendButton: UIButton!
     /// 元の入力方法へ帰るボタン。送った直後だけ色を上げて次の一手を示す
     private var backButton: UIButton!
@@ -222,15 +224,18 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private func buildLayout() {
         let root = UIStackView()
         root.axis = .vertical
-        root.spacing = 4
+        root.spacing = 3
         root.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(root)
-        minHeight = view.heightAnchor.constraint(greaterThanOrEqualToConstant: 300)
+        // 高さは面ごとに変える(applyHeight)。拡張は自分で高さを決められるので、
+        // 「入る高さに中身を詰める」のではなく「要る高さを取る」ほうにしてある
+        minHeight = view.heightAnchor.constraint(equalToConstant: 320)
+        minHeight.priority = .required - 1 // 端末が別の高さを強いてきたら譲る
         NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
+            root.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
-            root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
+            root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4),
             minHeight,
         ])
 
@@ -307,6 +312,10 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         out.addArrangedSubview(undo)
         sendButton = smallButton("送る", #selector(onSend))
         out.addArrangedSubview(sendButton)
+        // 何も選んでいないあいだは畳む。案内文だけの行に1行ぶんの高さを
+        // 使っていると、そのぶんフリック面や手書きの枠が削られる
+        out.isHidden = true
+        outboxRow = out
         root.addArrangedSubview(out)
 
         // 他のキーボードから戻ってきたとき、勝手に字が残っているように見えないよう
@@ -390,20 +399,17 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         ])
         root.addArrangedSubview(strokeScroll)
 
-        // ── キー ──
+        // ── 打鍵の面 ──
+        // **スクロールに入れない**。読みのフリック面も手書きの枠も、指を置いて
+        // 動かす場所なので、縦の動きをスクロールに取られると入力にならない
+        // (部品パレットだけは数が多いので、その中に自前でスクロールを置く)。
+        // 高さは余りを全部もらう＝画面が小さい端末では自動的に詰まるだけで、
+        // 「下が見えない」状態にはならない
         keyArea.axis = .vertical
         keyArea.spacing = 4
-        let keyScroll = UIScrollView()
-        keyArea.translatesAutoresizingMaskIntoConstraints = false
-        keyScroll.addSubview(keyArea)
-        NSLayoutConstraint.activate([
-            keyArea.topAnchor.constraint(equalTo: keyScroll.topAnchor),
-            keyArea.bottomAnchor.constraint(equalTo: keyScroll.bottomAnchor),
-            keyArea.leadingAnchor.constraint(equalTo: keyScroll.leadingAnchor),
-            keyArea.trailingAnchor.constraint(equalTo: keyScroll.trailingAnchor),
-            keyArea.widthAnchor.constraint(equalTo: keyScroll.widthAnchor),
-        ])
-        root.addArrangedSubview(keyScroll)
+        keyArea.setContentHuggingPriority(.defaultLow, for: .vertical)
+        keyArea.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        root.addArrangedSubview(keyArea)
 
         buildStrokeChips()
         rebuildKeys()
@@ -658,15 +664,14 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         if shelf != .none { refreshShelf() }
     }
 
-    /// 送る欄の見た目。中身が無いあいだ「送る」は押せない見た目にする
+    /// 送る欄の見た目。何も選んでいないあいだは行ごと畳む
     private func onOutboxChanged() {
-        outboxLabel.text = outbox.isEmpty ? "候補を選ぶとここに入ります" : outbox
-        outboxLabel.textColor = outbox.isEmpty ? colSub : colText
-        outboxLabel.font = outbox.isEmpty
-            ? .systemFont(ofSize: 12)
-            : (extFont1?.withSize(19) ?? .systemFont(ofSize: 19))
-        guard let b = sendButton else { return }
         let ready = !outbox.isEmpty
+        outboxRow?.isHidden = !ready
+        outboxLabel.text = outbox
+        outboxLabel.textColor = colText
+        outboxLabel.font = extFont1?.withSize(19) ?? .systemFont(ofSize: 19)
+        guard let b = sendButton else { return }
         b.isEnabled = ready
         b.setTitleColor(ready ? themeColor { $0.onAccent } : colSub, for: .normal)
         style(b, fill: ready ? colAccent : colCard, stroke: ready ? colAccent : colBorder)
@@ -837,6 +842,22 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         }
     }
 
+    /**
+     * キーボードの高さ。面ごとに要るものが違うので出し分ける。
+     *
+     * 読みのフリック面(4段)も手書きの枠も、**スクロールさせずに全部出す**のが要件。
+     * 上の帯(組み立て中・送る・候補・かたち・タブ)だけで 250pt ほど要るので、
+     * その下に面ぶんを足した高さを自分で取りに行く。
+     * ただし画面の 62% を超えない。小さい端末では面の側が詰まるだけで、
+     * 「下が見えない」ことにはならない(フリックのキーも枠も余りを分け合うため)。
+     */
+    private func applyHeight() {
+        let screen = view.window?.windowScene?.screen.bounds.height
+            ?? UIScreen.main.bounds.height
+        let want: CGFloat = kanaOpen ? 476 : (hwOpen ? 470 : 320)
+        minHeight?.constant = Swift.min(want, screen * 0.62)
+    }
+
     private func rebuildKeys() {
         let faceOpen = kanaOpen || hwOpen
         for (i, v) in tabRow.arrangedSubviews.enumerated() {
@@ -859,9 +880,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         hwHits = nil
         hwPad = nil
         hwCount = nil
-
-        // 読みの面はフリック4段(と読みの欄・引けた字)、手書きの面は書く枠が入る高さが要る
-        minHeight?.constant = kanaOpen ? 400 : (hwOpen ? 420 : 300)
+        applyHeight()
 
         if kanaOpen {
             buildReadingArea()
@@ -872,6 +891,23 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             return
         }
 
+        // 部品パレットだけは数が多いので、この面の中に自前のスクロールを置く
+        // (指を置いて動かす面ではないので、ここのスクロールは邪魔にならない)
+        let grid = UIStackView()
+        grid.axis = .vertical
+        grid.spacing = 4
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = UIScrollView()
+        scroll.addSubview(grid)
+        NSLayoutConstraint.activate([
+            grid.topAnchor.constraint(equalTo: scroll.topAnchor),
+            grid.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
+            grid.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
+            grid.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
+            grid.widthAnchor.constraint(equalTo: scroll.widthAnchor),
+        ])
+        keyArea.addArrangedSubview(scroll)
+
         switch currentTab {
         case .common:
             let parts = commonParts()
@@ -879,15 +915,17 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
                 let l = UILabel()
                 l.text = "辞書を読み込み中…"
                 l.textColor = colSub
-                keyArea.addArrangedSubview(l)
+                grid.addArrangedSubview(l)
             } else {
-                grid(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } }, cols: 8)
+                rows(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } },
+                     cols: 8, into: grid)
             }
         case .radical:
             let parts: [String] = strokeGroup == "common"
                 ? Palettes.radical.map(String.init)
                 : (Palettes.difficult.first { $0.strokes == strokeGroup }?.parts.map(String.init) ?? [])
-            grid(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } }, cols: 8)
+            rows(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } },
+                 cols: 8, into: grid)
         }
     }
 
@@ -926,11 +964,16 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// 部品を読みから引くためだけにある。標準のかなキーボードに見えてしまうので、
     /// 面の頭にそれを1行で断っておく。
     private func buildReadingArea() {
-        let note = UILabel()
-        note.text = "部品を読みから出す面です。文章は普段のキーボードで"
-        note.font = .systemFont(ofSize: 10)
-        note.textColor = colSub
-        keyArea.addArrangedSubview(note)
+        // 断り書きは**打ち始めるまで**。文章を打つ面に見えるのを防ぐのが目的なので、
+        // 一度打ち始めた人にはもう要らない。そのぶんの高さをフリック面に回す
+        readingNoteShown = reading.isEmpty
+        if reading.isEmpty {
+            let note = UILabel()
+            note.text = "字の読みを打つと候補に出ます。文章は普段のキーボードで"
+            note.font = .systemFont(ofSize: 10)
+            note.textColor = colSub
+            keyArea.addArrangedSubview(note)
+        }
 
         let label = UILabel()
         label.font = .systemFont(ofSize: 16)
@@ -964,16 +1007,20 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             hits.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
             hits.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
             hits.heightAnchor.constraint(equalTo: scroll.heightAnchor),
-            scroll.heightAnchor.constraint(equalToConstant: 46),
+            scroll.heightAnchor.constraint(equalToConstant: 44),
         ])
         readingHits = hits
         keyArea.addArrangedSubview(scroll)
 
+        // フリック面は**残りの高さを全部もらう**。固定の高さを与えると、
+        // 画面の小さい端末で下の段がはみ出して打てなくなる
         let pad = FlickKanaView(
             text: colText, sub: colSub, card: colCard, border: colBorder, accentBg: colAccentBg,
         )
         pad.delegate = self
-        pad.heightAnchor.constraint(equalToConstant: 188).isActive = true
+        pad.setContentHuggingPriority(.defaultLow, for: .vertical)
+        pad.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        pad.heightAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
         flick = pad
         keyArea.addArrangedSubview(pad)
 
@@ -1005,10 +1052,19 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         afterReadingChanged()
     }
 
+    /// 断り書きを出しているかどうか。打ち始めたら引っ込めて高さをフリック面へ回す
+    private var readingNoteShown = true
+
     private func afterReadingChanged() {
         readingPreview = nil
         resumedNote.isHidden = true
         persist() // 読みも組みかけのうち。切り替えて戻ったら続きから打てる
+        if kanaOpen, readingNoteShown != reading.isEmpty {
+            // 断り書きの出し入れで面の高さが変わるので組み直す
+            readingNoteShown = reading.isEmpty
+            rebuildKeys()
+            return
+        }
         refreshReadingLabel()
         runReadingSearch()
     }
@@ -1053,13 +1109,26 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             b.widthAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
             b.accessibilityLabel = ch
             b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
-            b.addAction(UIAction { [weak self] _ in self?.insert(ch) }, for: .touchUpInside)
+            b.addAction(UIAction { [weak self] _ in self?.commitReading(ch) }, for: .touchUpInside)
             // 長押しはそのまま入力。読みが分かっている字はこれが最短
             let g = UILongPressGestureRecognizer(target: self, action: #selector(onReadingHitLongPress(_:)))
             b.addGestureRecognizer(g)
             b.accessibilityValue = ch
             hits.addArrangedSubview(b)
         }
+    }
+
+    /// 読みから引けた字を**かたちコードへ入れて、読みを空にする**。
+    ///
+    /// 普通のかな漢字変換と同じ手触りにするため。「つき」と打って月を選んだ時点で
+    /// その変換は済んでいるので、読みが残っていると次の部品を打つのに消す手間が要る。
+    /// 空にすると上の候補欄も読みの結果から**組み立て中のかたちの候補へ戻る**ので、
+    /// 〈左右〉日月 まで組んだところで「明」がそのまま出てくる
+    private func commitReading(_ ch: String) {
+        insert(ch)
+        reading = ""
+        flick?.resetToggle()
+        afterReadingChanged()
     }
 
     /// 読みから出た字の長押し。その字そのものを入れたいときの近道(送る欄へ)。
@@ -1136,10 +1205,15 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         tools.spacing = 4
         tools.widthAnchor.constraint(equalToConstant: 76).isActive = true
 
+        // 書く枠は**残りの高さを全部もらう**。固定にすると小さい端末で下が切れて、
+        // 枠の下半分に書けなくなる
         let row = UIStackView(arrangedSubviews: [pad, tools])
         row.axis = .horizontal
         row.spacing = 6
-        pad.heightAnchor.constraint(equalToConstant: 170).isActive = true
+        pad.setContentHuggingPriority(.defaultLow, for: .vertical)
+        pad.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        pad.heightAnchor.constraint(greaterThanOrEqualToConstant: 130).isActive = true
+        row.setContentHuggingPriority(.defaultLow, for: .vertical)
         keyArea.addArrangedSubview(row)
 
         showHandwritingNote(handwriting.ready ? "枠に字を書いてください" : "手書きの辞書を準備中…")
@@ -1266,7 +1340,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     // MARK: - 部品
 
-    private func grid(_ keys: [UIView], cols: Int) {
+    private func rows(_ keys: [UIView], cols: Int, into container: UIStackView) {
         var row: UIStackView?
         for (i, k) in keys.enumerated() {
             if i % cols == 0 {
@@ -1274,7 +1348,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
                 r.axis = .horizontal
                 r.spacing = 4
                 r.distribution = .fillEqually
-                keyArea.addArrangedSubview(r)
+                container.addArrangedSubview(r)
                 row = r
             }
             row?.addArrangedSubview(k)

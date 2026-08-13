@@ -98,6 +98,9 @@ class KeyboardView(context: Context, private val host: Host) :
         /** 連射中に音を鳴らす頻度。毎回鳴らすと「ジジジ」と潰れて聞こえる */
         const val SOUND_EVERY_N_REPEATS = 3
 
+        /** 打鍵の面より上(道具の帯〜タブ)がだいたい使う高さ(dp) */
+        const val CHROME_DP = 250f
+
         /** 着せ替えの保存キーと「おまかせ」の値 */
         const val PREF_THEME = "theme"
         const val THEME_AUTO = "auto"
@@ -177,6 +180,9 @@ class KeyboardView(context: Context, private val host: Host) :
     private lateinit var kanaToggle: TextView
     private lateinit var hwToggle: TextView
     private lateinit var outboxLabel: TextView
+
+    /** 送る欄の行。空のあいだは畳んで、その高さを打鍵の面へ回す */
+    private lateinit var outboxRow: LinearLayout
     private lateinit var sendButton: TextView
     private lateinit var backButton: TextView
     private var resumedNote: TextView? = null
@@ -306,6 +312,10 @@ class KeyboardView(context: Context, private val host: Host) :
         )
         sendButton = smallButton("送る") { host.send() }
         outRow.addView(sendButton)
+        // 何も選んでいないあいだは行ごと畳む。案内文だけの行に1行ぶんの高さを
+        // 使っていると、そのぶんフリック面や手書きの枠が削られる
+        outRow.visibility = View.GONE
+        outboxRow = outRow
         addView(outRow)
 
         // 他のキーボードから戻ってきたとき、勝手に字が残っているように見えないよう
@@ -393,10 +403,12 @@ class KeyboardView(context: Context, private val host: Host) :
         }
         keyScroll = ScrollView(context).apply {
             addView(keyArea)
-            // かたちの行を常時表示にしたぶん、キーボード全体が高くなりすぎない
-            // よう部品グリッドを詰める(足りない分はスクロールで出す)。
-            // 読みの面はフリック4段が入る高さが要るので rebuildKeys が伸ばす
-            layoutParams = LayoutParams(matchParent, dp(168))
+            // **中身が足りないときは viewport いっぱいに広げる**。こうしておくと
+            // 読みのフリック面も手書きの枠も weight で高さを分け合えるので、
+            // 画面が小さい端末では詰まるだけで「下が見えない」ことにならない。
+            // 部品パレット(数が多い)のときだけ、はみ出したぶんがスクロールする
+            isFillViewport = true
+            layoutParams = LayoutParams(matchParent, faceHeight())
         }
         addView(keyScroll)
 
@@ -440,9 +452,10 @@ class KeyboardView(context: Context, private val host: Host) :
     /** 送る欄が変わった。中身が無いあいだ「送る」は押せない見た目にする */
     fun onOutboxChanged() {
         val out = host.outboxText
+        val ready = out.isNotEmpty()
+        outboxRow.visibility = if (ready) View.VISIBLE else View.GONE
         outboxLabel.text = out
         outboxLabel.typeface = if (out.isEmpty()) Typeface.DEFAULT else fontFor(out)
-        val ready = out.isNotEmpty()
         sendButton.isEnabled = ready
         sendButton.setTextColor(if (ready) colOnAccent else colSub)
         sendButton.background = keyBg(
@@ -830,9 +843,7 @@ class KeyboardView(context: Context, private val host: Host) :
         hwPad = null
         hwCount = null
 
-        // 読みの面はフリック4段(と読みの欄・結果)、手書きの面は書く枠が入る高さが要る
-        keyScroll.layoutParams =
-            LayoutParams(matchParent, dp(if (kanaOpen) 250 else if (hwOpen) 260 else 168))
+        keyScroll.layoutParams = LayoutParams(matchParent, faceHeight())
 
         if (kanaOpen) {
             buildReadingArea()
@@ -867,6 +878,22 @@ class KeyboardView(context: Context, private val host: Host) :
                 grid(parts.size, 8) { i -> keyButton(parts[i], 20f) { host.insert(parts[i]) } }
             }
         }
+    }
+
+    /**
+     * 打鍵の面の高さ。面ごとに要るものが違うので出し分ける。
+     *
+     * 読みのフリック面(4段)も手書きの枠も、**スクロールさせずに全部出す**のが要件。
+     * ただし上の帯(組み立て中・送る・候補・かたち・タブ)だけで 250dp ほど使うので、
+     * 画面の 62% を超えないところで頭を打たせる。足りないぶんはフリックのキーと
+     * 手書きの枠が詰まって吸収する(下が切れて打てなくなるよりはよい)。
+     */
+    private fun faceHeight(): Int {
+        val dm = resources.displayMetrics
+        val screenDp = dm.heightPixels / dm.density
+        val cap = (screenDp * 0.62f - CHROME_DP).toInt()
+        val want = if (kanaOpen) 268 else if (hwOpen) 252 else 168
+        return dp(want.coerceAtMost(cap).coerceAtLeast(140))
     }
 
     /** 辞書内で構成要素として多く出てくる部品。日本語の字だけで数える */
@@ -905,15 +932,19 @@ class KeyboardView(context: Context, private val host: Host) :
      * 面の頭にそれを1行で断っておく。
      */
     private fun buildReadingArea() {
-        keyArea.addView(
-            TextView(context).apply {
-                text = "部品を読みから出す面です。文章は普段のキーボードで"
-                setTextColor(colSub)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-                setPadding(dp(2), dp(2), dp(2), 0)
-            },
-            LayoutParams(matchParent, wrap),
-        )
+        // 断り書きは**打ち始めるまで**。文章を打つ面に見えるのを防ぐのが目的なので、
+        // 一度打ち始めた人には要らない。そのぶんの高さをフリック面に回す
+        if (reading.isEmpty()) {
+            keyArea.addView(
+                TextView(context).apply {
+                    text = "字の読みを打つと候補に出ます。文章は普段のキーボードで"
+                    setTextColor(colSub)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                    setPadding(dp(2), dp(2), dp(2), 0)
+                },
+                LayoutParams(matchParent, wrap),
+            )
+        }
 
         val head = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -939,10 +970,13 @@ class KeyboardView(context: Context, private val host: Host) :
             LayoutParams(matchParent, dp(48)),
         )
 
+        // フリック面は**残りの高さを全部もらう**。固定にすると画面の小さい端末で
+        // 下の段がはみ出して打てなくなる
         val pad = FlickKanaView(context, colText, colSub, colCard, colBorder, colAccentBg, this)
         flick = pad
-        keyArea.addView(pad, LayoutParams(matchParent, wrap))
+        keyArea.addView(pad, LayoutParams(matchParent, 0, 1f))
 
+        readingNoteShown = reading.isEmpty()
         refreshReadingLabel()
         runReadingSearch()
     }
@@ -981,10 +1015,18 @@ class KeyboardView(context: Context, private val host: Host) :
         host.persist()
     }
 
+    /** 断り書きを出しているか。打ち始めたら引っ込めて高さをフリック面へ回す */
+    private var readingNoteShown = true
+
     private fun afterReadingChanged() {
         readingPreview = null
         clearResumedNote()
         host.persist() // 読みも組みかけのうち。切り替えて戻ったら続きから打てる
+        if (kanaOpen && readingNoteShown != reading.isEmpty()) {
+            // 断り書きの出し入れで面の割り付けが変わるので組み直す
+            rebuildKeys()
+            return
+        }
         refreshReadingLabel()
         runReadingSearch()
     }
@@ -1033,7 +1075,7 @@ class KeyboardView(context: Context, private val host: Host) :
                     isClickable = true
                     // タップはかたちコードへ部品として足す(読みで部品を出すのが目的)。
                     // その字そのものを入れたいときは長押しで送る欄へ
-                    setOnClickListener { host.insert(ch) }
+                    setOnClickListener { commitReading(ch) }
                     setOnLongClickListener {
                         host.select(ch)
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -1083,7 +1125,7 @@ class KeyboardView(context: Context, private val host: Host) :
         val row = LinearLayout(context).apply { orientation = HORIZONTAL }
         val pad = HandwritingView(context, colText, colBorder, colAccent, this)
         hwPad = pad
-        row.addView(pad, LinearLayout.LayoutParams(0, dp(150), 1f))
+        row.addView(pad, LinearLayout.LayoutParams(0, matchParent, 1f))
 
         val tools = LinearLayout(context).apply {
             orientation = VERTICAL
@@ -1108,7 +1150,8 @@ class KeyboardView(context: Context, private val host: Host) :
             },
         )
         row.addView(tools, LinearLayout.LayoutParams(wrap, wrap))
-        keyArea.addView(row, LayoutParams(matchParent, wrap))
+        // 書く枠は残りの高さを全部もらう(固定にすると下が切れて書けなくなる)
+        keyArea.addView(row, LayoutParams(matchParent, 0, 1f))
 
         showHandwritingNote(if (host.handwriting.ready) "枠に字を書いてください" else "手書きの辞書を準備中…")
         // パターン(1.2MB)は手書きの面を初めて開いたときにだけ読む。
@@ -1183,6 +1226,21 @@ class KeyboardView(context: Context, private val host: Host) :
                 },
             )
         }
+    }
+
+    /**
+     * 読みから引けた字を**かたちコードへ入れて、読みを空にする**。
+     *
+     * 普通のかな漢字変換と同じ手触りにするため。「つき」と打って月を選んだ時点で
+     * その変換は済んでいるので、読みが残っていると次の部品を打つのに消す手間が要る。
+     * 空にすると上の候補欄も読みの結果から**組み立て中のかたちの候補へ戻る**ので、
+     * 〈左右〉日月 まで組んだところで「明」がそのまま出てくる。
+     */
+    private fun commitReading(ch: String) {
+        host.insert(ch)
+        reading.setLength(0)
+        flick?.resetToggle()
+        afterReadingChanged()
     }
 
     // ---- フリックのかな面から呼ばれる ----

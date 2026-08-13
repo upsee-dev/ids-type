@@ -163,7 +163,9 @@ private final class KanaKeyView: UIView {
         NSLayoutConstraint.activate([
             label.centerXAnchor.constraint(equalTo: centerXAnchor),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 42),
+            // 面の高さは端末に合わせて伸び縮みする。ここを高く縛ると、
+            // 画面の小さい端末で下の段がはみ出して打てなくなる
+            heightAnchor.constraint(greaterThanOrEqualToConstant: 34),
         ])
         pad.style(self, pressed: false)
     }
