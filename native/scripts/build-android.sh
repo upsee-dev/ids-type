@@ -22,6 +22,13 @@ node scripts/sync-core.mjs
 # app.json から android/ を再生成（既存の android/ は作り直す）
 npx expo prebuild -p android --clean --no-install
 
+# prebuild は autolinking の結果を **package名を書き換える前** に吐くことがある。
+# その場合 android/build/generated/autolinking/autolinking.json が
+# テンプレートの com.app のまま残り、gradle がそれを使って
+#   ReactNativeApplicationEntryPoint.java: パッケージcom.appは存在しません
+# で :app:compileReleaseJavaWithJavac が落ちる。gradle に作り直させる
+rm -rf android/build/generated/autolinking
+
 pushd android >/dev/null
 ./gradlew assembleRelease --no-daemon
 popd >/dev/null

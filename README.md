@@ -434,7 +434,12 @@ JDK 17 は `/opt/homebrew/opt/openjdk@17`、Android SDK は `~/Library/Android/s
   internal トラックへ。`withReleaseSigning` プラグインが `store/AuthKey/` の
   アップロード鍵で署名する（鍵が無いとデバッグ署名のままになり Play に弾かれる）。
   提出は edit を作る→上げる→トラックに割り当て→commit の順で、commit するまで
-  Play 側に反映されないので途中で失敗しても中途半端にならない
+  Play 側に反映されないので途中で失敗しても中途半端にならない。
+  **prebuild のあとに `android/build/generated/autolinking` を消してから gradle を
+  呼ぶこと**。prebuild は autolinking の結果を package 名を書き換える前に吐くこと
+  があり、テンプレートの `com.app` のまま残ると
+  `ReactNativeApplicationEntryPoint.java: パッケージcom.appは存在しません` で
+  `:app:compileReleaseJavaWithJavac` が落ちる（`scripts/build-android.sh` は対応済み）
 - **iOS**: `xcodebuild archive` → `-exportArchive`（`native/ExportOptions.plist`）→
   `xcrun altool --upload-app`。プロファイルは持っていないので
   `-allowProvisioningUpdates` と ASC の APIキーで自動生成させる。
