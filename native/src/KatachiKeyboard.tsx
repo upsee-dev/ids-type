@@ -39,6 +39,14 @@ const PART_COLS = 8;
 const GAP = 4;
 const SIDE_PADDING = 12;
 
+/**
+ * 読みの欄と引けた字の行の高さ。**中身で伸び縮みさせない**。
+ * ここが1pxでも変わると、残りをもらうフリック面(や手書きの枠)が
+ * 打っている最中に縮んで、狙ったキーの隣に入る
+ */
+const READING_ROW = 36;
+const HIT_ROW = 44;
+
 export function KatachiKeyboard({
   engine,
   theme,
@@ -355,13 +363,20 @@ function SearchTab({
         </Pressable>
       </View>
 
-      {/* ── 引けた字(1行)。タップ=部品として足す / 長押し=出力へ ── */}
+      {/* ── 引けた字(1行)。タップ=部品として足す / 長押し=出力へ ──
+          高さは**候補の有無にかかわらず HIT_ROW で固定**。候補が出た拍子に
+          この行が伸びると、下のフリック面がそのぶん縮んで打っている最中に
+          キーが動く(1字目で位置がずれて、2字目が隣のキーに入る) */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         keyboardShouldPersistTaps="always"
-        style={{ flexGrow: 0 }}
-        contentContainerStyle={{ flexDirection: "row", gap: GAP }}
+        style={styles.hitRow}
+        contentContainerStyle={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: GAP,
+        }}
       >
         {hits.length ? (
           hits.map(p => (
@@ -476,26 +491,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GAP },
-  readingRow: { flexDirection: "row", alignItems: "center", gap: GAP },
+  // 案内文(小さい字)と打った読み(大きい字)で高さが変わらないよう、
+  // 行の高さを決めて中の箱は伸ばす(alignItems は stretch のまま)
+  readingRow: { flexDirection: "row", height: READING_ROW, gap: GAP },
   readingBox: {
     flex: 1,
     minWidth: 0,
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 34,
     justifyContent: "center",
   },
   readingClear: {
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    justifyContent: "center",
   },
+  // 候補が無いとき(案内文)も 44 のまま空けておく
+  hitRow: { flexGrow: 0, height: HIT_ROW },
   hitKey: {
     minWidth: 44,
-    height: 44,
+    height: HIT_ROW,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,

@@ -509,8 +509,14 @@ class KeyboardView(context: Context, private val host: Host) :
         resumedNote?.visibility = View.VISIBLE
     }
 
+    /**
+     * 断り書きを引っ込める。**行そのものは残して透明にするだけ**にする。
+     * GONE にすると1行ぶん詰まって、下のフリック面・手書きの枠が打っている
+     * 最中に動く(1字目でキーがずれて、2字目が隣のキーに入る)
+     */
     private fun clearResumedNote() {
-        resumedNote?.visibility = View.GONE
+        val note = resumedNote ?: return
+        if (note.visibility == View.VISIBLE) note.visibility = View.INVISIBLE
     }
 
     /**
@@ -932,19 +938,19 @@ class KeyboardView(context: Context, private val host: Host) :
      * 面の頭にそれを1行で断っておく。
      */
     private fun buildReadingArea() {
-        // 断り書きは**打ち始めるまで**。文章を打つ面に見えるのを防ぐのが目的なので、
-        // 一度打ち始めた人には要らない。そのぶんの高さをフリック面に回す
-        if (reading.isEmpty()) {
-            keyArea.addView(
-                TextView(context).apply {
-                    text = "字の読みを打つと候補に出ます。文章は普段のキーボードで"
-                    setTextColor(colSub)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-                    setPadding(dp(2), dp(2), dp(2), 0)
-                },
-                LayoutParams(matchParent, wrap),
-            )
-        }
+        // 断り書きは**出しっぱなしにする**。打ち始めたら引っ込めれば1行ぶんの高さを
+        // フリック面に回せるが、それをやると1字目を打った瞬間にキーの大きさと位置が
+        // 変わり、2字目が隣のキーに入る。打っている最中に面が動かないことのほうが、
+        // 1行ぶんの高さより大事
+        keyArea.addView(
+            TextView(context).apply {
+                text = "字の読みを打つと候補に出ます。文章は普段のキーボードで"
+                setTextColor(colSub)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setPadding(dp(2), dp(2), dp(2), 0)
+            },
+            LayoutParams(matchParent, wrap),
+        )
 
         val head = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -976,7 +982,6 @@ class KeyboardView(context: Context, private val host: Host) :
         flick = pad
         keyArea.addView(pad, LayoutParams(matchParent, 0, 1f))
 
-        readingNoteShown = reading.isEmpty()
         refreshReadingLabel()
         runReadingSearch()
     }
@@ -1015,18 +1020,14 @@ class KeyboardView(context: Context, private val host: Host) :
         host.persist()
     }
 
-    /** 断り書きを出しているか。打ち始めたら引っ込めて高さをフリック面へ回す */
-    private var readingNoteShown = true
-
+    /**
+     * 読みが変わった。**面は組み直さない**。組み直すとフリックのキーが動いて、
+     * 続けて打っている指が隣のキーに乗る
+     */
     private fun afterReadingChanged() {
         readingPreview = null
         clearResumedNote()
         host.persist() // 読みも組みかけのうち。切り替えて戻ったら続きから打てる
-        if (kanaOpen && readingNoteShown != reading.isEmpty()) {
-            // 断り書きの出し入れで面の割り付けが変わるので組み直す
-            rebuildKeys()
-            return
-        }
         refreshReadingLabel()
         runReadingSearch()
     }

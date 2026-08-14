@@ -139,16 +139,20 @@ export function HandwritingPad({
 
   return (
     <View style={{ flex: 1, gap: 4 }}>
-      {/* ── 候補行 ── */}
-      {matches.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={styles.candRow}
-        >
-          {matches.map((m) => (
+      {/* ── 候補行 ──
+          高さは**候補の有無にかかわらず CAND_ROW で固定**。1画目で候補が出た
+          拍子にこの行が伸びると、下の書く枠がそのぶん縮む。枠が縮むと2画目から
+          座標の取り方が変わり(認識は枠に対する外接枠で正規化する)、書いている
+          途中で字が歪む */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="always"
+        style={styles.candRowBox}
+        contentContainerStyle={styles.candRow}
+      >
+        {matches.length > 0 ? (
+          matches.map((m) => (
             <Pressable
               key={m.ch}
               onPressIn={() => haptic("commit")}
@@ -171,17 +175,17 @@ export function HandwritingPad({
                 {m.ch}
               </Text>
             </Pressable>
-          ))}
-        </ScrollView>
-      ) : (
-        <Text style={{ fontSize: 11, color: theme.faint, paddingVertical: 8 }}>
-          {index
-            ? strokes.length
-              ? "似ている字が見つかりません。全部消してもう一度どうぞ"
-              : "枠に字を書くと候補が出ます。タップで出力へ・長押しで部品に"
-            : "手書きの辞書を準備中…"}
-        </Text>
-      )}
+          ))
+        ) : (
+          <Text style={{ fontSize: 11, color: theme.faint }}>
+            {index
+              ? strokes.length
+                ? "似ている字が見つかりません。全部消してもう一度どうぞ"
+                : "枠に字を書くと候補が出ます。タップで出力へ・長押しで部品に"
+              : "手書きの辞書を準備中…"}
+          </Text>
+        )}
+      </ScrollView>
 
       {/* ── 書く枠 + 道具 ── */}
       <View style={{ flex: 1, flexDirection: "row", gap: 4 }}>
@@ -297,11 +301,20 @@ export function HandwritingPad({
   );
 }
 
+/** 候補行の高さ。候補が無いとき(案内文)も同じだけ空けておく */
+const CAND_ROW = 50;
+
 const styles = StyleSheet.create({
-  candRow: { flexDirection: "row", gap: 4, paddingVertical: 2 },
+  candRowBox: { flexGrow: 0, height: CAND_ROW },
+  candRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 2,
+  },
   candKey: {
     minWidth: 46,
-    height: 46,
+    height: CAND_ROW - 4,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,

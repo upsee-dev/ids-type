@@ -323,7 +323,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         resumedNote.font = .systemFont(ofSize: 10)
         resumedNote.textColor = colAccent
         resumedNote.text = "前回の続きです"
-        resumedNote.isHidden = true
+        resumedNote.isHidden = true // 続きが無いときは行ごと出さない(restorePending で出す)
         root.addArrangedSubview(resumedNote)
 
         // ── 候補 ──
@@ -547,7 +547,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     @objc private func onToggleKana() {
         kanaOpen.toggle()
         hwOpen = false
-        resumedNote.isHidden = true
+        dismissResumedNote()
         rebuildKeys()
         persist()
     }
@@ -556,7 +556,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     @objc private func onToggleHandwriting() {
         hwOpen.toggle()
         kanaOpen = false
-        resumedNote.isHidden = true
+        dismissResumedNote()
         rebuildKeys()
         persist()
     }
@@ -625,7 +625,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         textDocumentProxy.insertText(outbox)
         outbox = ""
         composing = ""
-        resumedNote.isHidden = true
+        dismissResumedNote()
         store.clearPending()
         if let b = backButton {
             b.tintColor = colAccent
@@ -660,7 +660,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         // 選んだ字はアプリと共有の履歴へ。アプリで調べた字をキーボードで打つ／
         // キーボードで打った字をアプリで見返す、を両方向でつなぐ
         store.remember(ch)
-        resumedNote.isHidden = true
+        dismissResumedNote()
         if shelf != .none { refreshShelf() }
     }
 
@@ -691,7 +691,16 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         outbox = p.outbox
         composing = p.code
         rebuildKeys()
+        resumedNote.alpha = 1
         resumedNote.isHidden = p.code.isEmpty && p.outbox.isEmpty && p.reading.isEmpty
+    }
+
+    /// 断り書きを引っ込める。**行そのものは残して透明にするだけ**にする。
+    /// isHidden にすると1行ぶん詰まって、下のフリック面・手書きの枠が
+    /// 打っている最中に伸び縮みする(1字目でキーが動いて2字目が隣に入る)
+    private func dismissResumedNote() {
+        guard !resumedNote.isHidden else { return }
+        resumedNote.alpha = 0
     }
 
     /// 組みかけを覚える。**iOS の拡張は予告なく落とされる**ので、
@@ -711,7 +720,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         composingLabel.textColor = composing.isEmpty ? colSub : colText
         if !composing.isEmpty {
             // 打ち始めたら断り書きと「戻る」の強調は引っ込める(組んでいる最中なので)
-            resumedNote.isHidden = true
+            dismissResumedNote()
             if let b = backButton {
                 b.tintColor = colSub
                 style(b, fill: .clear, stroke: colBorder)
@@ -964,16 +973,15 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// 部品を読みから引くためだけにある。標準のかなキーボードに見えてしまうので、
     /// 面の頭にそれを1行で断っておく。
     private func buildReadingArea() {
-        // 断り書きは**打ち始めるまで**。文章を打つ面に見えるのを防ぐのが目的なので、
-        // 一度打ち始めた人にはもう要らない。そのぶんの高さをフリック面に回す
-        readingNoteShown = reading.isEmpty
-        if reading.isEmpty {
-            let note = UILabel()
-            note.text = "字の読みを打つと候補に出ます。文章は普段のキーボードで"
-            note.font = .systemFont(ofSize: 10)
-            note.textColor = colSub
-            keyArea.addArrangedSubview(note)
-        }
+        // 断り書きは**出しっぱなしにする**。打ち始めたら引っ込めれば1行ぶんの高さを
+        // フリック面に回せるが、それをやると1字目を打った瞬間にキーの大きさと位置が
+        // 変わり、2字目が隣のキーに入る。打っている最中に面が動かないことのほうが、
+        // 1行ぶんの高さより大事
+        let note = UILabel()
+        note.text = "字の読みを打つと候補に出ます。文章は普段のキーボードで"
+        note.font = .systemFont(ofSize: 10)
+        note.textColor = colSub
+        keyArea.addArrangedSubview(note)
 
         let label = UILabel()
         label.font = .systemFont(ofSize: 16)
@@ -1052,19 +1060,12 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         afterReadingChanged()
     }
 
-    /// 断り書きを出しているかどうか。打ち始めたら引っ込めて高さをフリック面へ回す
-    private var readingNoteShown = true
-
+    /// 読みが変わった。**面は組み直さない**。組み直すとフリックのキーが動いて、
+    /// 続けて打っている指が隣のキーに乗る
     private func afterReadingChanged() {
         readingPreview = nil
-        resumedNote.isHidden = true
+        dismissResumedNote()
         persist() // 読みも組みかけのうち。切り替えて戻ったら続きから打てる
-        if kanaOpen, readingNoteShown != reading.isEmpty {
-            // 断り書きの出し入れで面の高さが変わるので組み直す
-            readingNoteShown = reading.isEmpty
-            rebuildKeys()
-            return
-        }
         refreshReadingLabel()
         runReadingSearch()
     }
@@ -1237,7 +1238,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     /// 1画描き終えるたびに引き直す。描いた画がそのまま問いになる
     func handwritingStrokesChanged(_ strokes: [[Double]]) {
-        resumedNote.isHidden = true
+        dismissResumedNote()
         hwCount?.text = strokes.isEmpty ? "手書き" : "\(strokes.count)画"
         hwSeq += 1
         let seq = hwSeq
