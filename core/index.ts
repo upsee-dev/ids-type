@@ -12,9 +12,15 @@
 //   └── data/         データ定義
 //       ├── blocks.ts      Unicode の CJK ブロック表(ビルドと実行時で共有)
 //       ├── kana.ts        読み入力の12キーフリック表
+//       ├── keyboard.ts   システムキーボードの見た目の設定(縦幅)
 //       ├── palettes.ts    キーボードに並べる部品
 //       └── types.ts       辞書(kanji-data.json)の型
-export { Engine } from "./engine.ts";
+export {
+  Engine,
+  SORT_MODES,
+  DEFAULT_SORT,
+  type SortMode,
+} from "./engine.ts";
 
 export {
   OPERATORS,
@@ -39,6 +45,12 @@ export {
 } from "./data/blocks.ts";
 
 export { RADICAL_PALETTE, DIFFICULT_COMPONENTS } from "./data/palettes.ts";
+
+export {
+  KEY_HEIGHTS,
+  DEFAULT_KEY_HEIGHT,
+  type KeyHeight,
+} from "./data/keyboard.ts";
 
 export {
   KANA_BACKSPACE,

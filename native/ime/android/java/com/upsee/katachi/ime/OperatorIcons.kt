@@ -20,8 +20,8 @@ object OperatorIcons {
         "OL" to Icon(rects = floatArrayOf(0.74f, 0f, 0.26f, 1f, 1f,  0f, 0f, 1f, 0.26f, 1f,  0f, 0.74f, 1f, 0.26f, 1f,  0f, 0.34f, 0.64f, 0.32f, 2f)),
         "OC" to Icon(rects = floatArrayOf(0f, 0f, 1f, 0.24f, 1f,  0f, 0.76f, 1f, 0.24f, 1f,  0f, 0f, 0.24f, 1f, 1f,  0.76f, 0f, 0.24f, 1f, 1f,  0.34f, 0.34f, 0.32f, 0.32f, 2f)),
         "XX" to Icon(rects = floatArrayOf(0f, 0.06f, 0.7f, 0.7f, 1f,  0.3f, 0.24f, 0.7f, 0.7f, 2f)),
-        "MI" to Icon(symbol = "⇄"),
-        "RO" to Icon(symbol = "↻"),
-        "SU" to Icon(symbol = "−"),
+        "MI" to Icon(symbol = "⿾"),
+        "RO" to Icon(symbol = "⿿"),
+        "SU" to Icon(symbol = "㇯"),
     )
 }

@@ -16,10 +16,9 @@ import { HandwritingPad } from "./HandwritingPad";
  * 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
  * かたちは常時表示の行に出し、タブは部品の出し分けだけに使う。
  */
-type Tab = "common" | "radical" | "search" | "draw";
+type Tab = "radical" | "search" | "draw";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "common", label: "よく使う部品" },
   { id: "radical", label: "部首・偏旁" },
   { id: "search", label: "読みでさがす" },
   { id: "draw", label: "手書き" },
@@ -38,15 +37,13 @@ export function KatachiKeyboard({
   /** 字を出力へ入れる(手書き候補のクリック)。無ければ onInsert に落とす */
   onPick?: (ch: string) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("common");
+  const [tab, setTab] = useState<Tab>("radical");
   const [showAllOps, setShowAllOps] = useState(false);
 
   const ops = useMemo(() => {
     const primary = PRIMARY_CODES.map(c => OPERATORS.find(o => o.code === c)!).filter(Boolean);
     return showAllOps ? [...primary, ...OPERATORS.filter(o => !PRIMARY_CODES.includes(o.code))] : primary;
   }, [showAllOps]);
-
-  const common = useMemo(() => engine?.commonParts(180) ?? [], [engine]);
 
   return (
     <div className="border-t border-stone-200 bg-stone-100/95 backdrop-blur dark:border-stone-800 dark:bg-stone-900/95">
@@ -96,9 +93,6 @@ export function KatachiKeyboard({
         </div>
 
         <div className="rounded-b-lg bg-white p-1.5 shadow-sm dark:bg-stone-800">
-          {tab === "common" && (
-            <PartGrid parts={common} onInsert={onInsert} empty="辞書を読み込み中…" />
-          )}
 
           {tab === "radical" && <RadicalTab onInsert={onInsert} />}
 

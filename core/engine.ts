@@ -3,7 +3,7 @@
 // 操作子の定義・字形の正規化・IDSの構文解析は core/ids/、
 // ブロック表と部品パレットは core/data/ に分けてある。
 import { CODE2IDC, isIDC, readableIds } from "./ids/operators.ts";
-import { norm, PLACEHOLDER, SOFT } from "./ids/normalize.ts";
+import { norm, SOFT } from "./ids/normalize.ts";
 import { parseNodes, toTokens, WILD, type Node } from "./ids/parse.ts";
 import { ALL_BLOCKS, blockOf, type Block } from "./data/blocks.ts";
 import type {
@@ -14,11 +14,59 @@ import type {
   Result,
 } from "./data/types.ts";
 
+/**
+ * 候補の並び順。設定で選べる。
+ *
+ * common … これまでの並び。完全一致 → 学年 → 使用頻度で、KANJIDIC2 に無い
+ *          拡張漢字は必ず後ろ(Engine#score)。文章の中の字を出すときはこちら
+ * near   … 打ったかたちに近い順。**打った部品のほかに余分な部品が少ない字**を
+ *          先に出す。ぴったりの字が拡張漢字でも先頭に来るので、珍しい1字を
+ *          狙って出すときはこちらのほうが速い
+ *
+ * 「近い」の物差しは Engine#leafCount(再帰的に展開したときの部品の数)。
+ * 学年や頻度と違って**拡張漢字9万字にもある**情報なので、10万字ぜんぶを
+ * 同じ土俵で並べられる。
+ */
+export const SORT_MODES = [
+  {
+    key: "common",
+    label: "よく使う順",
+    note: "学年・使用頻度の高い字から。ふだんの文章で使う字を出すとき",
+  },
+  {
+    key: "near",
+    label: "かたちが近い順",
+    note: "打った形に余分の少ない字から。珍しい字を狙って出すとき",
+  },
+] as const;
+
+export type SortMode = (typeof SORT_MODES)[number]["key"];
+
+export const DEFAULT_SORT: SortMode = "common";
+
+/** 「近い順」で余分な部品1つぶんの重み。素点の最大(2,827,000)より大きくする */
+const NEAR_STEP = 10000000;
+
+/** 余分の数え上げの頭打ち。Kotlin/Swift 側の Int32 を溢れさせないため */
+const NEAR_MAX = 99;
+
 export class Engine {
   private chars = new Map<string, CharMeta>();
   private decompMap = new Map<string, string>(); // 全分解(候補字+部品)
   private treeCache = new Map<string, Node | null>();
   private closureCache = new Map<string, Set<string>>();
+  private leafCountCache = new Map<string, number>();
+
+  /**
+   * 直前の検索の**全件**。ページ送りのために覚えておく。
+   *
+   * 候補はページに分けて全部見せるが、1ページめくるたびに10万字を走査し直すと
+   * 数十〜数百ms かかって「めくる」感じにならない。入力と並び順が同じあいだは、
+   * 切り出す位置を変えるだけで返す。持つのは1件だけ(直前の検索)。
+   */
+  private lastKey = "";
+  private lastAll: Result[] = [];
+  private lastMode = "empty";
 
   constructor(raw: RawData) {
     for (const [
@@ -168,9 +216,38 @@ export class Engine {
     return out;
   }
 
-  search(input: string, limit = 200): { results: Result[]; mode: string } {
+  /**
+   * 候補を1ページぶん返す。`total` は絞り込みの全件数で、UI はこれを見て
+   * ページを分ける(offset を動かして次のページを取る)。
+   */
+  search(
+    input: string,
+    limit = 200,
+    sort: SortMode = DEFAULT_SORT,
+    offset = 0,
+  ): { results: Result[]; mode: string; total: number } {
     const compiled = Engine.compile(input);
-    if (!compiled) return { results: [], mode: "empty" };
+    if (!compiled) return { results: [], mode: "empty", total: 0 };
+    const key = `${compiled}\u0000${sort}`;
+    if (key !== this.lastKey) {
+      const found = this.searchAll(compiled, sort);
+      this.lastKey = key;
+      this.lastAll = found.results;
+      this.lastMode = found.mode;
+    }
+    const from = Math.max(0, offset);
+    return {
+      results: this.lastAll.slice(from, from + limit),
+      mode: this.lastMode,
+      total: this.lastAll.length,
+    };
+  }
+
+  /** 絞り込みの本体。全件を並べ替えて返す(切り出しは search がやる) */
+  private searchAll(
+    compiled: string,
+    sort: SortMode,
+  ): { results: Result[]; mode: string } {
     const nodes = parseNodes(toTokens(compiled));
     if (!nodes.length) return { results: [], mode: "empty" };
 
@@ -185,8 +262,11 @@ export class Engine {
         const m = this.match(first, t);
         if (m) results.push({ ch, exact: m === 2, meta });
       }
-      results.sort((a, b) => this.score(a) - this.score(b));
-      return { results: results.slice(0, limit), mode: "structure" };
+      const asked = this.askedLeaves(first);
+      results.sort(
+        (a, b) => this.sortKey(a, sort, asked) - this.sortKey(b, sort, asked),
+      );
+      return { results, mode: "structure" };
     }
 
     // 部品包含検索(操作子なし)
@@ -200,8 +280,60 @@ export class Engine {
       if (tokens.every((t) => cl.has(t)))
         results.push({ ch, exact: false, meta });
     }
-    results.sort((a, b) => this.score(a) - this.score(b));
-    return { results: results.slice(0, limit), mode: "parts" };
+    const asked = tokens.reduce((n, t) => n + this.leafCount(t), 0);
+    results.sort(
+      (a, b) => this.sortKey(a, sort, asked) - this.sortKey(b, sort, asked),
+    );
+    return { results, mode: "parts" };
+  }
+
+  /**
+   * 並べ替えの鍵。「よく使う順」は素点そのまま、「かたちが近い順」は
+   * **打った部品のほかに余分な部品がいくつあるか**を先に見て、同じ数のなかを
+   * 素点で並べる(＝同じくらい近い字なら、よく使う字が先)。
+   */
+  private sortKey(r: Result, sort: SortMode, asked: number): number {
+    const s = this.score(r);
+    if (sort !== "near") return s;
+    const extra = Math.min(NEAR_MAX, Math.max(0, this.leafCount(r.ch) - asked));
+    return extra * NEAR_STEP + s;
+  }
+
+  /** 入力が求めている部品の数。? は数えない(埋まるぶんは「余分」として効く) */
+  private askedLeaves(n: Node): number {
+    if (typeof n === "string") return n === WILD ? 0 : this.leafCount(n);
+    let k = 0;
+    for (const c of n.kids) k += this.askedLeaves(c);
+    return k;
+  }
+
+  /**
+   * 再帰的に展開したときの部品(葉)の数＝字の複雑さ。「近い順」の物差し。
+   * 分解を持たない字は1つ。循環しても止まるよう、先に1を入れてから数える。
+   *
+   * 学年や頻度と違って**拡張漢字9万字にもある**情報なので、10万字ぜんぶを
+   * 同じ土俵で並べられる。並び順の検算に使えるよう公開している。
+   */
+  leafCount(ch: string, depth = 0): number {
+    const c = norm(ch);
+    const hit = this.leafCountCache.get(c);
+    if (hit !== undefined) return hit;
+    const ids = this.decompMap.get(c);
+    if (!ids) {
+      this.leafCountCache.set(c, 1);
+      return 1;
+    }
+    if (depth > 12) return 1; // 深さ依存なので覚えない
+    this.leafCountCache.set(c, 1); // 循環ガード(先に登録)
+    let n = 0;
+    for (const t of toTokens(ids)) {
+      if (isIDC(t)) continue;
+      const k = norm(t);
+      n += k === c ? 1 : this.leafCount(k, depth + 1);
+    }
+    const v = n || 1;
+    this.leafCountCache.set(c, v);
+    return v;
   }
 
   private score(r: Result): number {
@@ -220,29 +352,6 @@ export class Engine {
   meta(ch: string): CharMeta | undefined {
     return this.chars.get(ch);
   }
-
-  // 辞書内で「何字の構成要素になっているか」の多い順に部品を返す。
-  // スマホのオンスクリーン部品パレット用(OSキーボードで打てない部品もここから入る)。
-  // 数えるのは KANJIDIC2 収録字だけ。拡張漢字9万字まで数えると簡体字の部品が
-  // 上位を占めてしまい、日本語入力のパレットとして使いものにならなくなる。
-  commonParts(limit = 150): string[] {
-    if (!this.commonPartsCache) {
-      const count = new Map<string, number>();
-      for (const [ch, meta] of this.chars) {
-        if (!meta.ids || meta.ext) continue;
-        for (const t of toTokens(meta.ids)) {
-          if (isIDC(t) || t === ch || PLACEHOLDER.test(t)) continue;
-          count.set(t, (count.get(t) ?? 0) + 1);
-        }
-      }
-      this.commonPartsCache = [...count]
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([ch]) => ch);
-    }
-    return this.commonPartsCache.slice(0, limit);
-  }
-
-  private commonPartsCache: string[] | null = null;
 
   // 表示用: 1段ずつ分解を展開した文字列リスト(例: 課 → [⿰言果, 果=⿱田木])
   decompose(ch: string, maxLines = 6): string[] {

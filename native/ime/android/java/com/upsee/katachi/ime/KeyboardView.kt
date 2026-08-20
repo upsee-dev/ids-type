@@ -33,7 +33,7 @@ import kotlin.concurrent.thread
  *   [ 送る: 明 ]                  [取消] [送る]
  *   [ 候補: 明 朝 晴 …                          ]
  *   [ かたち: 左右 上下 …                        ]
- *   [ よく使う部品 | 部首・偏旁 |          読み ]
+ *   [ 部首・偏旁 |            読み | 手書き ]
  *   [ 部品の並び / 読みのフリック面               ]
  *
  * 流れは **組む → 選ぶ → 送る → 戻る**。候補をタップしても入るのは「送る欄」までで、
@@ -79,21 +79,16 @@ class KeyboardView(context: Context, private val host: Host) :
         fun recreateKeyboard()
     }
 
-    /**
-     * 部品パレットの種類。**かたち(操作子)はタブに含めない**。
-     * 「⿰の左右」を選んでから部品を2つ選ぶ、という打ち方をするので、
-     * かたちと部品が別タブにあると1字打つたびに往復させられる。
-     * かたちは候補の下に常時出しておき、タブは部品の出し分けだけに使う。
-     *
-     * 読みのかな面もタブにしない。タブにするとかたちの行も候補も引っ込んでしまい、
-     * 「〈左右〉→ 日 → 月」の途中で部品を1つ読みから出したいだけなのに、
-     * 面ごと往復させられる。かな面は**パレットの上に重ねる出し入れ**にしてある。
-     */
-    private enum class Tab { COMMON, RADICAL }
 
     private companion object {
         /** ⌫長押しの連射間隔。標準のキーボードと同じくらいの速さ */
         const val REPEAT_INTERVAL_MS = 60L
+
+        /**
+         * 候補1ページの件数。部品1つで引くと数千件出るので、1行に全部並べると
+         * キーボードが出るまで固まる。ページに分けて**全件たどれる**ようにしてある。
+         */
+        const val CAND_PAGE = 60
 
         /** 連射中に音を鳴らす頻度。毎回鳴らすと「ジジジ」と潰れて聞こえる */
         const val SOUND_EVERY_N_REPEATS = 3
@@ -143,11 +138,9 @@ class KeyboardView(context: Context, private val host: Host) :
     private val matchParent = ViewGroup.LayoutParams.MATCH_PARENT
 
     private var tabViews: List<TextView> = emptyList()
-    private var tab = Tab.COMMON
     private var strokeGroup = "common"
     private var searchSeq = 0
     private var readingSeq = 0
-    private var cachedCommon: List<String>? = null
 
     /** 棚(履歴・お気に入り)の開き方。閉じているときは高さを持たない */
     private enum class Shelf { NONE, HISTORY, FAVORITES }
@@ -189,6 +182,12 @@ class KeyboardView(context: Context, private val host: Host) :
 
     private val composingLabel: TextView
     private val candidateRow: LinearLayout
+
+    /** 候補の横スクロール。ページをめくったら先頭へ戻す */
+    private val candScroll: HorizontalScrollView
+
+    /** いま何ページめの候補を出しているか(0始まり) */
+    private var candPage = 0
     private val keyArea: LinearLayout
     private val keyScroll: ScrollView
     private val strokeRow: HorizontalScrollView
@@ -214,6 +213,29 @@ class KeyboardView(context: Context, private val host: Host) :
 
     private val extFont1: Typeface by lazy { loadFont("KatachiExt1") }
     private val extFont2: Typeface by lazy { loadFont("KatachiExt2") }
+
+    /**
+     * 同梱フォントを読み終わったか。読み込みは21MBあって数百ミリ秒かかるので、
+     * **キーボードを組み立てている最中に fontFor を呼んではいけない**
+     * (by lazy がその場で読みに行き、キーボードが出るまで固まる)。
+     * 裏のスレッドが読み終えてから true にして、そこで組み直す。
+     */
+    private var fontsReady = false
+
+    /**
+     * アイコンのフォント。RNアプリが入れている Ionicons を**同じAPKの assets から
+     * 借りる**(fonts/Ionicons.ttf。@react-native-vector-icons/ionicons が置く)。
+     * キーボードのためだけに同じフォントをもう1部積むのは無駄なので、
+     * 拡張漢字フォントと同じ考え方で1部を共有する。
+     * 読めなかったときは日本語のラベルに落とすので、フォントが消えても意味は伝わる。
+     *
+     * **init より前に置くこと**。道具の帯(buildToolRow)は init から組み立てるので、
+     * この宣言が init より後ろにあると by lazy の受け皿がまだ null で、
+     * キーボードを出した瞬間に NPE で落ちる(= 入力方式は選べるのに画面が出ない)。
+     */
+    private val iconFont: Typeface? by lazy {
+        runCatching { Typeface.createFromAsset(context.assets, "fonts/Ionicons.ttf") }.getOrNull()
+    }
 
     /** 1字を描くフォント。どちらにも無い字は端末の標準フォント(明朝)に任せる */
     private fun fontFor(s: String): Typeface =
@@ -334,13 +356,12 @@ class KeyboardView(context: Context, private val host: Host) :
             orientation = HORIZONTAL
             setPadding(dp(6), 0, dp(6), 0)
         }
-        addView(
-            HorizontalScrollView(context).apply {
-                isHorizontalScrollBarEnabled = false
-                addView(candidateRow)
-                layoutParams = LayoutParams(matchParent, dp(52))
-            },
-        )
+        candScroll = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(candidateRow)
+            layoutParams = LayoutParams(matchParent, dp(52))
+        }
+        addView(candScroll)
 
         // ── かたち(操作子) ──
         // タブの外に出して常時表示にする。「かたち→部品→部品」と続けて打つのに
@@ -364,17 +385,15 @@ class KeyboardView(context: Context, private val host: Host) :
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), dp(2), dp(6), dp(2))
         }
+        // 部品パレットは「部首・偏旁」の1つだけ。読み・手書きの面から戻る口を
+        // 兼ねているので、タブと同じ見た目のまま置いてある
         tabViews = listOf(
-            Tab.COMMON to "よく使う部品",
-            Tab.RADICAL to "部首・偏旁",
-        ).map { (t, label) ->
-            tabButton(label) {
-                tab = t
+            tabButton("部首・偏旁") {
                 kanaOpen = false
                 hwOpen = false
                 rebuildKeys()
-            }.also { tabs.addView(it) }
-        }
+            }.also { tabs.addView(it) },
+        )
         // パレットに無い部品を読みから出すための面。タブではなく出し入れなので、
         // 出しても消してもかたちの行・候補・組み立て中の表示はそのまま残る。
         // 手書きも同じ扱い(読みも部品の見当もつかない字は、書いて引く)
@@ -425,7 +444,9 @@ class KeyboardView(context: Context, private val host: Host) :
             main.post {
                 // 入力中の表示は1字ずつ分けられないので、部品を多く含む1枚目を当てる。
                 // このフォントに無い字(かな・常用漢字)は OS が標準フォントで描く
+                fontsReady = true
                 composingLabel.typeface = loaded
+                buildOperators() // 鏡映・回転・除去の字形は同梱フォントで描く
                 rebuildKeys()
             }
         }
@@ -433,9 +454,15 @@ class KeyboardView(context: Context, private val host: Host) :
 
     // ---- サービスから呼ばれる ----
 
+    /** アプリで縦幅の設定が変わっているかもしれないので、面の高さを当て直す */
+    fun refreshHeight() {
+        val h = faceHeight()
+        if (keyScroll.layoutParams.height == h) return
+        keyScroll.layoutParams = LayoutParams(matchParent, h)
+        requestLayout()
+    }
+
     fun onDictReady() {
-        cachedCommon = null
-        if (!kanaOpen && tab == Tab.COMMON) rebuildKeys()
         runSearch()
         if (kanaOpen) runReadingSearch()
     }
@@ -580,17 +607,6 @@ class KeyboardView(context: Context, private val host: Host) :
         const val BACK = 0xF143
     }
 
-    /**
-     * アイコンのフォント。RNアプリが入れている Ionicons を**同じAPKの assets から
-     * 借りる**(fonts/Ionicons.ttf。@react-native-vector-icons/ionicons が置く)。
-     * キーボードのためだけに同じフォントをもう1部積むのは無駄なので、
-     * 拡張漢字フォントと同じ考え方で1部を共有する。
-     * 読めなかったときは日本語のラベルに落とすので、フォントが消えても意味は伝わる。
-     */
-    private val iconFont: Typeface? by lazy {
-        runCatching { Typeface.createFromAsset(context.assets, "fonts/Ionicons.ttf") }.getOrNull()
-    }
-
     private fun toolButton(
         icon: Int,
         label: String,
@@ -695,16 +711,23 @@ class KeyboardView(context: Context, private val host: Host) :
 
     // ---- 候補 ----
 
-    private fun runSearch() {
+    /**
+     * 候補を引き直す。打ち直したときは1ページめに戻し、ページ送りのときだけ
+     * いまのページを保つ(resetPage=false)。
+     */
+    private fun runSearch(resetPage: Boolean = true) {
         val q = host.composingText
+        if (resetPage) candPage = 0
         val seq = ++searchSeq
         if (q.isEmpty()) {
             candidateRow.removeAllViews()
             return
         }
         // 10万字の走査は数十〜数百msかかるので UI スレッドを止めない
+        val sort = Engine.Sort.of(host.store.sortMode())
+        val from = candPage * CAND_PAGE
         thread(name = "katachi-search") {
-            val r = host.engine.search(q, 60)
+            val r = host.engine.search(q, CAND_PAGE, sort, from)
             main.post {
                 if (seq == searchSeq) showCandidates(r) // 古い結果は捨てる
             }
@@ -713,6 +736,11 @@ class KeyboardView(context: Context, private val host: Host) :
 
     private fun showCandidates(r: Engine.Result) {
         candidateRow.removeAllViews()
+        // ページ送り。候補は1ページ CAND_PAGE 件ずつだが、全件たどれる
+        val pages = (r.total + CAND_PAGE - 1) / CAND_PAGE
+        if (candPage > 0) {
+            candidateRow.addView(pagerChip("◂ 前の${CAND_PAGE}件") { turnPage(-1) })
+        }
         if (r.hits.isEmpty()) {
             candidateRow.addView(
                 TextView(context).apply {
@@ -752,7 +780,48 @@ class KeyboardView(context: Context, private val host: Host) :
                 },
             )
         }
+        if (pages > 1) {
+            if (candPage < pages - 1) {
+                candidateRow.addView(pagerChip("次の${CAND_PAGE}件 ▸") { turnPage(1) })
+            }
+            // いま何ページめか。押せないことが分かるよう枠を出さない
+            candidateRow.addView(
+                TextView(context).apply {
+                    text = "${candPage + 1}/$pages"
+                    setTextColor(colSub)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                    gravity = Gravity.CENTER
+                    setPadding(dp(8), dp(4), dp(8), dp(4))
+                    layoutParams = LinearLayout.LayoutParams(wrap, dp(44))
+                },
+            )
+        }
     }
+
+    /**
+     * ページを1つ動かす。候補の先頭まで巻き戻してから引き直す
+     * (前のページの右端に居たまま次のページが出ると、どこを見ているのか分からない)。
+     */
+    private fun turnPage(d: Int) {
+        candPage = (candPage + d).coerceAtLeast(0)
+        candScroll.scrollTo(0, 0)
+        runSearch(resetPage = false)
+    }
+
+    /** ページ送りのキー。候補と間違えて押さないよう、字を小さく色も落とす */
+    private fun pagerChip(label: String, onTap: () -> Unit): View =
+        TextView(context).apply {
+            text = label
+            setTextColor(colAccent)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            gravity = Gravity.CENTER
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = keyBg(Color.TRANSPARENT, colAccent)
+            isClickable = true
+            setOnClickListener { onTap() }
+            feedbackOnPress()
+            layoutParams = LinearLayout.LayoutParams(wrap, dp(44)).apply { marginEnd = dp(4) }
+        }
 
     // ---- キーの並び ----
 
@@ -783,7 +852,8 @@ class KeyboardView(context: Context, private val host: Host) :
 
     /**
      * かたちの並び。よく使う順(PRIMARY_CODES)を先頭にして横スクロールで全部出す。
-     * IDC文字(⿰⿱⿴…)は端末のフォントで豆腐になるので日本語ラベルで描く。
+     * 絵は端末のフォントに頼らない(矩形で描くか、同梱フォントの字形を描く)。
+     * 名前は IDC文字ではなく日本語ラベル。
      */
     private fun buildOperators() {
         opInner.removeAllViews()
@@ -794,17 +864,21 @@ class KeyboardView(context: Context, private val host: Host) :
             val icon = OperatorIcons.ALL[op.code]
             opInner.addView(
                 TextView(context).apply {
-                    // アプリ版と同じ配置図を矩形で描く。図が無い操作子(⇄ ↻ −)だけ
-                    // 記号を1行目に出す
-                    if (icon?.rects != null) {
-                        val d = OperatorIconDrawable(icon, colText, dp(20))
+                    // アプリ版と同じ配置図を矩形で描く。配置図を持たない鏡映・回転・
+                    // 除去は IDC の字形(⿾⿿㇯)で、同梱フォントを当てて同じ大きさに
+                    // 描く(端末の標準フォントには無い字なので fontFor が要る)
+                    if (icon != null) {
+                        val d = OperatorIconDrawable(
+                            icon, colText, dp(20),
+                            // フォントを読み終わるまでは絵を出さない(読みに行くと固まる)。
+                            // 読み終わったところで buildOperators がもう一度走る
+                            icon.symbol?.takeIf { fontsReady }?.let { fontFor(it) },
+                        )
                         d.setBounds(0, 0, dp(20), dp(20))
                         setCompoundDrawables(null, d, null, null)
                         compoundDrawablePadding = dp(2)
-                        text = op.label
-                    } else {
-                        text = icon?.symbol?.let { "$it\n${op.label}" } ?: op.label
                     }
+                    text = op.label
                     setTextColor(colSub)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
                     gravity = Gravity.CENTER
@@ -823,12 +897,11 @@ class KeyboardView(context: Context, private val host: Host) :
 
     private fun rebuildKeys() {
         val faceOpen = kanaOpen || hwOpen
-        tabViews.forEachIndexed { i, v ->
-            val active = !faceOpen && i == tab.ordinal
-            v.setTextColor(if (active) colAccent else colSub)
+        for (v in tabViews) {
+            v.setTextColor(if (!faceOpen) colAccent else colSub)
             v.background = keyBg(
-                if (active) colCard else Color.TRANSPARENT,
-                if (active) colBorder else Color.TRANSPARENT,
+                if (!faceOpen) colCard else Color.TRANSPARENT,
+                if (!faceOpen) colBorder else Color.TRANSPARENT,
             )
         }
         // 読み・手書きの面を出しているあいだ、部品パレットのタブは効いていない
@@ -839,8 +912,7 @@ class KeyboardView(context: Context, private val host: Host) :
                 if (on) colAccent else colBorder,
             )
         }
-        strokeRow.visibility =
-            if (!faceOpen && tab == Tab.RADICAL) View.VISIBLE else View.GONE
+        strokeRow.visibility = if (!faceOpen) View.VISIBLE else View.GONE
         keyArea.removeAllViews()
         readingLabel = null
         readingHits = null
@@ -860,30 +932,12 @@ class KeyboardView(context: Context, private val host: Host) :
             return
         }
 
-        when (tab) {
-            Tab.COMMON -> {
-                val parts = commonParts()
-                if (parts.isEmpty()) {
-                    keyArea.addView(
-                        TextView(context).apply {
-                            text = "辞書を読み込み中…"
-                            setTextColor(colSub)
-                            setPadding(dp(10), dp(20), dp(10), 0)
-                        },
-                    )
-                } else {
-                    grid(parts.size, 8) { i -> keyButton(parts[i], 20f) { host.insert(parts[i]) } }
-                }
-            }
-            Tab.RADICAL -> {
-                val parts = if (strokeGroup == "common") {
-                    Ids.tokens(Palettes.RADICAL)
-                } else {
-                    Ids.tokens(Palettes.DIFFICULT.first { it.strokes == strokeGroup }.parts)
-                }
-                grid(parts.size, 8) { i -> keyButton(parts[i], 20f) { host.insert(parts[i]) } }
-            }
+        val parts = if (strokeGroup == "common") {
+            Ids.tokens(Palettes.RADICAL)
+        } else {
+            Ids.tokens(Palettes.DIFFICULT.first { it.strokes == strokeGroup }.parts)
         }
+        grid(parts.size, 8) { i -> keyButton(parts[i], 20f) { host.insert(parts[i]) } }
     }
 
     /**
@@ -897,31 +951,30 @@ class KeyboardView(context: Context, private val host: Host) :
     private fun faceHeight(): Int {
         val dm = resources.displayMetrics
         val screenDp = dm.heightPixels / dm.density
-        val cap = (screenDp * 0.62f - CHROME_DP).toInt()
-        val want = if (kanaOpen) 268 else if (hwOpen) 252 else 168
+        val h = Height.of(host.store.heightMode())
+        val cap = (screenDp * h.screenMax - CHROME_DP).toInt()
+        val want = ((if (kanaOpen) 268 else if (hwOpen) 252 else 168) * h.scale).toInt()
         return dp(want.coerceAtMost(cap).coerceAtLeast(140))
     }
 
-    /** 辞書内で構成要素として多く出てくる部品。日本語の字だけで数える */
-    private fun commonParts(): List<String> {
-        cachedCommon?.let { return it }
-        if (host.dict.jaCount == 0) return emptyList()
-        val count = HashMap<String, Int>(4096)
-        for (i in 0 until host.dict.jaCount) {
-            val ids = host.dict.ids[i]
-            if (ids.isEmpty()) continue
-            for (t in Ids.tokens(ids)) {
-                if (t.length == 1 && (Ids.isIdc(t[0]) || Ids.isPlaceholder(t[0]))) continue
-                if (t == host.dict.chars[i]) continue
-                count[t] = (count[t] ?: 0) + 1
-            }
+    /**
+     * キーボードの縦幅(アプリの設定画面で選ぶ)。打鍵の面だけを伸ばす。
+     * 上の帯(組み立て中・送る・候補・かたち・タブ)は打つための場所ではないので
+     * 広げても意味がなく、伸ばすのは指が触る面だけにしてある。
+     *
+     * scale … 面の高さの倍率 / screenMax … キーボード全体が画面に占めてよい割合。
+     * 倍率だけ上げても頭打ち(cap)に引っかかるので、割合も一緒に上げる。
+     * キーは core/data/keyboard.ts の KEY_HEIGHTS と同じ。
+     */
+    private enum class Height(val key: String, val scale: Float, val screenMax: Float) {
+        SMALL("small", 1.0f, 0.62f),
+        MEDIUM("medium", 1.22f, 0.70f),
+        LARGE("large", 1.45f, 0.78f),
+        ;
+
+        companion object {
+            fun of(key: String?): Height = entries.firstOrNull { it.key == key } ?: SMALL
         }
-        val out = count.entries
-            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
-            .take(120)
-            .map { it.key }
-        cachedCommon = out
-        return out
     }
 
     // ---- 読みでさがす ----

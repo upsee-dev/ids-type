@@ -24,6 +24,12 @@ struct SharedStore {
     private static let historyKey = "katachi.history"
     private static let favoritesKey = "katachi.favorites"
     private static let pendingKey = "katachi.pending"
+
+    /// 候補の並び順。アプリの設定画面(src/prefs.ts)が書き、ここは読むだけ
+    private static let sortKey = "katachi.order"
+
+    /// キーボードの縦幅。同じくアプリの設定画面が書く
+    private static let heightKey = "katachi.height"
     private static let probeKey = "katachi.sharedProbe"
 
     /// 履歴の上限。アプリ側(HISTORY_LIMIT)と同じ
@@ -73,6 +79,14 @@ struct SharedStore {
         else { return }
         defaults.set(raw, forKey: key)
     }
+
+    /// 候補の並び順("common" / "near")。値は core/engine.ts の SORT_MODES と同じ。
+    /// キーボードに設定画面は無いので、アプリで選んだものをここで読むだけにする
+    var sortMode: String { defaults.string(forKey: Self.sortKey) ?? "common" }
+
+    /// キーボードの縦幅("small" / "medium" / "large")。
+    /// 値は core/data/keyboard.ts の KEY_HEIGHTS と同じ
+    var heightMode: String { defaults.string(forKey: Self.heightKey) ?? "small" }
 
     var history: [String] { read(Self.historyKey) }
     var favorites: [String] { read(Self.favoritesKey) }

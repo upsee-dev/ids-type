@@ -1,5 +1,11 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { THEMES } from "./engine";
+import {
+  KEY_HEIGHTS,
+  SORT_MODES,
+  THEMES,
+  type KeyHeight,
+  type SortMode,
+} from "./engine";
 import { AUTO_THEME, type Theme } from "./theme";
 import { haptic, HAPTIC_LEVELS, type HapticLevel } from "./feedback";
 import { ADS_ENABLED } from "./purchases";
@@ -19,6 +25,10 @@ export function Settings({
   onPickTheme,
   hapticLevel,
   onPickHaptic,
+  sortMode,
+  onPickSort,
+  keyHeight,
+  onPickHeight,
   historyCount,
   favoriteCount,
   onClearHistory,
@@ -31,6 +41,10 @@ export function Settings({
   onPickTheme: (key: string) => void;
   hapticLevel: HapticLevel;
   onPickHaptic: (level: HapticLevel) => void;
+  sortMode: SortMode;
+  onPickSort: (mode: SortMode) => void;
+  keyHeight: KeyHeight;
+  onPickHeight: (h: KeyHeight) => void;
   historyCount: number;
   favoriteCount: number;
   onClearHistory: () => void;
@@ -76,6 +90,46 @@ export function Settings({
             </View>
             <Note theme={t}>
               「おまかせ」は端末のライト／ダーク設定に合わせて切り替わります。
+            </Note>
+          </Section>
+
+          <Section title="候補の並び順" theme={t}>
+            <View style={s.wrap}>
+              {SORT_MODES.map(m => (
+                <Chip
+                  key={m.key}
+                  theme={t}
+                  active={sortMode === m.key}
+                  label={m.label}
+                  onPress={() => onPickSort(m.key)}
+                />
+              ))}
+            </View>
+            <Note theme={t}>
+              {SORT_MODES.find(m => m.key === sortMode)?.note}
+            </Note>
+            <Note theme={t}>
+              システムキーボードでも同じ順になります。
+            </Note>
+          </Section>
+
+          <Section title="キーボードの縦幅" theme={t}>
+            <View style={s.wrap}>
+              {KEY_HEIGHTS.map(h => (
+                <Chip
+                  key={h.key}
+                  theme={t}
+                  active={keyHeight === h.key}
+                  label={h.label}
+                  onPress={() => onPickHeight(h.key)}
+                />
+              ))}
+            </View>
+            <Note theme={t}>
+              {KEY_HEIGHTS.find(h => h.key === keyHeight)?.note}
+            </Note>
+            <Note theme={t}>
+              システムキーボード（他のアプリで使うほう）の高さです。次に開いたときから変わります。
             </Note>
           </Section>
 

@@ -11,10 +11,19 @@ package com.upsee.katachi.ime
  */
 class Engine(private val dict: Dict) {
 
+    private companion object {
+        /** 「近い順」で余分な部品1つぶんの重み。素点の最大(2,827,000)より大きくする */
+        const val NEAR_STEP = 10_000_000
+
+        /** 余分の数え上げの頭打ち。Int を溢れさせないため */
+        const val NEAR_MAX = 99
+    }
+
     data class Hit(val index: Int, val ch: String, val exact: Boolean)
 
     private val treeCache = HashMap<String, Ids.Node?>(4096)
     private val closureCache = HashMap<String, Set<String>>(4096)
+    private val leafCountCache = HashMap<String, Int>(4096)
 
     // ---- 分解木 ----
 
@@ -110,17 +119,106 @@ class Engine(private val dict: Dict) {
         return s
     }
 
+    /**
+     * 候補の並び順。キーは core/engine.ts の SORT_MODES と同じ文字列で、
+     * アプリの設定画面が共有領域(Store.SORT)に書いたものをそのまま受ける。
+     */
+    enum class Sort {
+        /** これまでの並び。完全一致 → 学年 → 使用頻度(拡張漢字は必ず後ろ) */
+        COMMON,
+
+        /** 打ったかたちに近い順。余分な部品が少ない字を先に */
+        NEAR,
+        ;
+
+        companion object {
+            fun of(key: String?): Sort = if (key == "near") NEAR else COMMON
+        }
+    }
+
+    /**
+     * 並べ替えの鍵。NEAR は**打った部品のほかに余分な部品がいくつあるか**を
+     * 先に見て、同じ数のなかを素点で並べる(同じくらい近いなら、よく使う字が先)。
+     */
+    private fun sortKey(h: Hit, sort: Sort, asked: Int): Int {
+        val s = score(h.index, h.exact)
+        if (sort != Sort.NEAR) return s
+        val extra = (leafCount(h.ch) - asked).coerceIn(0, NEAR_MAX)
+        return extra * NEAR_STEP + s
+    }
+
+    /** 入力が求めている部品の数。? は数えない(埋まるぶんは「余分」として効く) */
+    private fun askedLeaves(n: Ids.Node): Int = when (n) {
+        is Ids.Node.Leaf -> if (n.ch == Ids.WILD.toString()) 0 else leafCount(n.ch)
+        is Ids.Node.Op -> n.kids.sumOf { askedLeaves(it) }
+    }
+
+    /**
+     * 再帰的に展開したときの部品(葉)の数＝字の複雑さ。「近い順」の物差し。
+     * 分解を持たない字は1つ。循環しても止まるよう、先に1を入れてから数える。
+     */
+    private fun leafCount(ch: String, depth: Int = 0): Int {
+        val c = Ids.norm(ch)
+        leafCountCache[c]?.let { return it }
+        val ids = dict.idsOf(c)
+        if (ids.isNullOrEmpty()) {
+            leafCountCache[c] = 1
+            return 1
+        }
+        if (depth > 12) return 1 // 深さ依存なので覚えない
+        leafCountCache[c] = 1 // 循環ガード。先に登録しておく
+        var n = 0
+        for (t in Ids.tokens(ids)) {
+            if (t.length == 1 && Ids.isIdc(t[0])) continue
+            val k = Ids.norm(t)
+            n += if (k == c) 1 else leafCount(k, depth + 1)
+        }
+        val v = if (n == 0) 1 else n
+        leafCountCache[c] = v
+        return v
+    }
+
     enum class Mode { EMPTY, STRUCTURE, PARTS }
 
-    data class Result(val hits: List<Hit>, val mode: Mode)
+    /** hits は1ページぶん。total は絞り込みの全件数(UI はこれでページを分ける) */
+    data class Result(val hits: List<Hit>, val mode: Mode, val total: Int = 0)
 
-    /** 入力文字列から候補を返す */
-    fun search(input: String, limit: Int = 200): Result {
+    /**
+     * 直前の検索の**全件**。ページ送りのために覚えておく。
+     * 1ページめくるたびに10万字を走査し直すと数十〜数百ms かかるため。
+     * 検索は打鍵ごとの別スレッドで走るので、3つの値をまとめて1つの参照で
+     * 差し替える(途中の状態が見えないようにする)。
+     */
+    private class Cached(val key: String, val hits: List<Hit>, val mode: Mode)
+
+    @Volatile
+    private var cache: Cached? = null
+
+    /**
+     * 候補を1ページぶん返す。
+     * offset を動かすと同じ絞り込みの続きが取れる(走査はやり直さない)。
+     */
+    fun search(
+        input: String,
+        limit: Int = 200,
+        sort: Sort = Sort.COMMON,
+        offset: Int = 0,
+    ): Result {
         val compiled = Ids.compile(input)
-        if (compiled.isEmpty()) return Result(emptyList(), Mode.EMPTY)
+        if (compiled.isEmpty()) return Result(emptyList(), Mode.EMPTY, 0)
+        val key = "$compiled\u0000$sort"
+        val c = cache?.takeIf { it.key == key } ?: searchAll(compiled, sort).let {
+            Cached(key, it.hits, it.mode).also { made -> cache = made }
+        }
+        val from = offset.coerceIn(0, c.hits.size)
+        val to = (from + limit).coerceIn(from, c.hits.size)
+        return Result(c.hits.subList(from, to), c.mode, c.hits.size)
+    }
 
+    /** 絞り込みの本体。全件を並べ替えて返す(切り出しは search がやる) */
+    private fun searchAll(compiled: String, sort: Sort): Result {
         val hasIdc = compiled.any { Ids.isIdc(it) }
-        val hits = ArrayList<Hit>(limit * 2)
+        val hits = ArrayList<Hit>(512)
 
         if (hasIdc) {
             val q = Ids.parse(compiled) ?: return Result(emptyList(), Mode.EMPTY)
@@ -131,8 +229,9 @@ class Engine(private val dict: Dict) {
                 val m = match(q, t)
                 if (m != 0) hits.add(Hit(i, dict.chars[i], m == 2))
             }
-            hits.sortBy { score(it.index, it.exact) }
-            return Result(hits.take(limit), Mode.STRUCTURE)
+            val asked = askedLeaves(q)
+            hits.sortBy { sortKey(it, sort, asked) }
+            return Result(hits, Mode.STRUCTURE, hits.size)
         }
 
         // 部品包含検索(操作子なし)
@@ -146,8 +245,9 @@ class Engine(private val dict: Dict) {
             val cl = closure(ch)
             if (want.all { cl.contains(it) }) hits.add(Hit(i, ch, false))
         }
-        hits.sortBy { score(it.index, it.exact) }
-        return Result(hits.take(limit), Mode.PARTS)
+        val asked = want.sumOf { leafCount(it) }
+        hits.sortBy { sortKey(it, sort, asked) }
+        return Result(hits, Mode.PARTS, hits.size)
     }
 
     /**

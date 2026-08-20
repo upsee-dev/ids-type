@@ -45,8 +45,13 @@ export const PRIMARY_CODES = [
   "XX",
 ];
 
-// 操作子アイコンの図形定義(0..1座標)。Web=div, RN=View で同じ絵を描くための共有仕様。
+// 操作子アイコンの図形定義(0..1座標)。Web=div, RN=View, Android=Canvas,
+// iOS=CoreGraphics で同じ絵を描くための共有仕様。
 // role 1/2/3 = 第1/第2/第3要素。複数の矩形で1つの要素(かこみのL字など)を表す。
+//
+// rects を持たない操作子は symbol の字を描く。**symbol は必ず同梱フォント
+// (Plangothic の切り出し)が持つ符号位置にすること**。端末の標準フォント頼みの
+// 記号を置くと、フォントの入っていない端末で豆腐(□)になる。
 export interface IconRect {
   x: number;
   y: number;
@@ -145,9 +150,14 @@ export const OPERATOR_ICON: Record<
     ],
   },
   XX: { rects: [r(0, 0.06, 0.7, 0.7, 1), r(0.3, 0.24, 0.7, 0.7, 2)] },
-  MI: { symbol: "⇄" },
-  RO: { symbol: "↻" },
-  SU: { symbol: "−" },
+  // 「置き方」ではなく「1つの部品をどうするか」なので、矩形の配置図には描けない。
+  // ここだけは IDC の字形そのものを出す。⿾⿿㇯ は端末の標準フォントには
+  // まず無いが、**同梱の Plangothic(KatachiExt1)が持っている**ので、拡張漢字と
+  // 同じく fontFor() でそのフォントを当てて描けばどの端末でも豆腐にならない
+  // (端末フォント頼みだった ⇄ ↻ − から差し替えた)。
+  MI: { symbol: "⿾" },
+  RO: { symbol: "⿿" },
+  SU: { symbol: "㇯" },
 };
 
 function r(

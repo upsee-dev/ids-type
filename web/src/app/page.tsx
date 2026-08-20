@@ -9,13 +9,22 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
-import { type Result } from "@/lib/engine";
+import { DEFAULT_SORT, SORT_MODES, type Result, type SortMode } from "@/lib/engine";
 import { useEngine } from "@/lib/useEngine";
 import { DICT_ERROR, DICT_LOADING, SAMPLES } from "@/lib/labels";
 import { KatachiKeyboard } from "@/components/KatachiKeyboard";
 import { OperatorIcon } from "@/components/OperatorIcon";
 import { KanjiGrid } from "@/components/KanjiGrid";
 import { CharDetail } from "@/components/CharDetail";
+
+/** 候補の並び順の保存先(この画面だけの設定なので localStorage でよい) */
+const SORT_STORAGE_KEY = "katachi.order";
+
+/**
+ * 候補1ページの件数。部品1つで引くと数千件出るので、全部を一度に描くと
+ * スクロールが重くなる。ページに分けて**全件たどれる**ようにしてある。
+ */
+const CAND_PAGE = 200;
 
 /** タップでフォーカスを奪わない＝ソフトキーボードを閉じさせない */
 const keepFocus = (e: React.PointerEvent) => e.preventDefault();
@@ -24,12 +33,34 @@ export default function Home() {
   const { engine, loadError } = useEngine();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[]>([]);
+  /** 絞り込みの全件数と、いま何ページめを見ているか(0始まり) */
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [mode, setMode] = useState("empty");
   const [output, setOutput] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [composing, setComposing] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  /** 候補の並び順。アプリ版と同じ2つ(SORT_MODES)。選んだものは端末に覚える */
+  const [sortMode, setSortMode] = useState<SortMode>(DEFAULT_SORT);
+  useEffect(() => {
+    const v = localStorage.getItem(SORT_STORAGE_KEY);
+    if (SORT_MODES.some((m) => m.key === v)) setSortMode(v as SortMode);
+  }, []);
+  const pageCount = Math.max(1, Math.ceil(total / CAND_PAGE));
+
+  /** ページをめくったら頭から見せる(前のページの位置に残さない) */
+  const turnPage = (d: number) => {
+    setPage((p) => Math.min(pageCount - 1, Math.max(0, p + d)));
+    window.scrollTo({ top: 0 });
+    document.querySelector("main")?.scrollTo({ top: 0 });
+  };
+
+  const pickSort = (m: SortMode) => {
+    setSortMode(m);
+    localStorage.setItem(SORT_STORAGE_KEY, m);
+  };
 
   const inputRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
@@ -69,12 +100,18 @@ export default function Home() {
   useEffect(() => {
     if (!engine || composing) return;
     const t = setTimeout(() => {
-      const found = engine.search(query);
+      const found = engine.search(query, CAND_PAGE, sortMode, page * CAND_PAGE);
       setResults(found.results);
+      setTotal(found.total);
       setMode(found.mode);
     }, 120);
     return () => clearTimeout(t);
-  }, [engine, query, composing]);
+  }, [engine, query, composing, sortMode, page]);
+
+  // 打ち直したり並び順を変えたりしたら1ページめに戻す
+  useEffect(() => {
+    setPage(0);
+  }, [query, sortMode]);
 
   // ボタン挿入後にキャレット位置を復元(常に末尾に飛ばさない)
   useLayoutEffect(() => {
@@ -295,12 +332,38 @@ export default function Home() {
           )}
 
           {engine && query && (
-            <p className="mb-1.5 text-[11px] text-stone-500 dark:text-stone-400">
-              {mode === "structure" &&
-                `構造マッチ: ${results.length}件(枠付き=完全一致)`}
-              {mode === "parts" && `部品を含む字: ${results.length}件`}
-              {mode === "empty" && "かたちか部品を入力してください"}
-            </p>
+            <div className="mb-1.5 flex items-center gap-2 text-[11px] text-stone-500 dark:text-stone-400">
+              <p className="min-w-0 flex-1 truncate">
+                {mode === "structure" &&
+                  `構造マッチ: ${total.toLocaleString()}件(枠付き=完全一致)`}
+                {mode === "parts" && `部品を含む字: ${total.toLocaleString()}件`}
+                {mode === "empty" && "かたちか部品を入力してください"}
+                {total > CAND_PAGE &&
+                  `　${(page * CAND_PAGE + 1).toLocaleString()}〜${Math.min(
+                    total,
+                    (page + 1) * CAND_PAGE,
+                  ).toLocaleString()}件目`}
+              </p>
+              {/* 候補の並び順。打ちながら切り替えられるよう候補の真上に置く */}
+              <div className="flex shrink-0 gap-1">
+                {SORT_MODES.map((m) => (
+                  <button
+                    key={m.key}
+                    onPointerDown={keepFocus}
+                    onClick={() => pickSort(m.key)}
+                    title={m.note}
+                    aria-pressed={sortMode === m.key}
+                    className={
+                      sortMode === m.key
+                        ? "rounded-full border border-indigo-400 bg-indigo-50 px-2 py-0.5 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                        : "rounded-full border border-stone-300 px-2 py-0.5 dark:border-stone-700"
+                    }
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {engine && query && mode !== "empty" && results.length === 0 && (
@@ -315,6 +378,31 @@ export default function Home() {
             onPick={pick}
             onPointerDown={keepFocus}
           />
+
+          {/* ページ送り。候補は1ページぶんずつ描くが、めくれば全件たどれる */}
+          {pageCount > 1 && (
+            <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+              <button
+                onPointerDown={keepFocus}
+                onClick={() => turnPage(-1)}
+                disabled={page === 0}
+                className="rounded-lg border border-stone-300 px-3 py-2 text-stone-600 disabled:opacity-40 dark:border-stone-700 dark:text-stone-300"
+              >
+                前の{CAND_PAGE}件
+              </button>
+              <span className="text-stone-500 dark:text-stone-400">
+                {page + 1} / {pageCount}
+              </span>
+              <button
+                onPointerDown={keepFocus}
+                onClick={() => turnPage(1)}
+                disabled={page >= pageCount - 1}
+                className="rounded-lg border border-stone-300 px-3 py-2 text-stone-600 disabled:opacity-40 dark:border-stone-700 dark:text-stone-300"
+              >
+                次の{CAND_PAGE}件
+              </button>
+            </div>
+          )}
 
           <footer className="mt-6 text-[10px] leading-relaxed text-stone-400 dark:text-stone-500">
             入力方式は zi.tools の IDS 部品入力を参考にしています。収録字は

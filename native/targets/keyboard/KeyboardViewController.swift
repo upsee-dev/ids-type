@@ -15,7 +15,7 @@ import UIKit
 ///   [ (棚) 使った字 / お気に入りの字          ]
 ///   [ 入力中のかたち ]                [⌫] [消]
 ///   [ 候補 ] [ かたち ]
-///   [ よく使う部品 | 部首・偏旁 | 読みでさがす ]
+///   [ 部首・偏旁 |          読み | 手書き ]
 ///   [ 部品の並び / 読みのフリック面            ]
 final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedback,
     FlickKanaViewDelegate, HandwritingViewDelegate
@@ -53,8 +53,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// 読みのかな面もタブにしない。タブにするとかたちの行も候補も引っ込んでしまい、
     /// 部品を1つ読みから出したいだけなのに面ごと往復させられる。
     /// かな面は**パレットと入れ替える出し入れ**にしてある
-    private enum Tab: Int { case common, radical }
-    private var currentTab: Tab = .common
 
     /// かなの面を出しているか
     private var kanaOpen = false
@@ -163,6 +161,11 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private let resumedNote = UILabel()
     private let candidateScroll = UIScrollView()
     private let candidateRow = UIStackView()
+
+    /// いま何ページめの候補を出しているか(0始まり)。
+    /// 候補は1ページ candPageSize 件ずつだが、めくれば全件たどれる
+    private var candPage = 0
+    private static let candPageSize = 60
     private let tabRow = UIStackView()
     /// 道具の帯。打つ場所ではないので線で区切って上端にまとめる
     private let toolSeparator = UIView()
@@ -199,6 +202,12 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         default: base = nil
         }
         return base?.withSize(size) ?? .systemFont(ofSize: size)
+    }
+
+    /// キーボードが出るたび。アプリで縦幅の設定を変えていることがあるので当て直す
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        applyHeight()
     }
 
     override func viewDidLoad() {
@@ -365,11 +374,12 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         tabRow.axis = .horizontal
         tabRow.spacing = 4
         tabRow.distribution = .fillEqually
-        for (i, label) in ["よく使う部品", "部首・偏旁"].enumerated() {
+        // 部品パレットは「部首・偏旁」の1つだけ。読み・手書きの面から戻る口を
+        // 兼ねているので、タブと同じ見た目のまま置いてある
+        do {
             let b = UIButton(type: .system)
-            b.setTitle(label, for: .normal)
+            b.setTitle("部首・偏旁", for: .normal)
             b.titleLabel?.font = .systemFont(ofSize: 12)
-            b.tag = i
             b.addTarget(self, action: #selector(onTab(_:)), for: .touchUpInside)
             tabRow.addArrangedSubview(b)
         }
@@ -537,7 +547,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     // MARK: - 操作
 
     @objc private func onTab(_ sender: UIButton) {
-        currentTab = Tab(rawValue: sender.tag) ?? .common
         kanaOpen = false
         hwOpen = false
         rebuildKeys()
@@ -732,18 +741,24 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     // MARK: - 候補
 
-    private func runSearch() {
+    /// 候補を引き直す。打ち直したときは1ページめに戻し、
+    /// ページ送りのときだけいまのページを保つ(resetPage: false)
+    private func runSearch(resetPage: Bool = true) {
         let q = composing
+        if resetPage { candPage = 0 }
         searchSeq += 1
         let seq = searchSeq
         guard !q.isEmpty else {
             candidateRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
             return
         }
+        // 並び順はアプリの設定画面で選ぶ(共有領域から読むだけ)
+        let sort = Engine.Sort.of(store.sortMode)
+        let from = candPage * Self.candPageSize
         // 10万字の走査は数十〜数百msかかるので UI スレッドを止めない
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let r = self.engine.search(q, limit: 60)
+            let r = self.engine.search(q, limit: Self.candPageSize, sort: sort, offset: from)
             DispatchQueue.main.async {
                 guard seq == self.searchSeq else { return }  // 古い結果は捨てる
                 self.showCandidates(r)
@@ -753,6 +768,13 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     private func showCandidates(_ r: Engine.Result) {
         candidateRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // ページ送り。候補は1ページぶんずつ出すが、めくれば全件たどれる
+        let pages = (r.total + Self.candPageSize - 1) / Self.candPageSize
+        if candPage > 0 {
+            candidateRow.addArrangedSubview(pagerChip("◂ 前の\(Self.candPageSize)件") { [weak self] in
+                self?.turnPage(-1)
+            })
+        }
         guard !r.hits.isEmpty else {
             let l = UILabel()
             l.text = dict.jaCount == 0 ? "辞書を読み込み中…" : "該当なし"
@@ -775,6 +797,40 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             addFavoriteLongPress(to: b, ch: h.ch)
             candidateRow.addArrangedSubview(b)
         }
+        if pages > 1 {
+            if candPage < pages - 1 {
+                candidateRow.addArrangedSubview(pagerChip("次の\(Self.candPageSize)件 ▸") { [weak self] in
+                    self?.turnPage(1)
+                })
+            }
+            // いま何ページめか。押せないことが分かるよう枠を出さない
+            let l = UILabel()
+            l.text = "\(candPage + 1)/\(pages)"
+            l.textColor = colSub
+            l.font = .systemFont(ofSize: 11)
+            candidateRow.addArrangedSubview(l)
+        }
+    }
+
+    /// ページを1つ動かす。候補の先頭まで巻き戻してから引き直す
+    /// (前のページの右端に居たまま次のページが出ると、どこを見ているのか分からない)
+    private func turnPage(_ d: Int) {
+        candPage = max(0, candPage + d)
+        candidateScroll.setContentOffset(.zero, animated: false)
+        runSearch(resetPage: false)
+    }
+
+    /// ページ送りのキー。候補と間違えて押さないよう、字を小さく色も落とす
+    private func pagerChip(_ label: String, _ onTap: @escaping () -> Void) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle(label, for: .normal)
+        b.titleLabel?.font = .systemFont(ofSize: 11)
+        b.setTitleColor(colAccent, for: .normal)
+        style(b, fill: .clear, stroke: colAccent)
+        b.widthAnchor.constraint(greaterThanOrEqualToConstant: 66).isActive = true
+        b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+        b.addAction(UIAction { _ in onTap() }, for: .touchUpInside)
+        return b
     }
 
     // MARK: - キーの並び
@@ -801,7 +857,8 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     }
 
     /// かたちの並び。よく使う順を先頭にして横スクロールで全部出す。
-    /// IDC文字(⿰⿱⿴…)は端末のフォントで豆腐になるので日本語ラベルで描く。
+    /// 絵は端末のフォントに頼らない(矩形で描くか、同梱フォントの字形を描く)。
+    /// 名前は IDC文字ではなく日本語ラベル。
     private func buildOperators() {
         opRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let codes = Ids.primaryCodes
@@ -810,7 +867,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             guard let op = Ids.operators.first(where: { $0.code == code }) else { continue }
             let icon = OperatorIcons.all[code]
 
-            // アプリ版と同じ配置図を矩形で描く。図が無い操作子(⇄ ↻ −)は記号を出す
+            // アプリ版と同じ配置図を矩形で描く。配置図を持たない鏡映・回転・除去は
+            // IDC の字形(⿾⿿㇯)を出す。端末の標準フォントには無い字なので、
+            // 拡張漢字と同じく同梱フォント(font(for:size:))で描く
             let label = UILabel()
             label.text = op.label
             label.font = .systemFont(ofSize: 9)
@@ -827,8 +886,8 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             } else if let sym = icon?.symbol {
                 let s = UILabel()
                 s.text = sym
-                s.font = .systemFont(ofSize: 15)
-                s.textColor = colText
+                s.font = font(for: sym, size: 18)
+                s.textColor = colText.withAlphaComponent(0.85)
                 stack.addArrangedSubview(s)
             }
             stack.addArrangedSubview(label)
@@ -863,25 +922,51 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private func applyHeight() {
         let screen = view.window?.windowScene?.screen.bounds.height
             ?? UIScreen.main.bounds.height
-        let want: CGFloat = kanaOpen ? 476 : (hwOpen ? 470 : 320)
-        minHeight?.constant = Swift.min(want, screen * 0.62)
+        let h = Height.of(store.heightMode)
+        let want: CGFloat = (kanaOpen ? 476 : (hwOpen ? 470 : 320)) * h.scale
+        minHeight?.constant = Swift.min(want, screen * h.screenMax)
+    }
+
+    /// キーボードの縦幅(アプリの設定画面で選ぶ)。
+    /// scale … 高さの倍率 / screenMax … 画面に占めてよい割合。
+    /// 倍率だけ上げても頭打ちに引っかかるので、割合も一緒に上げる。
+    /// キーは core/data/keyboard.ts の KEY_HEIGHTS と同じ。
+    private enum Height: String {
+        case small, medium, large
+
+        var scale: CGFloat {
+            switch self {
+            case .small: return 1.0
+            case .medium: return 1.15
+            case .large: return 1.3
+            }
+        }
+
+        var screenMax: CGFloat {
+            switch self {
+            case .small: return 0.62
+            case .medium: return 0.70
+            case .large: return 0.78
+            }
+        }
+
+        static func of(_ key: String?) -> Height { Height(rawValue: key ?? "") ?? .small }
     }
 
     private func rebuildKeys() {
         let faceOpen = kanaOpen || hwOpen
-        for (i, v) in tabRow.arrangedSubviews.enumerated() {
+        for v in tabRow.arrangedSubviews {
             guard let b = v as? UIButton else { continue }
             // 読み・手書きの面を出しているあいだ、部品パレットのタブは効いていない
-            let active = !faceOpen && i == currentTab.rawValue
-            b.setTitleColor(active ? colAccent : colSub, for: .normal)
-            style(b, fill: active ? colCard : .clear, stroke: active ? colBorder : .clear)
+            b.setTitleColor(!faceOpen ? colAccent : colSub, for: .normal)
+            style(b, fill: !faceOpen ? colCard : .clear, stroke: !faceOpen ? colBorder : .clear)
         }
         for (toggle, on) in [(kanaToggle, kanaOpen), (hwToggle, hwOpen)] {
             guard let toggle else { continue }
             toggle.setTitleColor(on ? themeColor { $0.onAccent } : colSub, for: .normal)
             style(toggle, fill: on ? colAccent : colCard, stroke: on ? colAccent : colBorder)
         }
-        strokeScroll.isHidden = faceOpen || currentTab != .radical
+        strokeScroll.isHidden = faceOpen
         keyArea.arrangedSubviews.forEach { $0.removeFromSuperview() }
         readingLabel = nil
         readingHits = nil
@@ -917,48 +1002,11 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         ])
         keyArea.addArrangedSubview(scroll)
 
-        switch currentTab {
-        case .common:
-            let parts = commonParts()
-            if parts.isEmpty {
-                let l = UILabel()
-                l.text = "辞書を読み込み中…"
-                l.textColor = colSub
-                grid.addArrangedSubview(l)
-            } else {
-                rows(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } },
-                     cols: 8, into: grid)
-            }
-        case .radical:
-            let parts: [String] = strokeGroup == "common"
-                ? Palettes.radical.map(String.init)
-                : (Palettes.difficult.first { $0.strokes == strokeGroup }?.parts.map(String.init) ?? [])
-            rows(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } },
-                 cols: 8, into: grid)
-        }
-    }
-
-    /// 辞書内で構成要素として多く出てくる部品。日本語の字だけで数える
-    private var cachedCommon: [String]?
-    private func commonParts() -> [String] {
-        if let c = cachedCommon { return c }
-        guard dict.jaCount > 0 else { return [] }
-        var count: [String: Int] = [:]
-        for i in 0..<dict.jaCount {
-            let ids = dict.ids(at: i)
-            if ids.isEmpty { continue }
-            let ch = dict.char(at: i)
-            for t in ids {
-                if Ids.isIdc(t) || Ids.isPlaceholder(t) { continue }
-                let s = String(t)
-                if s == ch { continue }
-                count[s, default: 0] += 1
-            }
-        }
-        let out = count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
-            .prefix(120).map(\.key)
-        cachedCommon = out
-        return out
+        let parts: [String] = strokeGroup == "common"
+            ? Palettes.radical.map(String.init)
+            : (Palettes.difficult.first { $0.strokes == strokeGroup }?.parts.map(String.init) ?? [])
+        rows(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } },
+             cols: 8, into: grid)
     }
 
     // MARK: - 読みでさがす

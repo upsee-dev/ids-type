@@ -26,10 +26,9 @@ import { haptic } from "./feedback";
  * 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
  * かたちは常時表示の行に出し、タブは部品の出し分けだけに使う。
  */
-type Tab = "common" | "radical" | "search" | "draw";
+type Tab = "radical" | "search" | "draw";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "common", label: "よく使う部品" },
   { id: "radical", label: "部首・偏旁" },
   { id: "search", label: "読み" },
   { id: "draw", label: "手書き" },
@@ -66,7 +65,7 @@ export function KatachiKeyboard({
   collapsed?: boolean;
   onExpand?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("common");
+  const [tab, setTab] = useState<Tab>("radical");
   const [showAllOps, setShowAllOps] = useState(false);
   const { width } = useWindowDimensions();
 
@@ -77,7 +76,6 @@ export function KatachiKeyboard({
       : primary;
   }, [showAllOps]);
 
-  const common = useMemo(() => engine?.commonParts(180) ?? [], [engine]);
 
   /**
    * かたち(操作子)の行。**端末のキーボードを出しているあいだも出しておく**。
@@ -215,16 +213,6 @@ export function KatachiKeyboard({
           contentContainerStyle={{ padding: SIDE_PADDING, gap: GAP }}
           keyboardShouldPersistTaps="always"
         >
-          {tab === "common" && (
-            <PartGrid
-              parts={common}
-              width={partW}
-              theme={theme}
-              onInsert={onInsert}
-              empty="辞書を読み込み中…"
-            />
-          )}
-
           {tab === "radical" && (
             <RadicalTab width={partW} theme={theme} onInsert={onInsert} />
           )}

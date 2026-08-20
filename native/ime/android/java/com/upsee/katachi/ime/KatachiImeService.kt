@@ -216,6 +216,8 @@ class KatachiImeService : InputMethodService() {
     /** キーボードが出るたび。前の続きがあれば戻す */
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        // アプリで縦幅の設定を変えていることがあるので、出すたびに当て直す
+        view?.refreshHeight()
         val p = sharedStore.loadPending() ?: return
         composing.setLength(0)
         composing.append(p.code)

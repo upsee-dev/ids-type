@@ -17,7 +17,17 @@ final class Engine {
 
     enum Mode { case empty, structure, parts }
 
+    /// hits は1ページぶん。total は絞り込みの全件数(UI はこれでページを分ける)
     struct Result {
+        let hits: [Hit]
+        let mode: Mode
+        var total: Int = 0
+    }
+
+    /// 直前の検索の**全件**。ページ送りのために覚えておく。
+    /// 1ページめくるたびに10万字を走査し直すと数十〜数百ms かかるため。
+    private struct Cached {
+        let key: String
         let hits: [Hit]
         let mode: Mode
     }
@@ -34,6 +44,14 @@ final class Engine {
     private let dict: Dict
     private var treeCache: [String: Ids.Node?] = [:]
     private var closureCache: [String: ClosureBox] = [:]
+    private var leafCountCache: [String: Int] = [:]
+    private var cache: Cached?
+
+    /// 「近い順」で余分な部品1つぶんの重み。素点の最大(2,827,000)より大きくする
+    private static let nearStep = 10_000_000
+
+    /// 余分の数え上げの頭打ち。Int を溢れさせないため
+    private static let nearMax = 99
 
     init(dict: Dict) { self.dict = dict }
 
@@ -140,14 +158,81 @@ final class Engine {
         return s
     }
 
-    /// 入力文字列から候補を返す
-    func search(_ input: String, limit: Int = 60) -> Result {
+    /// 候補の並び順。キーは core/engine.ts の SORT_MODES と同じ文字列で、
+    /// アプリの設定画面が共有領域(SharedStore.sortMode)に書いたものを受ける。
+    enum Sort {
+        /// これまでの並び。完全一致 → 学年 → 使用頻度(拡張漢字は必ず後ろ)
+        case common
+        /// 打ったかたちに近い順。余分な部品が少ない字を先に
+        case near
+
+        static func of(_ key: String?) -> Sort { key == "near" ? .near : .common }
+    }
+
+    /// 並べ替えの鍵。near は**打った部品のほかに余分な部品がいくつあるか**を
+    /// 先に見て、同じ数のなかを素点で並べる(同じくらい近いなら、よく使う字が先)。
+    private func sortKey(_ h: Hit, _ sort: Sort, _ asked: Int) -> Int {
+        let s = score(h.index, h.exact)
+        if sort != .near { return s }
+        let extra = min(Self.nearMax, max(0, leafCount(h.ch) - asked))
+        return extra * Self.nearStep + s
+    }
+
+    /// 入力が求めている部品の数。? は数えない(埋まるぶんは「余分」として効く)
+    private func askedLeaves(_ n: Ids.Node) -> Int {
+        switch n {
+        case .leaf(let ch):
+            return ch == String(Ids.wild) ? 0 : leafCount(ch)
+        case .op(_, let kids):
+            return kids.reduce(0) { $0 + askedLeaves($1) }
+        }
+    }
+
+    /// 再帰的に展開したときの部品(葉)の数＝字の複雑さ。「近い順」の物差し。
+    /// 分解を持たない字は1つ。循環しても止まるよう、先に1を入れてから数える。
+    private func leafCount(_ ch: String, _ depth: Int = 0) -> Int {
+        let c = Ids.norm(ch)
+        if let hit = leafCountCache[c] { return hit }
+        guard let ids = dict.ids(of: c), !ids.isEmpty else {
+            leafCountCache[c] = 1
+            return 1
+        }
+        if depth > 12 { return 1 } // 深さ依存なので覚えない
+        leafCountCache[c] = 1 // 循環ガード。先に登録しておく
+        var n = 0
+        for t in ids where !Ids.isIdc(t) {
+            let k = Ids.norm(String(t))
+            n += k == c ? 1 : leafCount(k, depth + 1)
+        }
+        let v = n == 0 ? 1 : n
+        leafCountCache[c] = v
+        return v
+    }
+
+    /// 候補を1ページぶん返す。
+    /// offset を動かすと同じ絞り込みの続きが取れる(走査はやり直さない)。
+    func search(_ input: String, limit: Int = 60, sort: Sort = .common, offset: Int = 0) -> Result {
         let compiled = Ids.compile(input)
         if compiled.isEmpty { return Result(hits: [], mode: .empty) }
+        let key = "\(compiled)\u{0}\(sort)"
+        let c: Cached
+        if let hit = cache, hit.key == key {
+            c = hit
+        } else {
+            let found = searchAll(compiled, sort)
+            c = Cached(key: key, hits: found.hits, mode: found.mode)
+            cache = c
+        }
+        let from = min(max(0, offset), c.hits.count)
+        let to = min(from + limit, c.hits.count)
+        return Result(hits: Array(c.hits[from..<to]), mode: c.mode, total: c.hits.count)
+    }
 
+    /// 絞り込みの本体。全件を並べ替えて返す(切り出しは search がやる)
+    private func searchAll(_ compiled: String, _ sort: Sort) -> Result {
         let hasIdc = compiled.contains(where: { Ids.isIdc($0) })
         var hits: [Hit] = []
-        hits.reserveCapacity(limit * 2)
+        hits.reserveCapacity(512)
 
         // 互換漢字(U+F900〜)は統合漢字と正規等価で、見た目も同じ。
         // Swift の Set<String> は正規等価で判定するので、これに入れるだけで
@@ -167,8 +252,9 @@ final class Engine {
                     hits.append(Hit(index: i, ch: ch, exact: m == 2))
                 }
             }
-            hits.sort { score($0.index, $0.exact) < score($1.index, $1.exact) }
-            return Result(hits: Array(hits.prefix(limit)), mode: .structure)
+            let asked = askedLeaves(q)
+            hits.sort { sortKey($0, sort, asked) < sortKey($1, sort, asked) }
+            return Result(hits: hits, mode: .structure, total: hits.count)
         }
 
         // 部品包含検索(操作子なし)
@@ -182,8 +268,9 @@ final class Engine {
                 hits.append(Hit(index: i, ch: ch, exact: false))
             }
         }
-        hits.sort { score($0.index, $0.exact) < score($1.index, $1.exact) }
-        return Result(hits: Array(hits.prefix(limit)), mode: .parts)
+        let asked = want.reduce(0) { $0 + leafCount($1) }
+        hits.sort { sortKey($0, sort, asked) < sortKey($1, sort, asked) }
+        return Result(hits: hits, mode: .parts, total: hits.count)
     }
 
     /// 読みから字を引く。「つち」→ 土 圭 塩 … のように、部品として使いたい字を

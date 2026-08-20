@@ -30,7 +30,9 @@ import {
   radicalChar,
   rawData,
   THEMES,
+  type KeyHeight,
   type Result,
+  type SortMode,
 } from "./src/engine";
 import { KatachiKeyboard } from "./src/KatachiKeyboard";
 import { OperatorIcon } from "./src/OperatorIcon";
@@ -42,6 +44,12 @@ import {
   type HapticLevel,
 } from "./src/feedback";
 import { Settings } from "./src/Settings";
+import {
+  loadKeyHeight,
+  loadSortMode,
+  saveKeyHeight,
+  saveSortMode,
+} from "./src/prefs";
 import { loadPro } from "./src/purchases";
 import {
   loadFavorites,
@@ -58,6 +66,12 @@ const GRADE_LABEL: Record<number, string> = {
 };
 
 const CAND_COLS = 6;
+
+/**
+ * 候補1ページの件数。部品1つで引くと数千件出るので、全部を一度に描くと
+ * 指が止まる。ページに分けて**全件たどれる**ようにしてある。
+ */
+const CAND_PAGE = 200;
 
 export default function App() {
   // 拡張B〜Jの字を描くフォントは app.json の expo-font プラグインで
@@ -110,6 +124,13 @@ function Screen() {
   }, []);
   // 触覚の強さ。モジュール側は再描画に関係しないので値を渡すだけ
   const [hapticLevel, setLevel] = useState<HapticLevel>("normal");
+  /**
+   * 候補の並び順。共有領域に置いてあるので、同期で読めて起動時にちらつかない
+   * (キーボードもこの値を読む＝アプリで選べばシステムキーボードも変わる)
+   */
+  const [sortMode, setSortMode] = useState<SortMode>(loadSortMode);
+  /** システムキーボードの縦幅。アプリの中のキーボードには効かない */
+  const [keyHeight, setKeyHeight] = useState<KeyHeight>(loadKeyHeight);
   useEffect(() => {
     AsyncStorage.multiGet([THEME_STORAGE_KEY, HAPTIC_STORAGE_KEY])
       .then(([[, theme], [, level]]) => {
@@ -125,6 +146,16 @@ function Screen() {
     haptic("toggle");
     setThemeKey(key);
     AsyncStorage.setItem(THEME_STORAGE_KEY, key).catch(() => {});
+  };
+  const pickSort = (next: SortMode) => {
+    haptic("toggle");
+    setSortMode(next);
+    saveSortMode(next);
+  };
+  const pickHeight = (next: KeyHeight) => {
+    haptic("toggle");
+    setKeyHeight(next);
+    saveKeyHeight(next);
   };
   const pickHaptic = (next: HapticLevel) => {
     setLevel(next);
@@ -180,6 +211,9 @@ function Screen() {
   const [engine, setEngine] = useState<Engine | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[]>([]);
+  /** 絞り込みの全件数と、いま何ページめを見ているか(0始まり) */
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [mode, setMode] = useState("empty");
   const [output, setOutput] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -209,19 +243,35 @@ function Screen() {
   // 鳴らすとうるさいので、0でなかった状態からの変わり目でだけ出す
   const wasEmpty = useRef(false);
 
+  /** 候補のグリッド。ページをめくったら頭から見せる(前のページの位置に残さない) */
+  const gridRef = useRef<FlatList<Result>>(null);
+
+  // 打ち直したり並び順を変えたりしたら1ページめに戻す
+  useEffect(() => {
+    setPage(0);
+  }, [query, sortMode]);
+
   useEffect(() => {
     if (!engine) return;
     const id = setTimeout(() => {
-      const found = engine.search(query);
+      const found = engine.search(query, CAND_PAGE, sortMode, page * CAND_PAGE);
       setResults(found.results);
+      setTotal(found.total);
       setMode(found.mode);
-      const nowEmpty =
-        !!query && found.mode !== "empty" && found.results.length === 0;
+      const nowEmpty = !!query && found.mode !== "empty" && found.total === 0;
       if (nowEmpty && !wasEmpty.current) haptic("warn");
       wasEmpty.current = nowEmpty;
     }, 120);
     return () => clearTimeout(id);
-  }, [engine, query]);
+  }, [engine, query, sortMode, page]);
+
+  const pageCount = Math.max(1, Math.ceil(total / CAND_PAGE));
+
+  const turnPage = (d: number) => {
+    haptic("toggle");
+    setPage(p => Math.min(pageCount - 1, Math.max(0, p + d)));
+    gridRef.current?.scrollToOffset({ offset: 0, animated: false });
+  };
 
   /**
    * かたちコードの編集。
@@ -462,14 +512,20 @@ function Screen() {
         {engine && !!query && (
           <Text style={[s.status, { color: t.sub }]}>
             {mode === "structure"
-              ? `構造マッチ: ${results.length}件(枠付き=完全一致)`
+              ? `構造マッチ: ${total.toLocaleString()}件(枠付き=完全一致)`
               : mode === "parts"
-                ? `部品を含む字: ${results.length}件`
+                ? `部品を含む字: ${total.toLocaleString()}件`
                 : "かたちか部品を入力してください"}
+            {total > CAND_PAGE &&
+              `　${(page * CAND_PAGE + 1).toLocaleString()}〜${Math.min(
+                total,
+                (page + 1) * CAND_PAGE,
+              ).toLocaleString()}件目`}
           </Text>
         )}
 
         <FlatList
+          ref={gridRef}
           data={results}
           numColumns={CAND_COLS}
           keyExtractor={r => r.ch}
@@ -483,6 +539,28 @@ function Screen() {
               <Text style={[s.notice, { color: t.sub }]}>
                 該当なし。部品を減らすか ? (なんでも)に置き換えてみてください。
               </Text>
+            ) : null
+          }
+          // ページ送り。候補は全件たどれるが、一度に描くのは1ページぶんだけ
+          ListFooterComponent={
+            pageCount > 1 ? (
+              <View style={s.pager}>
+                <PagerButton
+                  theme={t}
+                  label={`前の${CAND_PAGE}件`}
+                  disabled={page === 0}
+                  onPress={() => turnPage(-1)}
+                />
+                <Text style={{ fontSize: 12, color: t.sub }}>
+                  {page + 1} / {pageCount}
+                </Text>
+                <PagerButton
+                  theme={t}
+                  label={`次の${CAND_PAGE}件`}
+                  disabled={page >= pageCount - 1}
+                  onPress={() => turnPage(1)}
+                />
+              </View>
             ) : null
           }
           renderItem={({ item }) => (
@@ -728,6 +806,10 @@ function Screen() {
         onPickTheme={pickTheme}
         hapticLevel={hapticLevel}
         onPickHaptic={pickHaptic}
+        sortMode={sortMode}
+        onPickSort={pickSort}
+        keyHeight={keyHeight}
+        onPickHeight={pickHeight}
         historyCount={history.length}
         favoriteCount={favorites.length}
         onClearHistory={clearHistory}
@@ -737,8 +819,46 @@ function Screen() {
   );
 }
 
+/** ページ送りのボタン。端末のフォントに頼らないよう記号は使わず日本語で出す */
+function PagerButton({
+  theme: t,
+  label,
+  disabled,
+  onPress,
+}: {
+  theme: ReturnType<typeof useTheme>;
+  label: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        s.pagerBtn,
+        {
+          borderColor: disabled ? t.border : t.accent,
+          backgroundColor: pressed ? t.accentBg : "transparent",
+          opacity: disabled ? 0.4 : 1,
+        },
+      ]}
+    >
+      <Text style={{ fontSize: 12, color: disabled ? t.faint : t.accent }}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const s = StyleSheet.create({
   header: { paddingHorizontal: 12, paddingBottom: 8, paddingTop: 4, borderBottomWidth: 1 },
+  pager: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    paddingVertical: 12,
+  },
+  pagerBtn: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
   // 履歴・お気に入り・設定。指で狙える大きさ(38pt角)を確保する
   themeBtn: {

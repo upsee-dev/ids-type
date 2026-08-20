@@ -22,6 +22,12 @@ class Store(context: Context) {
         const val HISTORY = "katachi.history"
         const val FAVORITES = "katachi.favorites"
 
+        /** 候補の並び順。アプリの設定画面(src/prefs.ts)が書き、ここは読むだけ */
+        const val SORT = "katachi.order"
+
+        /** キーボードの縦幅。同じくアプリの設定画面が書く */
+        const val HEIGHT = "katachi.height"
+
         /** 履歴の上限。アプリ側(HISTORY_LIMIT)と同じ */
         const val LIMIT = 60
 
@@ -67,6 +73,19 @@ class Store(context: Context) {
     private fun write(key: String, list: List<String>) {
         prefs.edit().putString(key, JSONArray(list).toString()).apply()
     }
+
+    /**
+     * 候補の並び順("common" / "near")。値は core/engine.ts の SORT_MODES と同じ。
+     * キーボードに設定画面は無いので、アプリで選んだものをここで読むだけにする。
+     * 打つたびに読むが、SharedPreferences は読み込み済みの Map なので安い。
+     */
+    fun sortMode(): String = prefs.getString(SORT, null) ?: "common"
+
+    /**
+     * キーボードの縦幅("small" / "medium" / "large")。
+     * 値は core/data/keyboard.ts の KEY_HEIGHTS と同じ。
+     */
+    fun heightMode(): String = prefs.getString(HEIGHT, null) ?: "small"
 
     fun history(): List<String> = read(HISTORY)
 
