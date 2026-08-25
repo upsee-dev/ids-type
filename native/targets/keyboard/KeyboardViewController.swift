@@ -58,6 +58,11 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private var kanaOpen = false
     /// 手書きの面を出しているか。かなの面とは場所を取り合うので同時には出さない
     private var hwOpen = false
+
+    /// カメラの案内を出しているか。
+    /// **キーボード拡張はカメラを使えない**(App Extension にカメラ権限が下りない)ので、
+    /// ここは「アプリで使えます」と伝えるだけの面。並びを4つに揃えるためのタブでもある
+    private var cameraOpen = false
     private var strokeGroup = "common"
     private var searchSeq = 0
     private var readingSeq = 0
@@ -157,6 +162,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// かなの面・手書きの面の出し入れ
     private var kanaToggle: UIButton!
     private var hwToggle: UIButton!
+    private var cameraToggle: UIButton!
     /// 他のキーボードから戻ってきたときの断り書き
     private let resumedNote = UILabel()
     private let candidateScroll = UIScrollView()
@@ -388,9 +394,13 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         // 手書きも同じ扱い(読みも部品の見当もつかない字は、書いて引く)
         kanaToggle = smallButton("読み", #selector(onToggleKana))
         hwToggle = smallButton("手書き", #selector(onToggleHandwriting))
-        let tabWrap = UIStackView(arrangedSubviews: [tabRow, kanaToggle, hwToggle])
+        cameraToggle = smallButton("カメラ", #selector(onToggleCamera))
+        let tabWrap = UIStackView(arrangedSubviews: [tabRow, kanaToggle, hwToggle, cameraToggle])
         tabWrap.axis = .horizontal
         tabWrap.spacing = 4
+        // **4つとも同じ幅**にする。並びとしては対等な引き方(部首／読み／手書き／カメラ)
+        // なので、1つだけが余りを全部取ると狙う幅がばらばらになって押しにくい
+        tabWrap.distribution = .fillEqually
         root.addArrangedSubview(tabWrap)
 
         // ── 画数チップ ──
@@ -405,7 +415,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             strokeRow.leadingAnchor.constraint(equalTo: strokeScroll.leadingAnchor),
             strokeRow.trailingAnchor.constraint(equalTo: strokeScroll.trailingAnchor),
             strokeRow.heightAnchor.constraint(equalTo: strokeScroll.heightAnchor),
-            strokeScroll.heightAnchor.constraint(equalToConstant: 28),
+            strokeScroll.heightAnchor.constraint(equalToConstant: 40),
         ])
         root.addArrangedSubview(strokeScroll)
 
@@ -549,6 +559,16 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     @objc private func onTab(_ sender: UIButton) {
         kanaOpen = false
         hwOpen = false
+        cameraOpen = false
+        rebuildKeys()
+    }
+
+    /// カメラの案内。拡張からはカメラを開けないので、アプリで使えることだけ伝える
+    @objc private func onToggleCamera() {
+        cameraOpen.toggle()
+        kanaOpen = false
+        hwOpen = false
+        dismissResumedNote()
         rebuildKeys()
     }
 
@@ -556,6 +576,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     @objc private func onToggleKana() {
         kanaOpen.toggle()
         hwOpen = false
+        cameraOpen = false
         dismissResumedNote()
         rebuildKeys()
         persist()
@@ -565,6 +586,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     @objc private func onToggleHandwriting() {
         hwOpen.toggle()
         kanaOpen = false
+        cameraOpen = false
         dismissResumedNote()
         rebuildKeys()
         persist()
@@ -842,9 +864,12 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             let active = strokeGroup == key
             let b = UIButton(type: .system)
             b.setTitle(label, for: .normal)
-            b.titleLabel?.font = .systemFont(ofSize: 11)
+            b.titleLabel?.font = .systemFont(ofSize: 13)
             b.setTitleColor(active ? colAccent : colSub, for: .normal)
-            b.contentEdgeInsets = UIEdgeInsets(top: 2, left: 8, bottom: 2, right: 8)
+            // 指で狙える大きさを確保する。字に合わせて詰めると高さが20ptほどしか
+            // なくなり、隣の画数を押してしまう
+            b.contentEdgeInsets = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+            b.widthAnchor.constraint(greaterThanOrEqualToConstant: 52).isActive = true
             style(b, fill: active ? colAccentBg : .clear, stroke: active ? colAccent : colBorder)
             b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
             b.addAction(UIAction { [weak self] _ in
@@ -954,14 +979,14 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     }
 
     private func rebuildKeys() {
-        let faceOpen = kanaOpen || hwOpen
+        let faceOpen = kanaOpen || hwOpen || cameraOpen
         for v in tabRow.arrangedSubviews {
             guard let b = v as? UIButton else { continue }
             // 読み・手書きの面を出しているあいだ、部品パレットのタブは効いていない
             b.setTitleColor(!faceOpen ? colAccent : colSub, for: .normal)
             style(b, fill: !faceOpen ? colCard : .clear, stroke: !faceOpen ? colBorder : .clear)
         }
-        for (toggle, on) in [(kanaToggle, kanaOpen), (hwToggle, hwOpen)] {
+        for (toggle, on) in [(kanaToggle, kanaOpen), (hwToggle, hwOpen), (cameraToggle, cameraOpen)] {
             guard let toggle else { continue }
             toggle.setTitleColor(on ? themeColor { $0.onAccent } : colSub, for: .normal)
             style(toggle, fill: on ? colAccent : colCard, stroke: on ? colAccent : colBorder)
@@ -982,6 +1007,10 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         }
         if hwOpen {
             buildHandwritingArea()
+            return
+        }
+        if cameraOpen {
+            buildCameraNote()
             return
         }
 
@@ -1007,6 +1036,36 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             : (Palettes.difficult.first { $0.strokes == strokeGroup }?.parts.map(String.init) ?? [])
         rows(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } },
              cols: 8, into: grid)
+    }
+
+    /// カメラの案内。**キーボード拡張はカメラを使えない**ので、
+    /// アプリの「カメラ」で読み取ってから戻ってきてもらう
+    private func buildCameraNote() {
+        let box = UIStackView()
+        box.axis = .vertical
+        box.spacing = 6
+        box.alignment = .center
+        box.isLayoutMarginsRelativeArrangement = true
+        box.layoutMargins = UIEdgeInsets(top: 24, left: 16, bottom: 16, right: 16)
+
+        let title = UILabel()
+        title.text = "カメラは「漢字カタチ入力」アプリで使えます"
+        title.font = .systemFont(ofSize: 14, weight: .semibold)
+        title.textColor = colText
+        title.textAlignment = .center
+        title.numberOfLines = 0
+
+        let note = UILabel()
+        note.text = "キーボードからはカメラを開けない決まりになっています。"
+            + "アプリを開いて「カメラ」で字を読み取ると、履歴から続けて打てます。"
+        note.font = .systemFont(ofSize: 12)
+        note.textColor = colSub
+        note.textAlignment = .center
+        note.numberOfLines = 0
+
+        box.addArrangedSubview(title)
+        box.addArrangedSubview(note)
+        keyArea.addArrangedSubview(box)
     }
 
     // MARK: - 読みでさがす

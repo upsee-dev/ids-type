@@ -1,6 +1,8 @@
 package com.upsee.katachi.ime
 
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -35,6 +37,11 @@ import kotlin.concurrent.thread
  * [Store.savePending] で覚え、次に開いたとき続きから打てるようにしている。
  */
 class KatachiImeService : InputMethodService() {
+
+    private companion object {
+        /** アプリを開くための scheme。app.json の expo.scheme と同じにすること */
+        const val APP_SCHEME = "ids-kanji-type"
+    }
 
     private lateinit var dict: Dict
     private lateinit var engine: Engine
@@ -165,6 +172,20 @@ class KatachiImeService : InputMethodService() {
             override fun openImePicker() {
                 persist()
                 getSystemService(InputMethodManager::class.java)?.showInputMethodPicker()
+            }
+
+            /**
+             * カメラで字を読み取る。
+             *
+             * 入力方式(Service)はカメラの権限を自分で求められない(Activity が要る)ので、
+             * ここではアプリのカメラ面を開くだけにする。組みかけは覚えたまま行くので、
+             * アプリで字を拾って戻ってくれば続きから打てる。
+             */
+            override fun openCamera() {
+                persist()
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$APP_SCHEME://camera"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { startActivity(intent) }
             }
 
             override fun persist() {

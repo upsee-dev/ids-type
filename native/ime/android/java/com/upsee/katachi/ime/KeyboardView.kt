@@ -73,6 +73,8 @@ class KeyboardView(context: Context, private val host: Host) :
         fun goBack()
         /** 入力方法の選択リスト(「戻る」の長押し) */
         fun openImePicker()
+        /** カメラで字を読み取る。入力方式はカメラを持てないのでアプリを開く */
+        fun openCamera()
         /** 組みかけを覚えておく(読み・かな面の状態が変わったとき) */
         fun persist()
         /** 着せ替えの反映。色は生成時に決まるので、ビューを作り直してもらう */
@@ -93,8 +95,11 @@ class KeyboardView(context: Context, private val host: Host) :
         /** 連射中に音を鳴らす頻度。毎回鳴らすと「ジジジ」と潰れて聞こえる */
         const val SOUND_EVERY_N_REPEATS = 3
 
-        /** 打鍵の面より上(道具の帯〜タブ)がだいたい使う高さ(dp) */
-        const val CHROME_DP = 250f
+        /** 画数チップの高さ。指で狙える大きさ(dp)。候補キー44・部品キー46に合わせる */
+        const val CHIP_DP = 40
+
+        /** 打鍵の面より上(道具の帯〜タブ〜画数チップ)がだいたい使う高さ(dp) */
+        const val CHROME_DP = 268f
 
         /** 着せ替えの保存キーと「おまかせ」の値 */
         const val PREF_THEME = "theme"
@@ -221,6 +226,12 @@ class KeyboardView(context: Context, private val host: Host) :
      * 裏のスレッドが読み終えてから true にして、そこで組み直す。
      */
     private var fontsReady = false
+
+    /**
+     * このビューを組んだときの縦幅の設定。変わっていたら作り直す合図に使う。
+     * (init より前に置くこと＝組み立て中に読めるようにしておく)
+     */
+    private var builtHeightMode = host.store.heightMode()
 
     /**
      * アイコンのフォント。RNアプリが入れている Ionicons を**同じAPKの assets から
@@ -385,28 +396,38 @@ class KeyboardView(context: Context, private val host: Host) :
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), dp(2), dp(6), dp(2))
         }
-        // 部品パレットは「部首・偏旁」の1つだけ。読み・手書きの面から戻る口を
+        // 部品パレットは「部首」の1つだけ。読み・手書きの面から戻る口を
         // 兼ねているので、タブと同じ見た目のまま置いてある
-        tabViews = listOf(
-            tabButton("部首・偏旁") {
-                kanaOpen = false
-                hwOpen = false
-                rebuildKeys()
-            }.also { tabs.addView(it) },
-        )
+        val radicalTab = tabButton("部首") {
+            kanaOpen = false
+            hwOpen = false
+            rebuildKeys()
+        }
+        tabViews = listOf(radicalTab)
         // パレットに無い部品を読みから出すための面。タブではなく出し入れなので、
         // 出しても消してもかたちの行・候補・組み立て中の表示はそのまま残る。
         // 手書きも同じ扱い(読みも部品の見当もつかない字は、書いて引く)
         kanaToggle = smallButton("読み") { toggleFace(kana = true) }
-        tabs.addView(kanaToggle)
         hwToggle = smallButton("手書き") { toggleFace(kana = false) }
-        tabs.addView(hwToggle)
+        // カメラは入力方式の中では持てない(権限を自分で求められない)ので、
+        // ここは**アプリのカメラ面を開くだけ**の入口にしてある
+        val cameraTab = smallButton("カメラ") { host.openCamera() }
+        // **4つとも同じ幅**にする。並びとしては対等な引き方(部首／読み／手書き／カメラ)
+        // なので、1つだけが余りを全部取ると狙う幅がばらばらになって押しにくい
+        for ((i, v) in listOf(radicalTab, kanaToggle, hwToggle, cameraTab).withIndex()) {
+            v.setPadding(dp(2), dp(7), dp(2), dp(7)) // 高さも揃える
+            v.layoutParams = LinearLayout.LayoutParams(0, wrap, 1f).apply {
+                if (i > 0) marginStart = dp(4)
+            }
+            tabs.addView(v)
+        }
         addView(tabs)
 
         // ── 画数チップ(部首タブのときだけ) ──
         strokeInner = LinearLayout(context).apply {
             orientation = HORIZONTAL
-            setPadding(dp(6), 0, dp(6), dp(2))
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(6), dp(2), dp(6), dp(3))
         }
         strokeRow = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
@@ -454,12 +475,19 @@ class KeyboardView(context: Context, private val host: Host) :
 
     // ---- サービスから呼ばれる ----
 
-    /** アプリで縦幅の設定が変わっているかもしれないので、面の高さを当て直す */
+    /**
+     * アプリで縦幅の設定が変わっていないか見る。
+     *
+     * 変わっていたら**ビューごと作り直してもらう**(高さだけ差し替えても、
+     * 入力方式のウィンドウは作り直したときの高さで出ることがあるため)。
+     * キーボードを出すたびに呼ばれるので、アプリで選んで戻ってくれば次に開いた
+     * ときには変わっている。
+     */
     fun refreshHeight() {
-        val h = faceHeight()
-        if (keyScroll.layoutParams.height == h) return
-        keyScroll.layoutParams = LayoutParams(matchParent, h)
-        requestLayout()
+        val now = host.store.heightMode()
+        if (now == builtHeightMode) return
+        builtHeightMode = now
+        host.recreateKeyboard()
     }
 
     fun onDictReady() {
@@ -835,8 +863,12 @@ class KeyboardView(context: Context, private val host: Host) :
                 TextView(context).apply {
                     text = label
                     setTextColor(if (active) colAccent else colSub)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                    setPadding(dp(10), dp(4), dp(10), dp(4))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    // 指で狙える大きさを確保する。字の見た目に合わせて詰めると
+                    // 高さが20dpほどしかなくなり、隣の画数を押してしまう
+                    gravity = Gravity.CENTER
+                    setPadding(dp(14), dp(0), dp(14), dp(0))
+                    minWidth = dp(52)
                     background = keyBg(
                         if (active) colAccentBg else Color.TRANSPARENT,
                         if (active) colAccent else colBorder,
@@ -844,7 +876,8 @@ class KeyboardView(context: Context, private val host: Host) :
                     isClickable = true
                     setOnClickListener { strokeGroup = key; buildStrokeChips(); rebuildKeys() }
                     feedbackOnPress()
-                    layoutParams = LinearLayout.LayoutParams(wrap, wrap).apply { marginEnd = dp(4) }
+                    layoutParams = LinearLayout.LayoutParams(wrap, dp(CHIP_DP))
+                        .apply { marginEnd = dp(5) }
                 },
             )
         }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Linking,
   AppState,
   FlatList,
   Keyboard,
@@ -30,6 +31,7 @@ import {
   radicalChar,
   rawData,
   THEMES,
+  KEY_HEIGHTS,
   type KeyHeight,
   type Result,
   type SortMode,
@@ -243,6 +245,25 @@ function Screen() {
   // 鳴らすとうるさいので、0でなかった状態からの変わり目でだけ出す
   const wasEmpty = useRef(false);
 
+  /**
+   * システムキーボードの「カメラ」から飛んできたときは、開いた先でカメラの面を出す。
+   * 入力方式はカメラの権限を自分で求められないので、キーボード側は
+   * ids-kanji-type://camera を投げるだけ＝受け取るのはここ。
+   */
+  const [cameraRequest, setCameraRequest] = useState(0);
+  useEffect(() => {
+    const wanted = (url: string | null) => !!url && url.includes("camera");
+    Linking.getInitialURL()
+      .then(u => {
+        if (wanted(u)) setCameraRequest(n => n + 1);
+      })
+      .catch(() => {});
+    const sub = Linking.addEventListener("url", ({ url }) => {
+      if (wanted(url)) setCameraRequest(n => n + 1);
+    });
+    return () => sub.remove();
+  }, []);
+
   /** 候補のグリッド。ページをめくったら頭から見せる(前のページの位置に残さない) */
   const gridRef = useRef<FlatList<Result>>(null);
 
@@ -315,7 +336,13 @@ function Screen() {
     [selected, engine],
   );
 
-  const keyboardMaxHeight = Math.min(height * 0.34, 280);
+  /**
+   * アプリの中のキーボードの高さ。設定の小・中・大で伸ばす
+   * (システムキーボードは IME 側が同じことをしている)。
+   * 伸ばしても画面の半分は超えさせない＝候補が見えなくならないように
+   */
+  const heightScale = KEY_HEIGHTS.find(h => h.key === keyHeight)?.scale ?? 1;
+  const keyboardMaxHeight = Math.min(height * 0.34 * heightScale, 280 * heightScale, height * 0.5);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={["top", "bottom"]}>
@@ -790,6 +817,7 @@ function Screen() {
           remember(ch);
         }}
         maxHeight={keyboardMaxHeight}
+        cameraRequest={cameraRequest}
         collapsed={directInput}
         onExpand={() => {
           setDirectInput(false);

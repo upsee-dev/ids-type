@@ -125,7 +125,7 @@ function RadicalTab({ onInsert }: { onInsert: (s: string) => void }) {
 
   return (
     <div>
-      <div className="mb-1 flex gap-1 overflow-x-auto pb-0.5">
+      <div className="mb-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
         <StrokeChip
           active={group === "common"}
           onClick={() => setGroup("common")}
@@ -197,11 +197,12 @@ function StrokeChip({
   onClick: () => void;
   label: string;
 }) {
+  // 指で狙える大きさを確保する(字に合わせて詰めると高さが20pxほどしかなくなる)
   return (
     <button
       onPointerDown={keepFocus}
       onClick={onClick}
-      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] whitespace-nowrap ${
+      className={`h-9 min-w-13 shrink-0 rounded-full border px-3 text-xs whitespace-nowrap ${
         active
           ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-stone-900 dark:text-indigo-300"
           : "border-stone-300 text-stone-500 dark:border-stone-600 dark:text-stone-400"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -16,6 +16,7 @@ import {
   type Engine,
 } from "./engine";
 import { OperatorIcon } from "./OperatorIcon";
+import { CameraPad } from "./CameraPad";
 import { FlickKanaPad } from "./FlickKanaPad";
 import { HandwritingPad } from "./HandwritingPad";
 import { fontFor, type Theme } from "./theme";
@@ -26,12 +27,14 @@ import { haptic } from "./feedback";
  * 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
  * かたちは常時表示の行に出し、タブは部品の出し分けだけに使う。
  */
-type Tab = "radical" | "search" | "draw";
+type Tab = "radical" | "search" | "draw" | "camera";
 
+/** 4つとも同じ幅にする(styles.tab の flex:1)。並びとしては対等な引き方なので */
 const TABS: { id: Tab; label: string }[] = [
-  { id: "radical", label: "部首・偏旁" },
+  { id: "radical", label: "部首" },
   { id: "search", label: "読み" },
   { id: "draw", label: "手書き" },
+  { id: "camera", label: "カメラ" },
 ];
 
 const PART_COLS = 8;
@@ -52,6 +55,7 @@ export function KatachiKeyboard({
   onInsert,
   onCommit,
   maxHeight,
+  cameraRequest,
   collapsed,
   onExpand,
 }: {
@@ -61,11 +65,17 @@ export function KatachiKeyboard({
   /** 字を出力欄へ入れる(手書き候補のタップ・読み候補の長押し) */
   onCommit: (ch: string) => void;
   maxHeight: number;
+  /** 増えるたびにカメラの面を開く(システムキーボードの「カメラ」から来たとき) */
+  cameraRequest: number;
   /** 端末のキーボードで直接打っているあいだは畳んで場所を空ける */
   collapsed?: boolean;
   onExpand?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("radical");
+  // システムキーボードの「カメラ」から飛んできたら、その面を開いて待つ
+  useEffect(() => {
+    if (cameraRequest) setTab("camera");
+  }, [cameraRequest]);
   const [showAllOps, setShowAllOps] = useState(false);
   const { width } = useWindowDimensions();
 
@@ -180,9 +190,10 @@ export function KatachiKeyboard({
           タブ往復が要らなくなる */}
       {opRow}
 
-      {/* 読みと手書きの面はスクロールに入れない。フリックの下向き・手書きの
-          縦画がスクロールに取られると入力にならないので、高さを固定して収める */}
-      {tab === "search" || tab === "draw" ? (
+      {/* 読み・手書き・カメラの面はスクロールに入れない。フリックの下向き・手書きの
+          縦画・カメラのプレビューがスクロールに取られると入力にならないので、
+          高さを固定して収める */}
+      {tab !== "radical" ? (
         <View
           style={{
             height: maxHeight,
@@ -191,20 +202,24 @@ export function KatachiKeyboard({
             paddingTop: GAP,
           }}
         >
-          {tab === "search" ? (
+          {tab === "search" && (
             <SearchTab
               engine={engine}
               theme={theme}
               onInsert={onInsert}
               onCommit={onCommit}
             />
-          ) : (
+          )}
+          {tab === "draw" && (
             <HandwritingPad
               engine={engine}
               theme={theme}
               onInsert={onInsert}
               onCommit={onCommit}
             />
+          )}
+          {tab === "camera" && (
+            <CameraPad theme={theme} onInsert={onInsert} onCommit={onCommit} />
           )}
         </View>
       ) : (
@@ -269,7 +284,7 @@ function RadicalTab({
           >
             <Text
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: group === c.key ? theme.accent : theme.sub,
               }}
             >
@@ -471,10 +486,15 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
   },
-  chipRow: { flexDirection: "row", gap: 4, paddingBottom: 6 },
+  chipRow: { flexDirection: "row", alignItems: "center", gap: 5, paddingBottom: 6 },
+  // 指で狙える大きさを確保する。字に合わせて詰めると高さが20ptほどしかなくなり、
+  // 隣の画数を押してしまう
   chip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    minWidth: 52,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
   },

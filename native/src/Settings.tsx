@@ -129,7 +129,8 @@ export function Settings({
               {KEY_HEIGHTS.find(h => h.key === keyHeight)?.note}
             </Note>
             <Note theme={t}>
-              システムキーボード（他のアプリで使うほう）の高さです。次に開いたときから変わります。
+              このアプリのキーボードはすぐに、システムキーボード（他のアプリで使うほう）は
+              次に開いたときに変わります。
             </Note>
           </Section>
 
@@ -179,7 +180,8 @@ export function Settings({
           <Section title="このアプリについて" theme={t}>
             <Note theme={t}>
               漢字カタチ入力は、通信を一切しません。入力した内容も、選んだ字も、
-              端末の外へ出ることはありません。
+              カメラで読み取った写真も、端末の外へ出ることはありません
+              （写真は読み取ったらすぐ捨てていて、保存もしていません）。
             </Note>
             <Note theme={t}>
               分解データ: BabelStone IDS ／ CHISE IDS ／ CJKVI IDS、
