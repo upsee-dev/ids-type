@@ -20,7 +20,7 @@ export function verifyCoverage(
     let withIds = 0;
     for (let cp = lo; cp <= hi; cp++) {
       const ch = String.fromCodePoint(cp);
-      const ids = ch in ext ? ext[ch] : chars[ch]?.[0];
+      const ids = ch in ext ? ext[ch][0] : chars[ch]?.[0];
       if (ids === undefined) continue;
       have++;
       if (ids) withIds++;

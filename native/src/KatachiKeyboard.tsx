@@ -328,8 +328,11 @@ function SearchTab({
   const hits = useMemo(() => {
     const q = reading.trim();
     if (!engine || !q) return [];
-    // 読み・部品・符号位置のどれでも引ける（Engine#list がまとめて面倒を見る）
-    return engine.list({ query: q, jaOnly: true, limit: 60 }).items.map(i => i.ch);
+    // 読み・部品・符号位置のどれでも引ける（Engine#list がまとめて面倒を見る）。
+    // **日本の字に絞らない**。10万字ぜんぶが読みを持つようになったので
+    // (正式→人名→参考→推定の順に並ぶ)、絞ると拡張漢字が読みで引けなくなる。
+    // よく使う字が先に出る並びはエンジン側で保証されている
+    return engine.list({ query: q, limit: 60 }).items.map(i => i.ch);
   }, [engine, reading]);
 
   const dropLast = (s: string) => [...s].slice(0, -1).join("");

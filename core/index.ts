@@ -78,7 +78,7 @@ export {
   type ThemeDef,
 } from "./data/themes.ts";
 
-export { radicalChar } from "./data/types.ts";
+export { radicalChar, refReadingLabel } from "./data/types.ts";
 
 export type {
   CharMeta,

@@ -101,6 +101,61 @@ checkPages("LR木?");
 checkPages("宀女");
 checkPages("日月", 50, "common");
 checkPages("宀女", 50, "near");
+/**
+ * 読み。10万字ぜんぶが読みを持つようになったので(build-data/readings.mts)、
+ *   1. 打った読みが**どの段に当たったか**の順に並ぶこと
+ *      (正式 → 人名 → 参考 → 推定。同じ段のなかはよく使う字が先)
+ *   2. KANJIDIC2 に無い字も読みで引けること
+ * を見る。段が効いていないと、声符から推しただけの字が 土 や 生 を押しのける。
+ */
+const checkReading = (q: string, expectFirst: string, note: string) => {
+  const { items, total } = e.list({ query: q, limit: 12 });
+  const ok = items[0]?.ch === expectFirst;
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [reading] "${q}" -> ${items.map(i => i.ch).join(" ")}` +
+      `  (${total}件・${note})  期待の先頭:${expectFirst}`,
+  );
+};
+checkReading("つち", "土", "正式(音訓)が先頭");
+checkReading("あきら", "朗", "人名読みでも引ける");
+checkReading("いずくんぞ", "烏", "資料にしか無い読みでも引ける");
+checkReading("ぎょう", "行", "よく使う字が先");
+
+/** 読みの持ち方。正式・人名・参考が混ざらずに入っていること */
+const checkMeta = (ch: string, want: Record<string, string>) => {
+  const m = e.meta(ch)!;
+  const got = Object.fromEntries(
+    Object.keys(want).map(k => [k, (m as unknown as Record<string, string>)[k]]),
+  );
+  const ok = Object.entries(want).every(([k, v]) => got[k] === v);
+  if (!ok) fail++;
+  console.log(`${ok ? "OK " : "NG "} [reading] ${ch} ${JSON.stringify(got)}`);
+};
+// 正式な読みはそのまま、資料にしか無い読み(呉音・古訓)は参考として別に持つ
+checkMeta("悪", { on: "アク オ", refKind: "u" });
+// 人名でだけ使う読み
+checkMeta("亜", { on: "ア", nanori: "や つぎ つぐ" });
+// KANJIDIC2 に無い字。異体字から借りた読みと、声符から推した読み
+checkMeta("专", { on: "", ref: "セン もっぱ.ら", refKind: "v:專" });
+checkMeta("丆", { on: "", ref: "ヘツ", refKind: "p:丿" });
+
+// 読みを持つ字の割合(落ちたら補完の作り方を疑う)
+{
+  const all = e.list({ limit: 0 }).total;
+  let none = 0;
+  for (const { ch } of e.list({ limit: Number.MAX_SAFE_INTEGER }).items) {
+    const m = e.meta(ch)!;
+    if (!m.on && !m.kun && !m.nanori && !m.ref) none++;
+  }
+  const covered = ((all - none) / all) * 100;
+  const ok = covered > 97;
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [reading] 読みのある字 ${covered.toFixed(1)}% (${all - none}/${all})`,
+  );
+}
+
 console.log("decompose 課:", e.decompose("課"));
 console.log("decompose 樹:", e.decompose("樹"));
 console.log(fail ? `FAILED: ${fail}` : "ALL PASS");

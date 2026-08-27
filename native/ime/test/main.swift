@@ -54,6 +54,35 @@ func checkOrder(_ q: String, _ expectFirst: String) {
 checkOrder("LR日月", "明"); checkOrder("日月", "明"); checkOrder("木", "木")
 checkOrder("宀女", "安"); checkOrder("OC囗玉", "国"); checkOrder("木木", "林")
 
+// ── 読みで引く ──
+// 10万字ぜんぶが読みを持つようになったので(build-data/readings.mts)、
+// 当たった読みの段(正式→人名→参考→推定)の順に並ぶこと、KANJIDIC2 に無い字も
+// 読みで引けることを見る。TypeScript 版(test-engine.mts の checkReading)と
+// 同じ問いを投げているので、返る並びも突き合わせられる
+func checkReading(_ q: String, _ expectFirst: String, _ note: String) {
+    let hits = engine.byReading(q, limit: 12)
+    let ok = hits.first == expectFirst
+    if !ok { fail += 1 }
+    print("\(ok ? "OK " : "NG ") [reading] \"\(q)\" -> \(hits.joined(separator: " "))  (\(note))")
+}
+checkReading("つち", "土", "正式(音訓)が先頭")
+checkReading("あきら", "朗", "人名読みでも引ける")
+checkReading("いずくんぞ", "烏", "資料にしか無い読みでも引ける")
+checkReading("ぎょう", "行", "よく使う字が先")
+
+// 読みの持ち方。正式・人名・参考が混ざらずに入っていること
+func checkReadingFields(_ ch: String, _ want: (String, String, String)) {
+    guard let i = dict.index(of: ch) else { print("NG  [reading] \(ch) が辞書に無い"); fail += 1; return }
+    let got = (dict.readings(at: i), dict.nanori(at: i), dict.ref(at: i))
+    let ok = got.0 == want.0 && got.1 == want.1 && got.2 == want.2
+    if !ok { fail += 1 }
+    print("\(ok ? "OK " : "NG ") [reading] \(ch) 音訓[\(got.0)] 人名[\(got.1)] 参考[\(got.2)]")
+}
+checkReadingFields("悪", ("アク オ\tわる.い わる- あ.し にく.い", "", "コ ああ いずくに いずくにかいずくんぞ"))
+checkReadingFields("亜", ("ア\tつ.ぐ", "や つぎ つぐ", "アク"))
+checkReadingFields("专", ("", "", "セン もっぱ.ら"))
+checkReadingFields("丆", ("", "", "ヘツ"))
+
 // ── 手書き照合 ──
 // web の build:handwriting が書き出した問題集を読み、TypeScript 実装が返したのと
 // **同じ候補が同じ順で**返るかを見る。数値の扱いが1つでもずれれば落ちる

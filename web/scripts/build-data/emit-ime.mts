@@ -5,9 +5,13 @@
 // タブ区切りの素朴なテキストにしておくと、行を split するだけで読めて
 // 中間オブジェクトも作らずに済む。
 //
-//   dict-ja.tsv    KANJIDIC2 収録字   char \t ids \t grade \t freq \t on \t kun
-//   dict-ext.tsv   それ以外の漢字      char \t ids
+//   dict-ja.tsv    KANJIDIC2 収録字   char \t ids \t grade \t freq \t on \t kun \t 人名 \t 参考 \t 参考の出所
+//   dict-ext.tsv   それ以外の漢字      char \t ids \t 参考 \t 参考の出所
 //   dict-parts.tsv 漢字でない部品      char \t ids
+//
+// 読みの列が3つ増えているのは、KANJIDIC2 に無い字も読みで引けるようにするため
+// (作り方は readings.mts)。正式(on/kun)・人名・参考は列を分けて持ち、
+// キーボード側もその区別のまま並べる。
 //
 // 分けてあるのは、IME 側が「日本語の字だけ先に読んで検索可能にし、
 // 拡張漢字は後から読む」という段階読み込みをできるようにするため。
@@ -247,12 +251,17 @@ export function emitImeDict(data: RawData, outDir: string): string[] {
   mkdirSync(outDir, { recursive: true });
 
   const ja: string[] = [];
-  for (const [ch, [ids, grade, freq, on, kun]] of Object.entries(data.chars)) {
-    ja.push(`${ch}\t${ids}\t${grade}\t${freq}\t${on}\t${kun}`);
+  for (const [ch, v] of Object.entries(data.chars)) {
+    const [ids, grade, freq, on, kun, , , , nanori, ref, refKind] = v;
+    ja.push(
+      `${ch}\t${ids}\t${grade}\t${freq}\t${on}\t${kun}\t${nanori}\t${ref}\t${refKind}`,
+    );
   }
 
   const ext: string[] = [];
-  for (const [ch, ids] of Object.entries(data.ext)) ext.push(`${ch}\t${ids}`);
+  for (const [ch, [ids, ref, refKind]] of Object.entries(data.ext)) {
+    ext.push(`${ch}\t${ids}\t${ref}\t${refKind}`);
+  }
 
   const parts: string[] = [];
   for (const [ch, ids] of Object.entries(data.parts)) parts.push(`${ch}\t${ids}`);

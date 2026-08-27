@@ -11,6 +11,12 @@ export interface KanjiInfo {
   freq: number;
   on: string[];
   kun: string[];
+  /**
+   * 人名でだけ使う読み(KANJIDIC2 の <nanori>)。「正式な音訓ではないが実際に
+   * 使われる読み」で、名前を打つときはこれが無いと引けない字が多い。
+   * 音訓とは別に持ち、UI でも「人名」と断って出す
+   */
+  nanori: string[];
   /** 画数。0=データなし */
   strokes: number;
   /** 康熙部首番号(1〜214)。0=データなし。字は U+2F00+n-1 で引ける */
@@ -38,6 +44,7 @@ export function loadKanjidic2(): Map<string, KanjiInfo> {
     const kun = [...block.matchAll(/<reading r_type="ja_kun">(.+?)<\/reading>/g)].map(
       (m) => m[1],
     );
+    const nanori = [...block.matchAll(/<nanori>(.+?)<\/nanori>/g)].map((m) => m[1]);
     const strokes = block.match(/<stroke_count>(\d+)<\/stroke_count>/);
     const rad = block.match(/<rad_value rad_type="classical">(\d+)<\/rad_value>/);
     // m_lang 属性なし = 英語。他言語(<meaning m_lang="fr">など)は拾わない
@@ -50,6 +57,7 @@ export function loadKanjidic2(): Map<string, KanjiInfo> {
       // 候補一覧に出す用途なので先頭4つで足りる
       on: on.slice(0, 4),
       kun: kun.slice(0, 4),
+      nanori: nanori.slice(0, 6),
       strokes: strokes ? +strokes[1] : 0,
       rad: rad ? +rad[1] : 0,
       meaning: meaning.slice(0, 3),

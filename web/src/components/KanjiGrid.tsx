@@ -1,6 +1,6 @@
 "use client";
 
-import { codePointLabel, type CharMeta } from "@/lib/engine";
+import { codePointLabel, refReadingLabel, type CharMeta } from "@/lib/engine";
 
 export interface KanjiCell {
   ch: string;
@@ -27,6 +27,20 @@ export function KanjiGrid({
   /** 入力画面ではソフトキーボードを閉じさせないために preventDefault を渡す */
   onPointerDown?: (e: React.PointerEvent) => void;
 }) {
+  /**
+   * ホバーで出す1行。**読みの出所も添える**。
+   * 正式(音訓)があればそれだけ、無ければ人名・参考・推定を見出しつきで出す
+   * (辞書にある読みと、こちらで推した読みを混ぜないため)
+   */
+  const hoverText = (ch: string, meta: CharMeta): string => {
+    const head = codePointLabel(ch);
+    const official = `${meta.on} ${meta.kun}`.trim();
+    if (official) return `${head} ${official}`;
+    if (meta.nanori) return `${head} 人名 ${meta.nanori}`;
+    if (meta.ref) return `${head} ${refReadingLabel(meta.refKind)} ${meta.ref}`;
+    return `${head} 読みデータなし`;
+  };
+
   return (
     <div className="grid grid-cols-6 gap-1 sm:grid-cols-10">
       {items.map(({ ch, meta, exact }) => (
@@ -34,11 +48,7 @@ export function KanjiGrid({
           key={ch}
           onPointerDown={onPointerDown}
           onClick={() => onPick(ch)}
-          title={
-            meta.ext
-              ? `${codePointLabel(ch)} 拡張漢字(読みデータなし)`
-              : `${codePointLabel(ch)} ${meta.on} ${meta.kun}`.trim()
-          }
+          title={hoverText(ch, meta)}
           className={`kanji flex min-h-12 items-center justify-center rounded-lg border text-2xl leading-none active:bg-indigo-100 dark:active:bg-stone-700 ${
             meta.ext ? "border-dashed text-stone-500 dark:text-stone-400 " : ""
           }${

@@ -23,7 +23,7 @@ Web版・Expoアプリ・システムキーボード（Android IME / iOSキー�
 │   ├── ids/operators.ts   #   かたちの配置図（Kotlin/Swift へは build:data が生成）
 │   ├── handwriting.ts     #   手書き検索の照合(パターンは build:handwriting が生成)
 │   ├── data/kana.ts       #   読み入力の12キーフリック表(アプリ・Webで共有)
-│   └── kanji-data.json    #   生成済み辞書(102,998字・2.7MB / gzip 0.9MB)
+│   └── kanji-data.json    #   生成済み辞書(102,998字・4.7MB / gzip 1.4MB)
 ├── data-src/              # 元データ（加工しない。出典は sources.json）
 ├── web/                   # Webプロトタイプ (Next.js + React + Tailwind)
 │   ├── src/app/           #   入力画面・収録漢字一覧(?q= と ?block= で共有できる)
@@ -75,6 +75,31 @@ Web版・Expoアプリ・システムキーボード（Android IME / iOSキー�
 
 - **KANJIDIC2 収録の 13,108字**（JIS X 0208/0212/0213）… 読み・学年・頻度・画数・部首つき。常に先に出る
 - **それ以外の 89,890字**（拡張A〜Jほか）… 常に後ろ。UIでは破線の枠で区別する
+
+### 読み（正式・人名・参考・推定の4段階）
+
+KANJIDIC2 が読みを持つのは 13,108字だけで、**残り9万字は読みでは一生引けなかった**。
+そこで読みを4段階で持ち、**正式かどうかを必ず区別**して出している
+（作り方は `web/scripts/build-data/readings.mts`）。
+
+| 段 | 出所 | 字数 | UI での出し方 |
+| --- | --- | ---: | --- |
+| **正式** | KANJIDIC2 の音訓 | 12,356 | 「音」「訓」。大きい字で先頭 |
+| **人名** | KANJIDIC2 の `nanori` | 1,350字に付く | 「人名」。小さく下に |
+| **参考** | Unihan の `kJapanese`（JIS由来の資料にある読み） | 39,308 | 「参考」。小さく下に |
+| **推定** | 異体字から借用 6,299 ／ 声符（部品）から推定 42,817 | 49,116 | 「推定(異体字 專)」「推定(声符 青)」 |
+| なし | どれも当てられなかった | 2,218 | 「読みデータなし」 |
+
+**10万字のうち 97.8%（100,780字）が読みで引ける**ようになった。
+
+- 正式な読みがある字にも、資料にしか無い読み（呉音・古訓・慣用）は**参考として足す**。
+  6,539字に 14,301件（悪→コ/ああ/いずくんぞ、握→オク/オウ、亜→アク など）
+- **推定は当てにしない前提の数字**。KANJIDIC2 の字で検算すると、声符から推した音が
+  実際の音と一致するのは **部首1つ＋声符1つの形で 66.0%**（6,801/10,308）、
+  全体で 59.6%。だから UI では必ず「推定」と断り、読みで引いたときも
+  **正式 → 人名 → 参考 → 推定**の順に並べる（同じ段のなかはよく使う字が先）。
+  この並びは4実装とも同じ（`Engine#readingRank` / `byReading`）
+- 互換漢字（U+F900〜）は統合漢字と同じ字なので、読みはそのまま借りる
 
 ### 候補の並び順（設定で選べる）
 
@@ -565,6 +590,7 @@ Android の前景・モノクロだけ背景を抜いている。ロゴ中央の
 | [CJKVI IDS Database](https://github.com/cjkvi/cjkvi-ids)                  | KANJIDIC2 収録字の日本字体。従来の検索結果を変えないため優先している                                                                 | GPLv2                                              |
 
 - 漢字情報（読み・学年・頻度・画数・部首・意味）: [KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project)（EDRDG、CC BY-SA 4.0）
+- KANJIDIC2 に無い字の読み・異体字・部首番号: [Unihan Database](https://www.unicode.org/reports/tr38/)（Unicode 17.0、Unicode License v3）。`kJapanese` がかな書きの日本語読みを 51,583字ぶん持っている
 - 字形表示: [Plangothic](https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic_Project)（SIL OFL 1.1）
 - 手書き検索の筆順パターン: [KanjiVG](https://github.com/KanjiVG/kanjivg)（Ulrich Apel、CC BY-SA 3.0）。SVGのまま同梱せず、ストローク特徴に圧縮して使う（`build:handwriting`）
 - 互換漢字（U+F900〜/U+2F800〜）の分解は、正規等価な統合漢字の IDS を NFC 経由で借りている（元データ側に無いため）

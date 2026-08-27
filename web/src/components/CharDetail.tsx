@@ -5,6 +5,7 @@ import {
   codePointLabel,
   radicalChar,
   readableIds,
+  refReadingLabel,
   type CharMeta,
 } from "@/lib/engine";
 import { GRADE_LABEL } from "@/lib/labels";
@@ -13,6 +14,10 @@ import { GRADE_LABEL } from "@/lib/labels";
  * 選んだ字の内訳。読み(音訓)がいちばん知りたい情報なので先頭に大きく出し、
  * 画数・部首・学年・頻度 → 意味 → 符号位置 → 分解 の順に薄くしていく。
  * 入力画面(コンパクト)と一覧画面(コピーボタンつき)で共有している。
+ *
+ * 読みは**正式かどうかで見た目を変える**。KANJIDIC2 の音訓だけを大きい字で出し、
+ * 人名読み・参考・推定は小さく、断り書きつきで下に置く
+ * (辞書に載っている読みと、こちらで推した読みを同じ顔で出さないため)。
  */
 export function CharDetail({
   ch,
@@ -57,10 +62,44 @@ export function CharDetail({
               </p>
             )}
           </div>
-        ) : (
+        ) : !meta.ref ? (
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            読みデータなし(KANJIDIC2 未収録の拡張漢字)
+            読みデータなし
           </p>
+        ) : null}
+
+        {/* ── 正式ではない読み ──
+            人名読み(KANJIDIC2 の nanori)と、KANJIDIC2 に無い字の参考・推定。
+            見出しで出所が分かるようにしてある(推定は当たるのが6割ほど) */}
+        {(meta.nanori || meta.ref) && (
+          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
+            {meta.nanori && (
+              <p className="text-stone-600 dark:text-stone-300">
+                <span
+                  className="mr-1.5 text-[10px] text-stone-400"
+                  title="人名でだけ使う読み。正式な音訓ではない"
+                >
+                  人名
+                </span>
+                {meta.nanori}
+              </p>
+            )}
+            {meta.ref && (
+              <p className="text-stone-600 dark:text-stone-300">
+                <span
+                  className="mr-1.5 text-[10px] text-stone-400"
+                  title={
+                    meta.refKind[0] === "u"
+                      ? "資料(Unihan)にある読み。KANJIDIC2 の音訓ではない"
+                      : "こちらで推した読み。当たるのは6割ほどなので当てにしないこと"
+                  }
+                >
+                  {refReadingLabel(meta.refKind)}
+                </span>
+                {meta.ref}
+              </p>
+            )}
+          </div>
         )}
 
         {/* ── 字の基本情報 ── */}

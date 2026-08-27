@@ -11,10 +11,24 @@ data-src/
 │   ├── babelstone.txt      土台。Unicode 16.0 の全97,680字
 │   ├── chise.txt           穴埋め。拡張Jの唯一の供給源
 │   └── cjkvi.txt           KANJIDIC2収録字の日本字体
-└── kanjidic2/
-    ├── kanjidic2.xml.gz    読み・学年・頻度
-    └── kanjidic2.xml       展開済み（15MB・.gitignore 済み）
+├── kanjidic2/
+│   ├── kanjidic2.xml.gz    読み・学年・頻度
+│   └── kanjidic2.xml       展開済み（15MB・.gitignore 済み）
+└── unihan/
+    └── Unihan.zip          KANJIDIC2 に無い字の読み・異体字・部首番号
 ```
+
+## Unihan は zip のまま置いている
+
+上流（Unicode）が zip でしか配っておらず、展開すると 25MB ある。ここは
+「上流のまま置く」決まりなので zip のまま置き、ビルドのときに必要な3ファイル
+（`Unihan_Readings.txt` / `Unihan_Variants.txt` / `Unihan_IRGSources.txt`）だけを
+`web/scripts/build-data/unzip.mts` が取り出す（依存なしの zip 読み）。
+
+使いどころは**読みの補完**。KANJIDIC2 が読みを持つのは 13,108字だけなので、
+`kJapanese`（かな書きの日本語読み・51,583字）で 9万字ぶんを埋め、それでも
+足りないところは異体字（`kSemanticVariant` ほか）と声符から推す。
+詳しくはリポジトリ直下 README の「読み（正式・人名・参考・推定の4段階）」。
 
 ## 取り直す
 

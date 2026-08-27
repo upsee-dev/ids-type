@@ -25,6 +25,21 @@ final class Dict {
     private var readStart: [Int32] = []
     private var readEnd: [Int32] = []
 
+    /// 人名でだけ使う読み(nanori)の範囲。KANJIDIC2 収録字だけ
+    private var nanoriStart: [Int32] = []
+    private var nanoriEnd: [Int32] = []
+
+    /// 参考・推定の読みの範囲。**拡張漢字も含めた全字ぶん**持つ
+    /// (KANJIDIC2 が読みを持つのは13,108字だけなので、これが無いと
+    ///  残り9万字は読みでは一生引けない。作り方は build-data/readings.mts)
+    private var refStart: [Int32] = []
+    private var refEnd: [Int32] = []
+
+    /// 参考の読みの出所。0=なし 1=資料(Unihan) 2=異体字から 3=部品(声符)から推定。
+    /// どの字から借りたかまでは要らない(キーボードは並べ替えにしか使わない)ので
+    /// 1バイトに畳む
+    private var refKind: [UInt8] = []
+
     /// 字(String) -> 添字。検索の閉包計算で引くので、これは作らざるを得ない
     private var index: [String: Int] = [:]
 
@@ -50,6 +65,19 @@ final class Dict {
     func readings(at i: Int) -> String {
         i < jaCount ? string(readStart[i], readEnd[i]) : ""
     }
+
+    /// 人名でだけ使う読み。正式な音訓ではない
+    func nanori(at i: Int) -> String {
+        i < jaCount ? string(nanoriStart[i], nanoriEnd[i]) : ""
+    }
+
+    /// 参考・推定の読み。正式な読みが無い字の手がかり
+    func ref(at i: Int) -> String {
+        i < refStart.count ? string(refStart[i], refEnd[i]) : ""
+    }
+
+    /// ref の出所。0=なし 1=資料 2=異体字 3=推定(声符)
+    func refKind(at i: Int) -> Int { i < refKind.count ? Int(refKind[i]) : 0 }
     func index(of ch: String) -> Int? { index[ch] }
 
     func ids(of ch: String) -> String? {
@@ -128,6 +156,8 @@ final class Dict {
         base: Int32, hasMeta: Bool, tab: UInt8
     ) {
         // フィールドの区切り位置を集める
+        //   ja  : char\tids\tgrade\tfreq\ton\tkun\t人名\t参考\t参考の出所
+        //   ext : char\tids\t参考\t参考の出所
         var cuts: [Int] = []
         var i = from
         while i < to {
@@ -138,21 +168,38 @@ final class Dict {
 
         let c0 = Int32(from) + base, c1 = Int32(cuts[0]) + base
         // ja は char\tids\tgrade… と続くので ids は次のタブまで。
-        // ext は char\tids だけなので行末まで
-        let c1end = hasMeta ? cuts[1] : to
+        // ext は char\tids\t参考… なので、読みの列があるならその手前まで
+        let c1end = hasMeta ? cuts[1] : (cuts.count >= 2 ? cuts[1] : to)
         let i0 = Int32(cuts[0] + 1) + base, i1 = Int32(c1end) + base
 
         let idx = charStart.count
         charStart.append(c0); charEnd.append(c1)
         idsStart.append(i0); idsEnd.append(i1)
 
+        /// 読みの列の範囲。列が足りない古い辞書でも落ちないよう空を返す
+        func span(_ n: Int) -> (Int32, Int32) {
+            guard cuts.count > n else { return (0, 0) }
+            let end = cuts.count > n + 1 ? cuts[n + 1] : to
+            return (Int32(cuts[n] + 1) + base, Int32(end) + base)
+        }
+
         if hasMeta {
             grade.append(UInt8(clamping: int(p, cuts[1] + 1, cuts[2])))
             freq.append(Int32(clamping: int(p, cuts[2] + 1, cuts[3])))
-            // 音読み(cuts[3]の次)から行末までが読み。訓読みとの間のタブは
-            // 突き合わせのときに空白と同じ「区切り」として効くので残しておく
+            // 音読み(cuts[3]の次)から訓読みの終わりまでが正式な読み。
+            // 音と訓の間のタブは、突き合わせのときに空白と同じ「区切り」として効く
+            let onKunEnd = cuts.count > 5 ? cuts[5] : to
             readStart.append(Int32(cuts[3] + 1) + base)
-            readEnd.append(Int32(to) + base)
+            readEnd.append(Int32(onKunEnd) + base)
+            let (ns, ne) = span(5)
+            nanoriStart.append(ns); nanoriEnd.append(ne)
+            let (rs, re) = span(6)
+            refStart.append(rs); refEnd.append(re)
+            refKind.append(kindCode(p, cuts.count > 7 ? cuts[7] + 1 : to, to))
+        } else {
+            let (rs, re) = span(1)
+            refStart.append(rs); refEnd.append(re)
+            refKind.append(kindCode(p, cuts.count > 2 ? cuts[2] + 1 : to, to))
         }
         // Swift の String は正規等価で比較・ハッシュする。互換漢字(U+F902 車)は
         // 統合漢字(U+8ECA 車)と等価判定されるので、素直に代入すると後から読む
@@ -162,6 +209,17 @@ final class Dict {
         // JS/Kotlin は UTF-16 単位の比較なのでこの問題は起きない。
         let key = string(c0, c1)
         if index[key] == nil { index[key] = idx }
+    }
+
+    /// 参考の読みの出所を1バイトに畳む。"u"=1(資料) "v"=2(異体字) "p"=3(推定)
+    private func kindCode(_ p: UnsafeBufferPointer<UInt8>, _ from: Int, _ to: Int) -> UInt8 {
+        guard from < to else { return 0 }
+        switch p[from] {
+        case UInt8(ascii: "u"): return 1
+        case UInt8(ascii: "v"): return 2
+        case UInt8(ascii: "p"): return 3
+        default: return 0
+        }
     }
 
     private func int(_ p: UnsafeBufferPointer<UInt8>, _ from: Int, _ to: Int) -> Int {

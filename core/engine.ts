@@ -72,6 +72,9 @@ const CP_STEP = 2000000;
 /** 「近い順」で余分な部品1つぶんの重み。素点の最大(5,327,000)より大きくする */
 const NEAR_STEP = 10000000;
 
+/** 読みで引いたときの「段」(正式→人名→参考→推定)1つぶんの重み */
+const READING_STEP = 10000000;
+
 /** 余分の数え上げの頭打ち。Kotlin/Swift 側の Int32 を溢れさせないため */
 const NEAR_MAX = 99;
 
@@ -96,7 +99,7 @@ export class Engine {
   constructor(raw: RawData) {
     for (const [
       ch,
-      [ids, grade, freq, on, kun, strokes, rad, meaning],
+      [ids, grade, freq, on, kun, strokes, rad, meaning, nanori, ref, refKind],
     ] of Object.entries(raw.chars)) {
       this.chars.set(ch, {
         ids,
@@ -104,17 +107,22 @@ export class Engine {
         freq,
         on,
         kun,
-        // 旧形式の辞書(5要素)でも動くように既定値を入れる
+        // 旧形式の辞書(5要素・8要素)でも動くように既定値を入れる
         strokes: strokes ?? 0,
         rad: rad ?? 0,
         meaning: meaning ?? "",
+        nanori: nanori ?? "",
+        ref: ref ?? "",
+        refKind: refKind ?? "",
         ext: false,
       });
       if (ids) this.decompMap.set(ch, ids);
     }
     // ext も検索候補。chars のあとに入れるので、同点のときは KANJIDIC2 側が先に並ぶ
-    for (const [ch, ids] of Object.entries(raw.ext ?? {})) {
+    for (const [ch, entry] of Object.entries(raw.ext ?? {})) {
       if (this.chars.has(ch)) continue;
+      // 旧形式(IDSの文字列だけ)の辞書でも動くようにしておく
+      const [ids, ref, refKind] = typeof entry === "string" ? [entry, "", ""] : entry;
       this.chars.set(ch, {
         ids,
         grade: 0,
@@ -124,6 +132,9 @@ export class Engine {
         strokes: 0,
         rad: 0,
         meaning: "",
+        nanori: "",
+        ref: ref ?? "",
+        refKind: refKind ?? "",
         ext: true,
       });
       if (ids) this.decompMap.set(ch, ids);
@@ -451,6 +462,36 @@ export class Engine {
     return this.orderCache;
   }
 
+  /**
+   * 打った読みがその字のどの読みに当たったか。小さいほど先に出す。
+   * 0 = 当たらなかった。
+   *
+   *   1 … 正式(KANJIDIC2 の音訓)
+   *   2 … 人名(nanori)。正式ではないが実際に使われる
+   *   3 … 参考(資料にある読み)
+   *   4 … 推定(異体字・声符から。当たるのは6割ほど)
+   *
+   * 送り仮名・接辞の目印(あか.るい / -がわ)は落としてから見る。
+   */
+  private readingRank(m: CharMeta, kana: string, kata: string): number {
+    // 10万字ぜんぶが読みを持つので、ここは**打鍵のたびに10万回**通る。
+    // かなを揃え直す(正規化)のは文字列を作り直すぶん高いので、まず
+    // **打った読みをひらがな・カタカナの両方にしておいて素のまま探す**。
+    // 送り仮名の目印(あか.るい)が入っている読みだけ、揃え直して見直す
+    const has = (s: string) => {
+      if (!s) return false;
+      if (s.includes(kana) || s.includes(kata)) return true;
+      return (
+        (s.includes(".") || s.includes("-")) &&
+        toHiragana(s.replace(/[.\-]/g, "")).includes(kana)
+      );
+    };
+    if (has(`${m.on} ${m.kun}`)) return 1;
+    if (has(m.nanori)) return 2;
+    if (has(m.ref)) return m.refKind.startsWith("u") ? 3 : 4;
+    return 0;
+  }
+
   /** ブロックごとの収録字数(一覧のタブに出す) */
   blockCounts(): { block: Block; count: number }[] {
     if (!this.blockCountCache) {
@@ -486,14 +527,27 @@ export class Engine {
         const ch = Number.isFinite(cp) ? safeFromCodePoint(cp) : "";
         pool = ch && this.chars.has(ch) ? [ch] : [];
       } else if (kind === "reading") {
+        // 読みで引く。正式(音訓)→人名→参考→推定 の順に並べる。
+        // 10万字ぜんぶが何かしらの読みを持つので、**どの読みに当たったか**で
+        // 並べないと、正式な読みの字が推定の字に埋もれてしまう
         const kana = toHiragana(query);
-        pool = this.order().filter((ch) => {
-          const m = this.chars.get(ch)!;
-          if (!m.on && !m.kun) return false;
-          return toHiragana(`${m.on} ${m.kun}`.replace(/[.\-]/g, "")).includes(
-            kana,
-          );
-        });
+        const kata = toKatakana(kana);
+        const hit: { ch: string; key: number }[] = [];
+        // 走査は**辞書の並び順**(KANJIDIC2収録字→拡張漢字)。符号位置順で回すと
+        // 同点の字の前後が Kotlin/Swift 版とずれる(あちらは辞書順に走査する)
+        for (const [ch, meta] of this.chars) {
+          const rank = this.readingRank(meta, kana, kata);
+          // 同じ段のなかは素点(学年・頻度)順。つち→土 が先で、同じ読みを持つ
+          // 珍しい字は後ろになる(Kotlin/Swift の byReading と同じ並び)
+          if (rank) {
+            hit.push({
+              ch,
+              key: rank * READING_STEP + this.score({ ch, exact: false, meta }),
+            });
+          }
+        }
+        hit.sort((a, b) => a.key - b.key);
+        pool = hit.map((h) => h.ch);
       } else {
         // 構造・部品検索は search() をそのまま使う(スコア順が保たれる)
         pool = this.search(query, Number.MAX_SAFE_INTEGER).results.map(
@@ -540,6 +594,13 @@ function queryKind(q: string): string {
 function toHiragana(s: string): string {
   return s.replace(/[ァ-ヶ]/g, (c) =>
     String.fromCharCode(c.charCodeAt(0) - 0x60),
+  );
+}
+
+/** ひらがな→カタカナ。打った読みを音読みの表記でも探せるようにする */
+function toKatakana(s: string): string {
+  return s.replace(/[ぁ-ゖ]/g, (c) =>
+    String.fromCharCode(c.charCodeAt(0) + 0x60),
   );
 }
 

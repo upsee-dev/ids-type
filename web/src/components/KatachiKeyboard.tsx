@@ -161,7 +161,9 @@ function SearchTab({
   const hits = useMemo(() => {
     const q = reading.trim();
     if (!engine || !q || composing) return [];
-    return engine.list({ query: q, jaOnly: true, limit: 60 }).items.map((i) => i.ch);
+    // **日本の字に絞らない**。10万字ぜんぶが読みを持つようになったので
+    // (正式→人名→参考→推定の順に並ぶ)、絞ると拡張漢字が読みで引けなくなる
+    return engine.list({ query: q, limit: 60 }).items.map((i) => i.ch);
   }, [engine, reading, composing]);
 
   return (

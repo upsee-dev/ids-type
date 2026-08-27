@@ -6,6 +6,7 @@
 import { BLOCKS, isIdeograph } from "../../../core/data/blocks.ts";
 import type { RawData } from "../../../core/data/types.ts";
 import type { KanjiInfo } from "./kanjidic2.mts";
+import type { RefReading } from "./readings.mts";
 
 export interface SplitResult extends RawData {
   /** 収録はしたが分解データが無い字の数 */
@@ -19,9 +20,19 @@ const isIDC = (c: string) => (c >= "⿰" && c <= "⿿") || c === "㇯";
 export function splitDictionary(
   kanjidic: Map<string, KanjiInfo>,
   idsMap: Map<string, string>,
+  /** 参考・推定の読み。正式な読みが無い字だけ埋まる(readings.mts) */
+  refOf: (ch: string) => RefReading,
 ): SplitResult {
+  /** 参考の読みと出所を、辞書に入れる2つの文字列にする */
+  const refPair = (ch: string): [string, string] => {
+    const r = refOf(ch);
+    if (!r.ref.length) return ["", ""];
+    return [r.ref.join(" "), r.from ? `${r.kind}:${r.from}` : r.kind];
+  };
+
   const chars: RawData["chars"] = {};
   for (const [ch, m] of kanjidic) {
+    const [ref, refKind] = refPair(ch);
     chars[ch] = [
       idsMap.get(ch) || "",
       m.grade,
@@ -31,6 +42,9 @@ export function splitDictionary(
       m.strokes,
       m.rad,
       m.meaning.join(", "),
+      m.nanori.join(" "),
+      ref,
+      refKind,
     ];
   }
 
@@ -38,7 +52,8 @@ export function splitDictionary(
   const parts: RawData["parts"] = {};
   for (const [ch, ids] of idsMap) {
     if (ch in chars) continue;
-    (isIdeograph(ch) ? ext : parts)[ch] = ids;
+    if (isIdeograph(ch)) ext[ch] = [ids, ...refPair(ch)];
+    else parts[ch] = ids;
   }
 
   // zi.tools と同じく「ブロックの割り当て済み全字」を収録する。
@@ -50,7 +65,7 @@ export function splitDictionary(
     for (let cp = lo; cp <= hi; cp++) {
       const ch = String.fromCodePoint(cp);
       if (ch in chars || ch in ext) continue;
-      ext[ch] = "";
+      ext[ch] = ["", ...refPair(ch)];
       extNoIds++;
     }
   }
@@ -59,7 +74,7 @@ export function splitDictionary(
   const leaves = new Set<string>();
   const allIds = [
     ...Object.values(chars).map((v) => v[0]),
-    ...Object.values(ext),
+    ...Object.values(ext).map((v) => v[0]),
     ...Object.values(parts),
   ];
   for (const ids of allIds) {

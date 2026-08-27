@@ -30,6 +30,7 @@ import {
   Engine,
   radicalChar,
   rawData,
+  refReadingLabel,
   THEMES,
   KEY_HEIGHTS,
   type KeyHeight,
@@ -631,7 +632,10 @@ function Screen() {
               {selected}
             </Text>
             <View style={{ flex: 1, gap: 2 }}>
-              {/* 読みがいちばん知りたい情報なので先頭に大きく */}
+              {/* 読みがいちばん知りたい情報なので先頭に大きく。
+                  ただし**正式(KANJIDIC2の音訓)だけ**を大きい字で出し、
+                  人名・参考・推定は下に小さく、出所を添えて置く
+                  (辞書にある読みと、こちらで推した読みを同じ顔で出さない) */}
               {selMeta.on || selMeta.kun ? (
                 <Text style={{ color: t.text, fontSize: 14, fontWeight: "600" }}>
                   {[
@@ -641,9 +645,18 @@ function Screen() {
                     .filter(Boolean)
                     .join("　")}
                 </Text>
-              ) : (
-                <Text style={{ color: t.sub, fontSize: 11 }}>
-                  読みデータなし(KANJIDIC2 未収録の拡張漢字)
+              ) : !selMeta.ref ? (
+                <Text style={{ color: t.sub, fontSize: 11 }}>読みデータなし</Text>
+              ) : null}
+              {(!!selMeta.nanori || !!selMeta.ref) && (
+                <Text numberOfLines={2} style={{ color: t.sub, fontSize: 11 }}>
+                  {[
+                    selMeta.nanori && `人名 ${selMeta.nanori}`,
+                    selMeta.ref &&
+                      `${refReadingLabel(selMeta.refKind)} ${selMeta.ref}`,
+                  ]
+                    .filter(Boolean)
+                    .join("　")}
                 </Text>
               )}
               <Text style={{ color: t.sub, fontSize: 11 }}>

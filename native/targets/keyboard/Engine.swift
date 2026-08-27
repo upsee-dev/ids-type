@@ -61,6 +61,9 @@ final class Engine {
     /// 「近い順」で余分な部品1つぶんの重み。素点の最大(5,327,000)より大きくする
     private static let nearStep = 10_000_000
 
+    /// 読みで引いたときの「段」(正式→人名→参考→推定)1つぶんの重み
+    private static let readingStep = 10_000_000
+
     /// 余分の数え上げの頭打ち。Int を溢れさせないため
     private static let nearMax = 99
 
@@ -334,27 +337,50 @@ final class Engine {
     ///
     /// 音読み(カタカナ)・訓読み(ひらがな)の両方を1本に見て部分一致で拾う。
     /// 訓読みの「あか.るい」「-がわ」の . と - は送り仮名・接辞の目印なので落とす。
-    /// 突き合わせ方は core/engine.ts の list({query}) と同じ。
-    /// 読みを持つのは KANJIDIC2 収録字だけなので、走査も jaCount までで済む。
+    ///
+    /// 読みは**正式・人名・参考・推定の4段階**で持っているので(readings.mts)、
+    /// 当たった読みの段を第一の並び順にする。そうしないと、声符から推しただけの
+    /// 字が、辞書に載っている読みの字を押しのけて前に出てしまう。
+    ///
+    /// 走査は日本の字(13,108)を先に見て、**limit 件そろわなかったときだけ**
+    /// 拡張漢字9万字も見る。よくある読みは前半で埋まるので、打鍵ごとに
+    /// 10万字を舐めることにはならない。
     func byReading(_ query: String, limit: Int = 60) -> [String] {
         let kana = Kana.toHiragana(query.trimmingCharacters(in: .whitespaces))
         if kana.isEmpty { return [] }
+        // 上位に並び順(段→素点)、下位20bitに添字を詰めて Int 1本で並べる
         var hits: [Int] = []
         hits.reserveCapacity(limit * 4)
-        for i in 0..<dict.jaCount {
-            let raw = dict.readings(at: i)
-            if raw.isEmpty { continue }
-            let r = Kana.toHiragana(raw)
+        func scan(_ from: Int, _ to: Int) {
+            for i in from..<to {
+                let rank = readingRank(i, kana)
+                if rank == 0 { continue }
+                let key = rank * Self.readingStep + score(i, false)
+                hits.append((key << 20) | i)
+            }
+        }
+        scan(0, dict.jaCount)
+        if hits.count < limit { scan(dict.jaCount, dict.count) }
+        hits.sort()
+        return hits.prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
+    }
+
+    /// 打った読みがその字のどの読みに当たったか。小さいほど先に出す。0 = 当たらない。
+    ///   1 … 正式(KANJIDIC2 の音訓)
+    ///   2 … 人名(nanori)。正式ではないが実際に使われる
+    ///   3 … 参考(資料にある読み)
+    ///   4 … 推定(異体字・声符から。当たるのは6割ほど)
+    private func readingRank(_ i: Int, _ kana: String) -> Int {
+        func hit(_ s: String) -> Bool {
+            if s.isEmpty { return false }
+            return Kana.toHiragana(s)
                 .replacingOccurrences(of: ".", with: "")
                 .replacingOccurrences(of: "-", with: "")
-            if r.contains(kana) { hits.append(i) }
+                .contains(kana)
         }
-        // 常用に近い字・よく使う字を先に(同点は辞書の並び順。
-        // Kotlin/TypeScript の安定ソートと同じ並びにするため明示する)
-        hits.sort {
-            let ka = score($0, false), kb = score($1, false)
-            return ka == kb ? $0 < $1 : ka < kb
-        }
-        return hits.prefix(limit).map { dict.char(at: $0) }
+        if hit(dict.readings(at: i)) { return 1 }
+        if hit(dict.nanori(at: i)) { return 2 }
+        if hit(dict.ref(at: i)) { return dict.refKind(at: i) == 1 ? 3 : 4 }
+        return 0
     }
 }

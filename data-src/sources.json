@@ -66,6 +66,18 @@
       "benchmark": "精度の評価には同じリリースの kanjivg-<日付>-all.zip に入っている異体字(楷書体3,488枚・別筆順ほか計4,959枚)を使う。このXMLには1字も入っていないので held-out として成立する。zip は重いので置かず、build:handwriting-bench が圧縮済みの問題集(web/scripts/testdata/handwriting-variants.tsv)を書き出す"
     },
     {
+      "id": "unihan",
+      "file": "unihan/Unihan.zip",
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+      "title": "Unihan Database (Unicode Character Database)",
+      "author": "Unicode, Inc.",
+      "unicodeVersion": "17.0.0",
+      "license": "Unicode License v3",
+      "licenseUrl": "https://www.unicode.org/license.txt",
+      "role": "KANJIDIC2 に無い字の読み。kJapanese(かなの日本語読み)が51,583字ぶんあり、拡張漢字38,574字がこれで読めるようになる。異体字(kSemanticVariant ほか)と康熙部首番号(kRSUnicode)も、読みの補完に使う",
+      "note": "上流は zip。中の Unihan_Readings.txt / Unihan_Variants.txt / Unihan_IRGSources.txt を展開後 25MB ぶん使うので、zip のまま置いてビルド時に読む(build-data/unzip.mts)"
+    },
+    {
       "id": "kanjidic2",
       "file": "kanjidic2/kanjidic2.xml.gz",
       "url": "https://www.edrdg.org/kanjidic/kanjidic2.xml.gz",

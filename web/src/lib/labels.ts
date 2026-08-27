@@ -40,5 +40,5 @@ export const LIST_EXAMPLES = [
 ];
 
 /** 辞書の実サイズ。build:data の出力(gzip)と合わせる */
-export const DICT_LOADING = "辞書データを読み込み中… (10万字・gzip 約0.9MB)";
+export const DICT_LOADING = "辞書データを読み込み中… (10万字・gzip 約1.4MB)";
 export const DICT_ERROR = "辞書データの読み込みに失敗しました。再読み込みしてください。";

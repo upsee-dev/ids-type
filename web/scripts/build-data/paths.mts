@@ -22,4 +22,6 @@ export const SRC = {
   babelstone: join(DATA_SRC, "ids", "babelstone.txt"),
   cjkvi: join(DATA_SRC, "ids", "cjkvi.txt"),
   chise: join(DATA_SRC, "ids", "chise.txt"),
+  /** Unihan(読み・異体字・部首番号)。展開すると25MBあるので zip のまま読む */
+  unihanZip: join(DATA_SRC, "unihan", "Unihan.zip"),
 };
