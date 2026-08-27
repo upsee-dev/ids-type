@@ -15,3 +15,15 @@ import KatachiOcr from "./src/KatachiOcrModule";
  */
 export const recognizeText = (uri: string): Promise<string> =>
   KatachiOcr.recognizeText(uri);
+
+/**
+ * 読み終わった写真を捨てる。
+ *
+ * 撮った写真は端末の一時領域(キャッシュ)に**ファイルとして残る**。このアプリは
+ * 「写真はどこにも残りません」と断って権限をもらっているので、読み取りが済んだら
+ * 撮った側から消す（撮る → 読む → 使い捨て）。
+ *
+ * 消せなくても投げない。読み取りはもう済んでいて、呼ぶ側にできることが無いため。
+ */
+export const discardPhoto = (uri: string): Promise<void> =>
+  KatachiOcr.discardPhoto(uri);

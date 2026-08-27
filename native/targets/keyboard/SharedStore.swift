@@ -80,9 +80,10 @@ struct SharedStore {
         defaults.set(raw, forKey: key)
     }
 
-    /// 候補の並び順("common" / "near")。値は core/engine.ts の SORT_MODES と同じ。
+    /// 候補の並び順("unicode" / "common" / "near")。値は core/engine.ts の
+    /// SORT_MODES と同じ。既定は "unicode"(完全一致を先頭に、あとは符号位置順)。
     /// キーボードに設定画面は無いので、アプリで選んだものをここで読むだけにする
-    var sortMode: String { defaults.string(forKey: Self.sortKey) ?? "common" }
+    var sortMode: String { defaults.string(forKey: Self.sortKey) ?? "unicode" }
 
     /// キーボードの縦幅("small" / "medium" / "large")。
     /// 値は core/data/keyboard.ts の KEY_HEIGHTS と同じ

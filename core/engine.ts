@@ -17,17 +17,26 @@ import type {
 /**
  * 候補の並び順。設定で選べる。
  *
- * common … これまでの並び。完全一致 → 学年 → 使用頻度で、KANJIDIC2 に無い
- *          拡張漢字は必ず後ろ(Engine#score)。文章の中の字を出すときはこちら
- * near   … 打ったかたちに近い順。**打った部品のほかに余分な部品が少ない字**を
- *          先に出す。ぴったりの字が拡張漢字でも先頭に来るので、珍しい1字を
- *          狙って出すときはこちらのほうが速い
+ * **どの並びでも、打ったものと完全一致する字は必ず先頭**(Engine#score /
+ * Engine#codeKey)。「〈左右〉日月」と組んだのに 明 が候補の奥にある、
+ * のような並びにはならない。違うのは**そのあとの並べ方**だけ。
+ *
+ * unicode … 既定。あとは**符号位置(Unicode)の順**にただ並べる。打ち直しても
+ *           同じ字が同じ場所に出るので、「さっき見かけた字」を探し直しやすい
+ * common  … 学年 → 使用頻度の順。ふだんの文章で使う字を先に出したいとき
+ * near    … 打ったかたちに近い順。**打った部品のほかに余分な部品が少ない字**を
+ *           先に出す。珍しい1字を狙って出すときはこれがいちばん速い
  *
  * 「近い」の物差しは Engine#leafCount(再帰的に展開したときの部品の数)。
  * 学年や頻度と違って**拡張漢字9万字にもある**情報なので、10万字ぜんぶを
  * 同じ土俵で並べられる。
  */
 export const SORT_MODES = [
+  {
+    key: "unicode",
+    label: "符号位置順",
+    note: "打った形そのままの字を先頭に、あとは符号位置の順。並びが動かない",
+  },
   {
     key: "common",
     label: "よく使う順",
@@ -42,9 +51,25 @@ export const SORT_MODES = [
 
 export type SortMode = (typeof SORT_MODES)[number]["key"];
 
-export const DEFAULT_SORT: SortMode = "common";
+export const DEFAULT_SORT: SortMode = "unicode";
 
-/** 「近い順」で余分な部品1つぶんの重み。素点の最大(2,827,000)より大きくする */
+/**
+ * 完全一致の下駄。**打ったものそのままの字はどの並びでも必ず先頭**に来るよう、
+ * 残り(学年300,000＋頻度27,000＋拡張2,000,000)を全部足したより大きく取る。
+ * ここが小さいと、ぴったりの字が拡張漢字だったときに拡張の下駄で沈む。
+ */
+const EXACT_STEP = 3000000;
+
+/** 拡張漢字(KANJIDIC2 に無い字)の下駄。日本語入力なので日本の漢字の後ろへ */
+const EXT_STEP = 2000000;
+
+/**
+ * 「符号位置順」の段(完全一致→日本の漢字→拡張漢字)1つぶんの重み。
+ * 符号位置の最大 0x10FFFF(1,114,111)より大きくして、段が混ざらないようにする。
+ */
+const CP_STEP = 2000000;
+
+/** 「近い順」で余分な部品1つぶんの重み。素点の最大(5,327,000)より大きくする */
 const NEAR_STEP = 10000000;
 
 /** 余分の数え上げの頭打ち。Kotlin/Swift 側の Int32 を溢れさせないため */
@@ -274,11 +299,13 @@ export class Engine {
       (n) => typeof n === "string" && n !== WILD,
     ) as string[];
     if (!tokens.length) return { results: [], mode: "empty" };
+    // 打った部品そのものの字(「木」→ 木)も候補に入れる。**それが完全一致**なので、
+    // 除いてしまうと「打ったものと同じ字を先頭に」が成り立たない
+    const want = tokens.map(norm);
     for (const [ch, meta] of this.chars) {
-      if (tokens.length === 1 && ch === tokens[0]) continue; // 自分自身は除外
       const cl = this.closure(ch);
-      if (tokens.every((t) => cl.has(t)))
-        results.push({ ch, exact: false, meta });
+      if (!tokens.every((t) => cl.has(t))) continue;
+      results.push({ ch, exact: this.madeOfExactly(ch, want), meta });
     }
     const asked = tokens.reduce((n, t) => n + this.leafCount(t), 0);
     results.sort(
@@ -288,15 +315,48 @@ export class Engine {
   }
 
   /**
-   * 並べ替えの鍵。「よく使う順」は素点そのまま、「かたちが近い順」は
-   * **打った部品のほかに余分な部品がいくつあるか**を先に見て、同じ数のなかを
-   * 素点で並べる(＝同じくらい近い字なら、よく使う字が先)。
+   * 打った部品**だけ**でできている字か(並ぶ順番は問わない)。
+   * 例: 「木」→ 木そのもの、「木木」→ 林(⿰木木)。呆(⿱口木)は口が余るので違う。
+   *
+   * 操作子なしで打ったときの「完全一致」の見分け方。当たった字は候補の先頭へ出す。
+   */
+  private madeOfExactly(ch: string, want: string[]): boolean {
+    if (want.length === 1 && norm(ch) === want[0]) return true;
+    const ids = this.decompMap.get(ch);
+    if (!ids) return false;
+    const parts = toTokens(ids)
+      .filter((t) => !isIDC(t))
+      .map(norm)
+      .sort();
+    if (parts.length !== want.length) return false;
+    const sorted = [...want].sort();
+    return parts.every((p, i) => p === sorted[i]);
+  }
+
+  /**
+   * 並べ替えの鍵。「符号位置順」は符号位置そのまま、「よく使う順」は素点そのまま、
+   * 「かたちが近い順」は**打った部品のほかに余分な部品がいくつあるか**を先に見て、
+   * 同じ数のなかを素点で並べる(＝同じくらい近い字なら、よく使う字が先)。
    */
   private sortKey(r: Result, sort: SortMode, asked: number): number {
+    if (sort === "unicode") return this.codeKey(r);
     const s = this.score(r);
     if (sort !== "near") return s;
     const extra = Math.min(NEAR_MAX, Math.max(0, this.leafCount(r.ch) - asked));
     return extra * NEAR_STEP + s;
+  }
+
+  /**
+   * 「符号位置順」の鍵。**完全一致 → 日本の漢字 → 拡張漢字**の3段に分け、
+   * 段の中を符号位置(Unicode)で並べる。
+   *
+   * 段を分けずに符号位置だけで並べると、拡張A(U+3400〜)が統合漢字(U+4E00〜)より
+   * 前に来て、木を打つと 林 の前に見たこともない字が数百字並ぶ。日本語入力として
+   * 使いものにならないので、「拡張漢字は日本の漢字の後ろ」は符号位置順でも守る。
+   */
+  private codeKey(r: Result): number {
+    const rank = (r.exact ? 0 : 2) + (r.meta.ext ? 1 : 0);
+    return rank * CP_STEP + r.ch.codePointAt(0)!;
   }
 
   /** 入力が求めている部品の数。? は数えない(埋まるぶんは「余分」として効く) */
@@ -337,15 +397,17 @@ export class Engine {
   }
 
   private score(r: Result): number {
-    let s = r.exact ? 0 : 500000;
+    // 完全一致(打ったものそのままの字)が最上位の鍵。拡張漢字の下駄より大きいので、
+    // ぴったりの字が拡張漢字でも候補の先頭に出る
+    let s = r.exact ? 0 : EXACT_STEP;
     const g = r.meta.grade;
     s +=
       (g >= 1 && g <= 6 ? g : g === 8 ? 7 : g === 9 || g === 10 ? 8 : 10) *
       30000;
     s += r.meta.freq ? r.meta.freq * 10 : 27000;
     // 日本語入力なので、KANJIDIC2 に無い字(拡張A〜J ほか9万字)は必ず日本の漢字の後ろへ。
-    // 素点の最大(500000+300000+27000)より大きい下駄を履かせて確実に分離する
-    if (r.meta.ext) s += 2000000;
+    // 学年・頻度の最大(300,000+27,000)より大きい下駄を履かせて確実に分離する
+    if (r.meta.ext) s += EXT_STEP;
     return s;
   }
 

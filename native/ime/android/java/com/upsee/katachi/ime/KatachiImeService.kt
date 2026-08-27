@@ -23,7 +23,7 @@ import kotlin.concurrent.thread
  * だから一連の流れは
  *
  *   かたちと部品で組む → 候補から**選ぶ**(送る欄に入る) → **送る**(相手の欄へ)
- *   → **戻る**(元の入力方法へ)
+ *   → **地球儀キー**(普段の入力方法へ移る)
  *
  * になっている。組み立て中のかたちコードも、選んだ字も、送るまで相手の
  * テキスト欄には一切触らない。押し間違いが相手の本文に残らないようにするため。
@@ -154,21 +154,27 @@ class KatachiImeService : InputMethodService() {
             }
 
             /**
-             * 「戻る」。文章の続きを打つために元の入力方法へ帰る。
+             * 地球儀キー。文章の続きを打つために別の入力方法へ移る。
              *
-             * switchToPreviousInputMethod は直前に使っていた入力方法へ戻す
-             * (API 28+)。使えない・戻れないときは選択リストを出して本人に選ばせる
-             * (switchToNextInputMethod だと絵文字や音声入力に飛んでしまう)。
+             * **ほかの日本語入力と同じ振る舞い**にしてある。押すと次の入力方法へ
+             * 順に移り(switchToNextInputMethod)、長押しで選択リストが出る。
+             * 見慣れた地球儀を押せば普段のキーボードへ帰れるほうが、この道具
+             * だけの決まりを覚えるより速い。
+             *
+             * 移れなかったとき(次が無い・Android 8以前で API が無い)は選択リストを
+             * 出して本人に選ばせる。押しても何も起きない行き止まりを作らないため。
+             * ※ どちらの API も 28+。このアプリの下限は 24 なので必ず版で分ける。
              *
              * 組みかけは捨てずに覚えておく。戻ってきたら続きから打てる
              */
-            override fun goBack() {
+            override fun switchKeyboard() {
                 persist()
                 val moved = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
-                    switchToPreviousInputMethod()
+                    (switchToNextInputMethod(false) || switchToPreviousInputMethod())
                 if (!moved) openImePicker()
             }
 
+            /** 地球儀キーの長押し。移り先を自分で選びたいとき */
             override fun openImePicker() {
                 persist()
                 getSystemService(InputMethodManager::class.java)?.showInputMethodPicker()

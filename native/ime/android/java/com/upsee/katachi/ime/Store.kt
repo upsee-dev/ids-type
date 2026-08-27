@@ -75,11 +75,12 @@ class Store(context: Context) {
     }
 
     /**
-     * 候補の並び順("common" / "near")。値は core/engine.ts の SORT_MODES と同じ。
+     * 候補の並び順("unicode" / "common" / "near")。値は core/engine.ts の
+     * SORT_MODES と同じ。既定は "unicode"(完全一致を先頭に、あとは符号位置順)。
      * キーボードに設定画面は無いので、アプリで選んだものをここで読むだけにする。
      * 打つたびに読むが、SharedPreferences は読み込み済みの Map なので安い。
      */
-    fun sortMode(): String = prefs.getString(SORT, null) ?: "common"
+    fun sortMode(): String = prefs.getString(SORT, null) ?: "unicode"
 
     /**
      * キーボードの縦幅("small" / "medium" / "large")。

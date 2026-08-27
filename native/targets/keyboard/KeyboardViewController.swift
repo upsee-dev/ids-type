@@ -157,8 +157,8 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private let outboxLabel = UILabel()
     private weak var outboxRow: UIStackView?
     private var sendButton: UIButton!
-    /// 元の入力方法へ帰るボタン。送った直後だけ色を上げて次の一手を示す
-    private var backButton: UIButton!
+    /// 地球儀キー(キーボードの切り替え)。送った直後だけ色を上げて次の一手を示す
+    private var switchButton: UIButton!
     /// かなの面・手書きの面の出し入れ
     private var kanaToggle: UIButton!
     private var hwToggle: UIButton!
@@ -172,7 +172,8 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// 候補は1ページ candPageSize 件ずつだが、めくれば全件たどれる
     private var candPage = 0
     private static let candPageSize = 60
-    private let tabRow = UIStackView()
+    /// 部品パレット(部首)のタブ。読み・手書き・カメラの面から戻る口も兼ねる
+    private var radicalTab: UIButton!
     /// 道具の帯。打つ場所ではないので線で区切って上端にまとめる
     private let toolSeparator = UIView()
     private let shelfScroll = UIScrollView()
@@ -244,7 +245,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         view.addSubview(root)
         // 高さは面ごとに変える(applyHeight)。拡張は自分で高さを決められるので、
         // 「入る高さに中身を詰める」のではなく「要る高さを取る」ほうにしてある
-        minHeight = view.heightAnchor.constraint(equalToConstant: 320)
+        minHeight = view.heightAnchor.constraint(equalToConstant: 372)
         minHeight.priority = .required - 1 // 端末が別の高さを強いてきたら譲る
         NSLayoutConstraint.activate([
             root.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
@@ -288,7 +289,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         composingLabel.textColor = colText
         // 入力中の表示は1字ずつ分けられないので、部品を多く含む1枚目を当てる。
         // このフォントに無い字(かな・常用漢字)は OS が標準フォントで描く
-        composingLabel.font = extFont1?.withSize(17) ?? .systemFont(ofSize: 17)
+        // 組み立て中のかたち。〈左右〉日月 のように読める形で出るので、候補と
+        // 同じくらいの大きさで見えないと打っているものが確かめられない
+        composingLabel.font = extFont1?.withSize(20) ?? .systemFont(ofSize: 20)
         composingLabel.text = ""
         top.addArrangedSubview(composingLabel)
         let backspace = smallButton("⌫", #selector(onBackspace))
@@ -314,7 +317,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         outTag.textColor = colSub
         outTag.setContentHuggingPriority(.required, for: .horizontal)
         out.addArrangedSubview(outTag)
-        outboxLabel.font = extFont1?.withSize(19) ?? .systemFont(ofSize: 19)
+        outboxLabel.font = extFont1?.withSize(22) ?? .systemFont(ofSize: 22)
         outboxLabel.textColor = colText
         out.addArrangedSubview(outboxLabel)
         // 選び直しは1字ずつ。全部やめたいときは長押し
@@ -353,7 +356,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             candidateRow.leadingAnchor.constraint(equalTo: candidateScroll.leadingAnchor),
             candidateRow.trailingAnchor.constraint(equalTo: candidateScroll.trailingAnchor),
             candidateRow.heightAnchor.constraint(equalTo: candidateScroll.heightAnchor),
-            candidateScroll.heightAnchor.constraint(equalToConstant: 46),
+            // 候補は**見て選ぶ**もの。字が小さいと拡張漢字の細かな違い(点の有無・
+            // 一画の向き)が見分けられないので、行ごと大きめに取る
+            candidateScroll.heightAnchor.constraint(equalToConstant: 56),
         ])
         root.addArrangedSubview(candidateScroll)
 
@@ -377,30 +382,34 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         buildOperators()
 
         // ── タブ(部品パレットの出し分け)＋かなの面の出し入れ ──
-        tabRow.axis = .horizontal
-        tabRow.spacing = 4
-        tabRow.distribution = .fillEqually
-        // 部品パレットは「部首・偏旁」の1つだけ。読み・手書きの面から戻る口を
+        // 部品パレットは「部首」の1つだけ。読み・手書きの面から戻る口を
         // 兼ねているので、タブと同じ見た目のまま置いてある
-        do {
-            let b = UIButton(type: .system)
-            b.setTitle("部首・偏旁", for: .normal)
-            b.titleLabel?.font = .systemFont(ofSize: 12)
-            b.addTarget(self, action: #selector(onTab(_:)), for: .touchUpInside)
-            tabRow.addArrangedSubview(b)
-        }
+        radicalTab = smallButton("部首", #selector(onTab(_:)))
         // パレットに無い部品を読みから出すための面。タブではなく出し入れなので、
         // 出しても消してもかたちの行・候補・組み立て中の表示はそのまま残る。
         // 手書きも同じ扱い(読みも部品の見当もつかない字は、書いて引く)
         kanaToggle = smallButton("読み", #selector(onToggleKana))
         hwToggle = smallButton("手書き", #selector(onToggleHandwriting))
         cameraToggle = smallButton("カメラ", #selector(onToggleCamera))
-        let tabWrap = UIStackView(arrangedSubviews: [tabRow, kanaToggle, hwToggle, cameraToggle])
+        // **4つとも同じ幅・同じ大きさ**にする。並びとしては対等な引き方
+        // (部首／読み／手書き／カメラ)なので、幅も字の大きさもばらばらだと
+        // どれが今どの状態なのか読めず、狙う幅も毎回変わって押しにくい。
+        //
+        // 4つを**同じ1段**の arrangedSubviews に並べて .fillEqually で等分する
+        // (部首だけ入れ子の UIStackView にしていたときは、中の余白のぶんだけ
+        //  文字の載る幅がずれていた)。左右の詰めも smallButton の既定ではなく
+        // ここで揃え直す＝「部首」と「手書き」で字の詰まり方が変わらない
+        let tabWrap = UIStackView(arrangedSubviews: [radicalTab, kanaToggle, hwToggle, cameraToggle])
         tabWrap.axis = .horizontal
         tabWrap.spacing = 4
-        // **4つとも同じ幅**にする。並びとしては対等な引き方(部首／読み／手書き／カメラ)
-        // なので、1つだけが余りを全部取ると狙う幅がばらばらになって押しにくい
         tabWrap.distribution = .fillEqually
+        for b in [radicalTab, kanaToggle, hwToggle, cameraToggle] {
+            guard let b else { continue }
+            b.titleLabel?.font = .systemFont(ofSize: 13)
+            b.contentEdgeInsets = UIEdgeInsets(top: 8, left: 2, bottom: 8, right: 2)
+            b.titleLabel?.adjustsFontSizeToFitWidth = true // 幅は動かさず、字のほうを縮める
+            b.titleLabel?.minimumScaleFactor = 0.8
+        }
         root.addArrangedSubview(tabWrap)
 
         // ── 画数チップ ──
@@ -447,33 +456,24 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         favoritesButton = favorites
         let theme = toolButton("paintpalette", "着せ替え", #selector(onCycleTheme))
 
-        // 「戻る」。文章の続きは普段のキーボードで打つ道具立てなので、
-        // 帰り道を必ず出しておく。
-        // ただし iOS のサードパーティのキーボードには「直前のキーボードへ戻る」APIが
-        // 無く、advanceToNextInputMode() で次へ送るのが上限。戻り先は約束できないので
-        // 読み上げのラベルもその言い方にする
-        let back = toolButton("arrow.uturn.backward", "他のキーボードへ", #selector(onGoBack))
-        backButton = back
+        // 地球儀キー。文章の続きは普段のキーボードで打つ道具立てなので、出口を
+        // 必ず出しておく。**ほかのキーボードと同じ地球儀**にしてあるので、
+        // 押せば次のキーボードへ移り、長押しすれば選択リストが出る
+        // (どちらも handleInputModeList が面倒を見る＝OS 標準の振る舞いそのまま)。
+        //
+        // handleInputModeList は event が要るので、これだけ .allTouchEvents で受ける
+        // (toolButton が張った .touchUpInside は外してから付け替える)。
+        // needsInputModeSwitchKey で出し分けない: false のときも「普段のキーボードへ
+        // 帰る道」は要るし、キーが出たり消えたりするほうが分かりにくい
+        let globe = toolButton("globe", "キーボードを切り替える", #selector(onSwitchKeyboard(_:event:)))
+        globe.removeTarget(self, action: #selector(onSwitchKeyboard(_:event:)), for: .touchUpInside)
+        globe.addTarget(self, action: #selector(onSwitchKeyboard(_:event:)), for: .allTouchEvents)
+        switchButton = globe
 
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        var items: [UIView] = [history, favorites, theme, spacer, back]
-
-        // 地球儀。OS が切り替えキーを求めるときだけ出す(要件を満たすため)。
-        // handleInputModeList は event が要るので、これだけ .allTouchEvents で受ける
-        if needsInputModeSwitchKey {
-            let switchBtn = toolButton("globe", "キーボードを選ぶ", #selector(onSwitchKeyboard(_:event:)))
-            switchBtn.removeTarget(
-                self, action: #selector(onSwitchKeyboard(_:event:)), for: .touchUpInside,
-            )
-            switchBtn.addTarget(
-                self, action: #selector(onSwitchKeyboard(_:event:)), for: .allTouchEvents,
-            )
-            items.append(switchBtn)
-        }
-
-        let row = UIStackView(arrangedSubviews: items)
+        let row = UIStackView(arrangedSubviews: [history, favorites, theme, spacer, globe])
         row.axis = .horizontal
         row.spacing = 4
         return row
@@ -650,7 +650,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     }
 
     /// 送る欄の中身をカーソル位置へ。**ここが相手の欄に触る唯一の場所**。
-    /// 自動では戻らない代わりに「戻る」の色を上げて次の一手を示す
+    /// 自動では切り替わらない代わりに地球儀キーの色を上げて次の一手を示す
     @objc private func onSend() {
         guard !outbox.isEmpty else { return }
         textDocumentProxy.insertText(outbox)
@@ -658,23 +658,17 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         composing = ""
         dismissResumedNote()
         store.clearPending()
-        if let b = backButton {
+        if let b = switchButton {
             b.tintColor = colAccent
             style(b, fill: colAccentBg, stroke: colAccent)
         }
     }
 
-    /// 「戻る」。文章の続きを打つために元のキーボードへ帰る。
+    /// 地球儀キー。文章の続きを打つために別のキーボードへ移る。
     ///
-    /// サードパーティのキーボードには「直前のキーボードへ戻る」APIが無いので、
-    /// advanceToNextInputMode() で次へ送るのが上限（戻り先は約束できない）。
-    /// 組みかけは捨てずに覚えておく。戻ってきたら続きから打てる
-    @objc private func onGoBack() {
-        persist()
-        advanceToNextInputMode()
-    }
-
-    /// 地球儀キー。移り先を自分で選びたいときの選択リスト
+    /// handleInputModeList が**押せば次へ・長押しなら選択リスト**まで面倒を見る
+    /// (OS 標準の地球儀キーと同じ振る舞い)。組みかけは捨てずに覚えておくので、
+    /// 戻ってくれば続きから打てる。
     /// (.allTouchEvents で受けるので何度も呼ばれる。保存は毎回でも安い)
     @objc private func onSwitchKeyboard(_ sender: UIButton, event: UIEvent) {
         persist()
@@ -701,7 +695,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         outboxRow?.isHidden = !ready
         outboxLabel.text = outbox
         outboxLabel.textColor = colText
-        outboxLabel.font = extFont1?.withSize(19) ?? .systemFont(ofSize: 19)
+        outboxLabel.font = extFont1?.withSize(22) ?? .systemFont(ofSize: 22)
         guard let b = sendButton else { return }
         b.isEnabled = ready
         b.setTitleColor(ready ? themeColor { $0.onAccent } : colSub, for: .normal)
@@ -750,9 +744,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             : Ids.readable(Ids.compile(composing))
         composingLabel.textColor = composing.isEmpty ? colSub : colText
         if !composing.isEmpty {
-            // 打ち始めたら断り書きと「戻る」の強調は引っ込める(組んでいる最中なので)
+            // 打ち始めたら断り書きと地球儀キーの強調は引っ込める(組んでいる最中なので)
             dismissResumedNote()
-            if let b = backButton {
+            if let b = switchButton {
                 b.tintColor = colSub
                 style(b, fill: .clear, stroke: colBorder)
             }
@@ -808,10 +802,10 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         for h in r.hits {
             let b = UIButton(type: .system)
             b.setTitle(h.ch, for: .normal)
-            b.titleLabel?.font = font(for: h.ch, size: 23)
+            b.titleLabel?.font = font(for: h.ch, size: 27)
             b.setTitleColor(dict.isExt(h.index) ? colSub : colText, for: .normal)
             style(b, fill: h.exact ? colAccentBg : colCard, stroke: h.exact ? colAccent : colBorder)
-            b.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+            b.widthAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
             b.accessibilityLabel = h.ch
             b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
             // タップは「選ぶ」だけ。相手のテキスト欄に入るのは「送る」のとき
@@ -948,7 +942,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         let screen = view.window?.windowScene?.screen.bounds.height
             ?? UIScreen.main.bounds.height
         let h = Height.of(store.heightMode)
-        let want: CGFloat = (kanaOpen ? 476 : (hwOpen ? 470 : 320)) * h.scale
+        let want: CGFloat = (kanaOpen ? 512 : (hwOpen ? 506 : 372)) * h.scale
         minHeight?.constant = Swift.min(want, screen * h.screenMax)
     }
 
@@ -969,9 +963,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
         var screenMax: CGFloat {
             switch self {
-            case .small: return 0.62
-            case .medium: return 0.70
-            case .large: return 0.78
+            case .small: return 0.70
+            case .medium: return 0.78
+            case .large: return 0.84
             }
         }
 
@@ -980,11 +974,12 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     private func rebuildKeys() {
         let faceOpen = kanaOpen || hwOpen || cameraOpen
-        for v in tabRow.arrangedSubviews {
-            guard let b = v as? UIButton else { continue }
-            // 読み・手書きの面を出しているあいだ、部品パレットのタブは効いていない
+        // 読み・手書き・カメラの面を出しているあいだ、部品パレットのタブは効いていない
+        if let b = radicalTab {
             b.setTitleColor(!faceOpen ? colAccent : colSub, for: .normal)
-            style(b, fill: !faceOpen ? colCard : .clear, stroke: !faceOpen ? colBorder : .clear)
+            // 枠は開いていても消さない。4つの見た目を揃えるため、
+            // 変えるのは中の塗りと字の色だけにする
+            style(b, fill: !faceOpen ? colCard : .clear, stroke: colBorder)
         }
         for (toggle, on) in [(kanaToggle, kanaOpen), (hwToggle, hwOpen), (cameraToggle, cameraOpen)] {
             guard let toggle else { continue }

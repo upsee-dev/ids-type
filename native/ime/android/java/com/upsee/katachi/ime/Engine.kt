@@ -12,7 +12,22 @@ package com.upsee.katachi.ime
 class Engine(private val dict: Dict) {
 
     private companion object {
-        /** 「近い順」で余分な部品1つぶんの重み。素点の最大(2,827,000)より大きくする */
+        /**
+         * 完全一致の下駄。**打ったものそのままの字はどの並びでも必ず先頭**に来るよう、
+         * 残り(学年300,000＋頻度27,000＋拡張2,000,000)を全部足したより大きく取る。
+         */
+        const val EXACT_STEP = 3_000_000
+
+        /** 拡張漢字(KANJIDIC2 に無い字)の下駄。日本語入力なので日本の漢字の後ろへ */
+        const val EXT_STEP = 2_000_000
+
+        /**
+         * 「符号位置順」の段(完全一致→日本の漢字→拡張漢字)1つぶんの重み。
+         * 符号位置の最大 0x10FFFF(1,114,111)より大きくして段が混ざらないようにする。
+         */
+        const val CP_STEP = 2_000_000
+
+        /** 「近い順」で余分な部品1つぶんの重み。素点の最大(5,327,000)より大きくする */
         const val NEAR_STEP = 10_000_000
 
         /** 余分の数え上げの頭打ち。Int を溢れさせないため */
@@ -107,15 +122,16 @@ class Engine(private val dict: Dict) {
     }
 
     // ---- 並び順 ----
+    // 完全一致(打ったものそのままの字)が最上位の鍵。拡張漢字の下駄より大きいので、
+    // ぴったりの字が拡張漢字でも候補の先頭に出る。
     // 日本語入力なので、KANJIDIC2 に無い字は必ず日本の漢字の後ろへ。
-    // 素点の最大(500000+300000+27000)より大きい下駄を履かせて確実に分離する。
     private fun score(i: Int, exact: Boolean): Int {
-        var s = if (exact) 0 else 500_000
+        var s = if (exact) 0 else EXACT_STEP
         val g = dict.gradeAt(i)
         s += (if (g in 1..6) g else if (g == 8) 7 else if (g == 9 || g == 10) 8 else 10) * 30_000
         val f = dict.freqAt(i)
         s += if (f > 0) f * 10 else 27_000
-        if (dict.isExt(i)) s += 2_000_000
+        if (dict.isExt(i)) s += EXT_STEP
         return s
     }
 
@@ -124,7 +140,10 @@ class Engine(private val dict: Dict) {
      * アプリの設定画面が共有領域(Store.SORT)に書いたものをそのまま受ける。
      */
     enum class Sort {
-        /** これまでの並び。完全一致 → 学年 → 使用頻度(拡張漢字は必ず後ろ) */
+        /** 既定。完全一致を先頭に、あとは符号位置(Unicode)の順 */
+        UNICODE,
+
+        /** 完全一致 → 学年 → 使用頻度(拡張漢字は必ず後ろ) */
         COMMON,
 
         /** 打ったかたちに近い順。余分な部品が少ない字を先に */
@@ -132,19 +151,55 @@ class Engine(private val dict: Dict) {
         ;
 
         companion object {
-            fun of(key: String?): Sort = if (key == "near") NEAR else COMMON
+            fun of(key: String?): Sort = when (key) {
+                "near" -> NEAR
+                "common" -> COMMON
+                else -> UNICODE
+            }
         }
     }
 
     /**
-     * 並べ替えの鍵。NEAR は**打った部品のほかに余分な部品がいくつあるか**を
-     * 先に見て、同じ数のなかを素点で並べる(同じくらい近いなら、よく使う字が先)。
+     * 並べ替えの鍵。UNICODE は符号位置そのまま、NEAR は**打った部品のほかに
+     * 余分な部品がいくつあるか**を先に見て、同じ数のなかを素点で並べる
+     * (同じくらい近いなら、よく使う字が先)。
      */
     private fun sortKey(h: Hit, sort: Sort, asked: Int): Int {
+        if (sort == Sort.UNICODE) return codeKey(h)
         val s = score(h.index, h.exact)
         if (sort != Sort.NEAR) return s
         val extra = (leafCount(h.ch) - asked).coerceIn(0, NEAR_MAX)
         return extra * NEAR_STEP + s
+    }
+
+    /**
+     * 「符号位置順」の鍵。**完全一致 → 日本の漢字 → 拡張漢字**の3段に分け、
+     * 段の中を符号位置(Unicode)で並べる。
+     *
+     * 段を分けずに符号位置だけで並べると、拡張A(U+3400〜)が統合漢字(U+4E00〜)より
+     * 前に来て、木を打つと 林 の前に見たこともない字が数百字並ぶ。日本語入力として
+     * 使いものにならないので、「拡張漢字は日本の漢字の後ろ」は符号位置順でも守る。
+     */
+    private fun codeKey(h: Hit): Int {
+        val rank = (if (h.exact) 0 else 2) + (if (dict.isExt(h.index)) 1 else 0)
+        return rank * CP_STEP + h.ch.codePointAt(0)
+    }
+
+    /**
+     * 打った部品**だけ**でできている字か(並ぶ順番は問わない)。
+     * 例: 「木」→ 木そのもの、「木木」→ 林(⿰木木)。呆(⿱口木)は口が余るので違う。
+     *
+     * 操作子なしで打ったときの「完全一致」の見分け方。当たった字は候補の先頭へ出す。
+     */
+    private fun madeOfExactly(ch: String, want: List<String>): Boolean {
+        if (want.size == 1 && Ids.norm(ch) == want[0]) return true
+        val ids = dict.idsOf(ch)
+        if (ids.isNullOrEmpty()) return false
+        val parts = Ids.tokens(ids)
+            .filter { !(it.length == 1 && Ids.isIdc(it[0])) }
+            .map { Ids.norm(it) }
+        if (parts.size != want.size) return false
+        return parts.sorted() == want.sorted()
     }
 
     /** 入力が求めている部品の数。? は数えない(埋まるぶんは「余分」として効く) */
@@ -201,7 +256,7 @@ class Engine(private val dict: Dict) {
     fun search(
         input: String,
         limit: Int = 200,
-        sort: Sort = Sort.COMMON,
+        sort: Sort = Sort.UNICODE,
         offset: Int = 0,
     ): Result {
         val compiled = Ids.compile(input)
@@ -239,11 +294,12 @@ class Engine(private val dict: Dict) {
             .filter { it != Ids.WILD.toString() }
             .map { Ids.norm(it) }
         if (want.isEmpty()) return Result(emptyList(), Mode.EMPTY)
+        // 打った部品そのものの字(「木」→ 木)も候補に入れる。**それが完全一致**なので、
+        // 除いてしまうと「打ったものと同じ字を先頭に」が成り立たない
         for (i in dict.chars.indices) {
             val ch = dict.chars[i]
-            if (want.size == 1 && ch == want[0]) continue // 自分自身は除外
             val cl = closure(ch)
-            if (want.all { cl.contains(it) }) hits.add(Hit(i, ch, false))
+            if (want.all { cl.contains(it) }) hits.add(Hit(i, ch, madeOfExactly(ch, want)))
         }
         val asked = want.sumOf { leafCount(it) }
         hits.sortBy { sortKey(it, sort, asked) }
@@ -271,6 +327,7 @@ class Engine(private val dict: Dict) {
             if (r.contains(kana)) hits.add(i)
         }
         // 常用に近い字・よく使う字を先に。score は exact でない前提でよい
+        // (読みで引くのは KANJIDIC2 収録字だけなので、ここは符号位置順にしない)
         hits.sortBy { score(it, false) }
         return hits.take(limit).map { dict.chars[it] }
     }

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { recognizeText } from "../modules/katachi-ocr";
+import { discardPhoto, recognizeText } from "../modules/katachi-ocr";
 import { isIdeograph } from "./engine";
 import { fontFor, type Theme } from "./theme";
 import { haptic } from "./feedback";
@@ -41,11 +41,16 @@ export function CameraPad({
     haptic("commit");
     setBusy(true);
     setNote("読み取り中…");
+    // 撮った写真は端末の一時領域にファイルとして残る。読めても読めなくても
+    // 最後に必ず捨てる(「写真はどこにも残りません」と断って権限をもらっているので、
+    // 使い終わったものを置いていかない)
+    let photo: string | null = null;
     try {
       // skipProcessing は使わない。センサーの向きのまま返ってきて、
       // 横倒しの写真を読ませることになる(端末によっては全滅する)
       const shot = await cam.current?.takePictureAsync({ quality: 0.9 });
       if (!shot?.uri) throw new Error("no photo");
+      photo = shot.uri;
       const text = await recognizeText(shot.uri);
       // 読めた順のまま、漢字だけを重複なく拾う
       const seen = new Set<string>();
@@ -64,6 +69,7 @@ export function CameraPad({
       setNote("読み取れませんでした。もう一度撮ってみてください");
       haptic("warn");
     } finally {
+      if (photo) await discardPhoto(photo).catch(() => {});
       setBusy(false);
     }
   };
@@ -75,7 +81,7 @@ export function CameraPad({
           紙や画面に出てきた字を、カメラで読み取って探せます。
         </Text>
         <Text style={{ fontSize: 11, color: theme.faint, textAlign: "center" }}>
-          読み取りは端末の中だけで行い、写真はどこにも残りません。
+          読み取りは端末の中だけで行い、写真は読んだそばから消します。
         </Text>
         <Pressable
           onPress={() => {
@@ -102,7 +108,8 @@ export function CameraPad({
         {note}
       </Text>
 
-      {/* 読み取れた字。読みタブ・手書きタブと同じ作法（タップ＝出力／長押し＝部品） */}
+      {/* 読み取れた字。手書きタブと同じ作法（タップ＝出力／長押し＝部品）。
+          撮った字はそのまま欲しい場面がほとんどなので、主動作をタップに置く */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

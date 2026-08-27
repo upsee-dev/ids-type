@@ -336,7 +336,8 @@ export default function Home() {
               <p className="min-w-0 flex-1 truncate">
                 {mode === "structure" &&
                   `構造マッチ: ${total.toLocaleString()}件(枠付き=完全一致)`}
-                {mode === "parts" && `部品を含む字: ${total.toLocaleString()}件`}
+                {mode === "parts" &&
+                  `部品を含む字: ${total.toLocaleString()}件(枠付き=完全一致)`}
                 {mode === "empty" && "かたちか部品を入力してください"}
                 {total > CAND_PAGE &&
                   `　${(page * CAND_PAGE + 1).toLocaleString()}〜${Math.min(

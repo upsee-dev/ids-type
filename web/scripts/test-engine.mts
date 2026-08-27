@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { Engine, type SortMode } from "../../core/index.ts";
+import { DEFAULT_SORT, Engine, type Result, type SortMode } from "../../core/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const raw = JSON.parse(readFileSync(join(here, "..", "..", "core", "kanji-data.json"), "utf8"));
@@ -22,11 +22,11 @@ const check = (q: string, expectTop: string[], within = 8, sort: SortMode = "com
  * ページを分けて取っても、続けて取ったのと同じ並びで**全件**たどれること。
  * (候補は1ページぶんずつ描くので、ここがずれると見落とす字が出る)
  */
-const checkPages = (q: string, per = 50) => {
-  const whole = e.search(q, per * 3).results.map(r => r.ch);
-  const paged = [0, 1, 2].flatMap(p => e.search(q, per, "common", p * per).results.map(r => r.ch));
-  const { total } = e.search(q, 1);
-  const last = e.search(q, per, "common", Math.max(0, total - 1)); // 最後の1件も取れる
+const checkPages = (q: string, per = 50, sort: SortMode = DEFAULT_SORT) => {
+  const whole = e.search(q, per * 3, sort).results.map(r => r.ch);
+  const paged = [0, 1, 2].flatMap(p => e.search(q, per, sort, p * per).results.map(r => r.ch));
+  const { total } = e.search(q, 1, sort);
+  const last = e.search(q, per, sort, Math.max(0, total - 1)); // 最後の1件も取れる
   const ok = whole.join("") === paged.join("") && last.results.length === Math.min(1, total);
   if (!ok) fail++;
   console.log(`${ok ? "OK " : "NG "} [pages] "${q}" 全${total}件 / ${per}件ずつ ${Math.ceil(total / per)}ページ`);
@@ -46,6 +46,39 @@ const checkNear = (q: string, parts: string[]) => {
   console.log(`${ok ? "OK " : "NG "} [near] "${q}" -> ${results.slice(0, 10).map(r => r.ch).join(" ")}  余分:${extras.slice(0, 10).join(",")}`);
 };
 
+/**
+ * 既定の「符号位置順」の性質。
+ *   1. 打ったものと完全一致する字が**先頭**
+ *   2. そのあとは 完全一致 → 日本の漢字 → 拡張漢字 の段で、段の中は符号位置順
+ * (段を分けるのは、拡張A(U+3400〜)が統合漢字(U+4E00〜)より前だから。
+ *  分けないと木を打っただけで 林 の前に見たこともない字が数百字並ぶ)
+ */
+const rank = (r: Result) => (r.exact ? 0 : 2) + (r.meta.ext ? 1 : 0);
+const checkUnicode = (q: string, expectFirst: string) => {
+  const { results, total } = e.search(q, 500, "unicode");
+  const first = results[0]?.ch ?? "";
+  const sorted = results.every((r, i) => {
+    if (i === 0) return true;
+    const prev = results[i - 1];
+    if (rank(prev) !== rank(r)) return rank(prev) < rank(r);
+    return prev.ch.codePointAt(0)! < r.ch.codePointAt(0)!;
+  });
+  const ok = first === expectFirst && sorted;
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [unicode] "${q}" -> ${results.slice(0, 10).map(r => r.ch).join(" ")}` +
+      `  (${total}件, 先頭:${first}${sorted ? "" : " / 符号位置順が崩れている"})  期待:${expectFirst}`,
+  );
+};
+
+checkUnicode("LR日月", "明"); // 組んだかたちそのままの字が先頭
+checkUnicode("日月", "明");
+checkUnicode("木", "木"); // 部品そのものの字も「完全一致」＝先頭
+checkUnicode("宀女", "安");
+checkUnicode("OC囗玉", "国");
+check("木", ["木"], 1, "unicode");
+check("LR木木", ["林"], 1, "unicode");
+check("木木", ["林"], 1, "unicode"); // 操作子なしでも「木2つでできた字」は完全一致
 check("LR日月", ["明"]);
 check("UD宀子", ["字"]);
 check("OC囗玉", ["国"]);
@@ -66,6 +99,8 @@ checkNear("日月", ["日", "月"]);
 checkPages("日月");
 checkPages("LR木?");
 checkPages("宀女");
+checkPages("日月", 50, "common");
+checkPages("宀女", 50, "near");
 console.log("decompose 課:", e.decompose("課"));
 console.log("decompose 樹:", e.decompose("樹"));
 console.log(fail ? `FAILED: ${fail}` : "ALL PASS");

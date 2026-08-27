@@ -8,6 +8,7 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
 
 /**
  * 写真から字を読み取る(Android)。
@@ -17,6 +18,9 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * 「通信を一切しない」というこのアプリの約束を破ってしまう。
  *
  * 認識器は作るのに費用がかかるので使い回す(撮るたびに作らない)。
+ *
+ * 撮った写真は一時領域にファイルとして残るので、読み終わったら
+ * [discardPhoto] で消してもらう(「写真はどこにも残りません」と断っているため)。
  */
 class KatachiOcrModule : Module() {
 
@@ -44,6 +48,17 @@ class KatachiOcrModule : Module() {
                             promise.reject(CodedException("ocr_failed", "読み取れませんでした", it))
                         }
                 }
+        }
+
+        // 読み終わった写真を捨てる。撮る → 読む → 使い捨て、で端末にも残さない。
+        // 消せなくても失敗にはしない(読み取りは済んでいて、呼ぶ側にできることが無い)。
+        // 消すのは自分たちが撮った file:// のファイルだけ(他所の写真には触らない)
+        AsyncFunction("discardPhoto") { uri: String ->
+            val path = runCatching { Uri.parse(uri) }
+                .getOrNull()
+                ?.takeIf { it.scheme == null || it.scheme == "file" }
+                ?.path
+            if (path != null) runCatching { File(path).delete() }
         }
     }
 }

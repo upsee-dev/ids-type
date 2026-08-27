@@ -12,7 +12,7 @@
  * (Android は dp で面だけ、iOS は pt で帯を含む全体)。呼び名とキーはここが唯一。
  */
 export const KEY_HEIGHTS = [
-  { key: "small", label: "小", scale: 1, note: "いまの高さ。画面をいちばん広く使えます" },
+  { key: "small", label: "小", scale: 1, note: "標準の高さ。画面をいちばん広く使えます" },
   { key: "medium", label: "中", scale: 1.22, note: "キーを少し大きく。打ち間違いが減ります" },
   { key: "large", label: "大", scale: 1.45, note: "キーをいちばん大きく。指が太くても押せます" },
 ] as const;

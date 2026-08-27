@@ -47,7 +47,18 @@ final class Engine {
     private var leafCountCache: [String: Int] = [:]
     private var cache: Cached?
 
-    /// 「近い順」で余分な部品1つぶんの重み。素点の最大(2,827,000)より大きくする
+    /// 完全一致の下駄。**打ったものそのままの字はどの並びでも必ず先頭**に来るよう、
+    /// 残り(学年300,000＋頻度27,000＋拡張2,000,000)を全部足したより大きく取る
+    private static let exactStep = 3_000_000
+
+    /// 拡張漢字(KANJIDIC2 に無い字)の下駄。日本語入力なので日本の漢字の後ろへ
+    private static let extStep = 2_000_000
+
+    /// 「符号位置順」の段(完全一致→日本の漢字→拡張漢字)1つぶんの重み。
+    /// 符号位置の最大 0x10FFFF(1,114,111)より大きくして段が混ざらないようにする
+    private static let cpStep = 2_000_000
+
+    /// 「近い順」で余分な部品1つぶんの重み。素点の最大(5,327,000)より大きくする
     private static let nearStep = 10_000_000
 
     /// 余分の数え上げの頭打ち。Int を溢れさせないため
@@ -146,36 +157,71 @@ final class Engine {
     }
 
     // MARK: - 並び順
+    // 完全一致(打ったものそのままの字)が最上位の鍵。拡張漢字の下駄より大きいので、
+    // ぴったりの字が拡張漢字でも候補の先頭に出る。
     // 日本語入力なので、KANJIDIC2 に無い字は必ず日本の漢字の後ろへ。
-    // 素点の最大(500000+300000+27000)より大きい下駄を履かせて確実に分離する。
     private func score(_ i: Int, _ exact: Bool) -> Int {
-        var s = exact ? 0 : 500_000
+        var s = exact ? 0 : Self.exactStep
         let g = dict.grade(at: i)
         s += (g >= 1 && g <= 6 ? g : g == 8 ? 7 : (g == 9 || g == 10) ? 8 : 10) * 30_000
         let f = dict.freq(at: i)
         s += f > 0 ? f * 10 : 27_000
-        if dict.isExt(i) { s += 2_000_000 }
+        if dict.isExt(i) { s += Self.extStep }
         return s
     }
 
     /// 候補の並び順。キーは core/engine.ts の SORT_MODES と同じ文字列で、
     /// アプリの設定画面が共有領域(SharedStore.sortMode)に書いたものを受ける。
     enum Sort {
-        /// これまでの並び。完全一致 → 学年 → 使用頻度(拡張漢字は必ず後ろ)
+        /// 既定。完全一致を先頭に、あとは符号位置(Unicode)の順
+        case unicode
+        /// 完全一致 → 学年 → 使用頻度(拡張漢字は必ず後ろ)
         case common
         /// 打ったかたちに近い順。余分な部品が少ない字を先に
         case near
 
-        static func of(_ key: String?) -> Sort { key == "near" ? .near : .common }
+        static func of(_ key: String?) -> Sort {
+            switch key {
+            case "near": return .near
+            case "common": return .common
+            default: return .unicode
+            }
+        }
     }
 
-    /// 並べ替えの鍵。near は**打った部品のほかに余分な部品がいくつあるか**を
-    /// 先に見て、同じ数のなかを素点で並べる(同じくらい近いなら、よく使う字が先)。
+    /// 並べ替えの鍵。unicode は符号位置そのまま、near は**打った部品のほかに
+    /// 余分な部品がいくつあるか**を先に見て、同じ数のなかを素点で並べる
+    /// (同じくらい近いなら、よく使う字が先)。
     private func sortKey(_ h: Hit, _ sort: Sort, _ asked: Int) -> Int {
+        if sort == .unicode { return codeKey(h) }
         let s = score(h.index, h.exact)
         if sort != .near { return s }
         let extra = min(Self.nearMax, max(0, leafCount(h.ch) - asked))
         return extra * Self.nearStep + s
+    }
+
+    /// 「符号位置順」の鍵。**完全一致 → 日本の漢字 → 拡張漢字**の3段に分け、
+    /// 段の中を符号位置(Unicode)で並べる。
+    ///
+    /// 段を分けずに符号位置だけで並べると、拡張A(U+3400〜)が統合漢字(U+4E00〜)より
+    /// 前に来て、木を打つと 林 の前に見たこともない字が数百字並ぶ。日本語入力として
+    /// 使いものにならないので、「拡張漢字は日本の漢字の後ろ」は符号位置順でも守る。
+    private func codeKey(_ h: Hit) -> Int {
+        let rank = (h.exact ? 0 : 2) + (dict.isExt(h.index) ? 1 : 0)
+        let cp = h.ch.unicodeScalars.first.map { Int($0.value) } ?? 0
+        return rank * Self.cpStep + cp
+    }
+
+    /// 打った部品**だけ**でできている字か(並ぶ順番は問わない)。
+    /// 例: 「木」→ 木そのもの、「木木」→ 林(⿰木木)。呆(⿱口木)は口が余るので違う。
+    ///
+    /// 操作子なしで打ったときの「完全一致」の見分け方。当たった字は候補の先頭へ出す。
+    private func madeOfExactly(_ ch: String, _ want: [String]) -> Bool {
+        if want.count == 1, Ids.norm(ch) == want[0] { return true }
+        guard let ids = dict.ids(of: ch), !ids.isEmpty else { return false }
+        let parts = ids.filter { !Ids.isIdc($0) }.map { Ids.norm(String($0)) }
+        if parts.count != want.count { return false }
+        return parts.sorted() == want.sorted()
     }
 
     /// 入力が求めている部品の数。? は数えない(埋まるぶんは「余分」として効く)
@@ -211,7 +257,7 @@ final class Engine {
 
     /// 候補を1ページぶん返す。
     /// offset を動かすと同じ絞り込みの続きが取れる(走査はやり直さない)。
-    func search(_ input: String, limit: Int = 60, sort: Sort = .common, offset: Int = 0) -> Result {
+    func search(_ input: String, limit: Int = 60, sort: Sort = .unicode, offset: Int = 0) -> Result {
         let compiled = Ids.compile(input)
         if compiled.isEmpty { return Result(hits: [], mode: .empty) }
         let key = "\(compiled)\u{0}\(sort)"
@@ -229,6 +275,15 @@ final class Engine {
     }
 
     /// 絞り込みの本体。全件を並べ替えて返す(切り出しは search がやる)
+    /// 並べ替えの比較。**同点は辞書の並び順**で決める。
+    /// Swift の sort は安定ではないので、ここを書かないと同点の候補の前後が
+    /// 実行のたびに変わり、TypeScript/Kotlin 版(安定ソート)とも食い違う。
+    private func less(_ a: Hit, _ b: Hit, _ sort: Sort, _ asked: Int) -> Bool {
+        let ka = sortKey(a, sort, asked)
+        let kb = sortKey(b, sort, asked)
+        return ka == kb ? a.index < b.index : ka < kb
+    }
+
     private func searchAll(_ compiled: String, _ sort: Sort) -> Result {
         let hasIdc = compiled.contains(where: { Ids.isIdc($0) })
         var hits: [Hit] = []
@@ -253,23 +308,24 @@ final class Engine {
                 }
             }
             let asked = askedLeaves(q)
-            hits.sort { sortKey($0, sort, asked) < sortKey($1, sort, asked) }
+            hits.sort { less($0, $1, sort, asked) }
             return Result(hits: hits, mode: .structure, total: hits.count)
         }
 
         // 部品包含検索(操作子なし)
         let want = compiled.filter { $0 != Ids.wild }.map { Ids.norm(String($0)) }
         if want.isEmpty { return Result(hits: [], mode: .empty) }
+        // 打った部品そのものの字(「木」→ 木)も候補に入れる。**それが完全一致**なので、
+        // 除いてしまうと「打ったものと同じ字を先頭に」が成り立たない
         for i in 0..<dict.count {
             let ch = dict.char(at: i)
-            if want.count == 1 && ch == want[0] { continue } // 自分自身は除外
             let cl = closure(ch)
             if want.allSatisfy({ cl.contains($0) }), seen.insert(ch).inserted {
-                hits.append(Hit(index: i, ch: ch, exact: false))
+                hits.append(Hit(index: i, ch: ch, exact: madeOfExactly(ch, want)))
             }
         }
         let asked = want.reduce(0) { $0 + leafCount($1) }
-        hits.sort { sortKey($0, sort, asked) < sortKey($1, sort, asked) }
+        hits.sort { less($0, $1, sort, asked) }
         return Result(hits: hits, mode: .parts, total: hits.count)
     }
 
@@ -293,8 +349,12 @@ final class Engine {
                 .replacingOccurrences(of: "-", with: "")
             if r.contains(kana) { hits.append(i) }
         }
-        // 常用に近い字・よく使う字を先に
-        hits.sort { score($0, false) < score($1, false) }
+        // 常用に近い字・よく使う字を先に(同点は辞書の並び順。
+        // Kotlin/TypeScript の安定ソートと同じ並びにするため明示する)
+        hits.sort {
+            let ka = score($0, false), kb = score($1, false)
+            return ka == kb ? $0 < $1 : ka < kb
+        }
         return hits.prefix(limit).map { dict.char(at: $0) }
     }
 }

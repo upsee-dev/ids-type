@@ -27,18 +27,19 @@ import kotlin.concurrent.thread
 /**
  * キーボードの画面。Web版・アプリ版と同じ構成をビューで組む。
  *
- *   [ 履歴 ★ 着せ替え                      戻る ]  ← 道具の帯(打つ場所ではない)
+ *   [ 履歴 ★ 着せ替え                        🌐 ]  ← 道具の帯(打つ場所ではない)
  *   [ (棚) 使った字 / お気に入りの字            ]
  *   [ 組み立て中のかたち ]             [⌫] [消]
  *   [ 送る: 明 ]                  [取消] [送る]
  *   [ 候補: 明 朝 晴 …                          ]
  *   [ かたち: 左右 上下 …                        ]
- *   [ 部首・偏旁 |            読み | 手書き ]
+ *   [ 部首 | 読み | 手書き | カメラ ]  ← 4つとも同じ幅
  *   [ 部品の並び / 読みのフリック面               ]
  *
- * 流れは **組む → 選ぶ → 送る → 戻る**。候補をタップしても入るのは「送る欄」までで、
- * 相手のテキスト欄に触るのは「送る」を押したときだけ。押し間違いが相手の本文に
- * 残らないようにするため、組み立て中と送る欄は行を分けてラベルを付けてある。
+ * 流れは **組む → 選ぶ → 送る → 🌐で普段のキーボードへ**。候補をタップしても
+ * 入るのは「送る欄」までで、相手のテキスト欄に触るのは「送る」を押したときだけ。
+ * 押し間違いが相手の本文に残らないようにするため、組み立て中と送る欄は
+ * 行を分けてラベルを付けてある。
  *
  * 上の帯だけは打つための場所ではないので、間に線を引いて色も落とし、
  * 打鍵の面から視覚的に切り離してある。
@@ -69,9 +70,9 @@ class KeyboardView(context: Context, private val host: Host) :
         fun clearSelected()
         /** 送る欄の中身を相手のカーソル位置へ */
         fun send()
-        /** 元の入力方法へ戻る */
-        fun goBack()
-        /** 入力方法の選択リスト(「戻る」の長押し) */
+        /** 次の入力方法へ移る(地球儀キー。長押しは選択リスト) */
+        fun switchKeyboard()
+        /** 入力方法の選択リスト(地球儀キーの長押し) */
         fun openImePicker()
         /** カメラで字を読み取る。入力方式はカメラを持てないのでアプリを開く */
         fun openCamera()
@@ -95,11 +96,15 @@ class KeyboardView(context: Context, private val host: Host) :
         /** 連射中に音を鳴らす頻度。毎回鳴らすと「ジジジ」と潰れて聞こえる */
         const val SOUND_EVERY_N_REPEATS = 3
 
-        /** 画数チップの高さ。指で狙える大きさ(dp)。候補キー44・部品キー46に合わせる */
-        const val CHIP_DP = 40
+        /** 画数チップの高さ。指で狙える大きさ(dp)。候補キー52・部品キー46に合わせる */
+        const val CHIP_DP = 42
 
-        /** 打鍵の面より上(道具の帯〜タブ〜画数チップ)がだいたい使う高さ(dp) */
-        const val CHROME_DP = 268f
+        /**
+         * 打鍵の面より上(道具の帯〜組み立て中〜候補〜かたち〜タブ〜画数チップ)が
+         * だいたい使う高さ(dp)。**この帯を厚くしたら一緒に増やすこと**
+         * (打鍵の面の頭打ち cap をここから引いて決めているため)
+         */
+        const val CHROME_DP = 286f
 
         /** 着せ替えの保存キーと「おまかせ」の値 */
         const val PREF_THEME = "theme"
@@ -182,7 +187,9 @@ class KeyboardView(context: Context, private val host: Host) :
     /** 送る欄の行。空のあいだは畳んで、その高さを打鍵の面へ回す */
     private lateinit var outboxRow: LinearLayout
     private lateinit var sendButton: TextView
-    private lateinit var backButton: TextView
+
+    /** 地球儀キー(入力方法の切り替え)。送ったあとは色を上げて次の一手を示す */
+    private lateinit var switchButton: TextView
     private var resumedNote: TextView? = null
 
     private val composingLabel: TextView
@@ -294,7 +301,9 @@ class KeyboardView(context: Context, private val host: Host) :
         }
         composingLabel = TextView(context).apply {
             setTextColor(colText)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            // 組み立て中のかたち。〈左右〉日月 のように読める形で出るので、
+            // 候補と同じくらいの大きさで見えないと打っているものが確かめられない
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
             hint = "かたちと部品を選んでください"
             setHintTextColor(colSub)
             layoutParams = LayoutParams(0, wrap, 1f)
@@ -324,7 +333,7 @@ class KeyboardView(context: Context, private val host: Host) :
         )
         outboxLabel = TextView(context).apply {
             setTextColor(colText)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 23f)
             hint = "候補を選ぶとここに入ります"
             setHintTextColor(colSub)
             setSingleLine()
@@ -370,7 +379,9 @@ class KeyboardView(context: Context, private val host: Host) :
         candScroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             addView(candidateRow)
-            layoutParams = LayoutParams(matchParent, dp(52))
+            // 候補は**見て選ぶ**もの。字が小さいと拡張漢字の細かな違い(点の有無・
+            // 一画の向き)が見分けられないので、行ごと大きめに取る
+            layoutParams = LayoutParams(matchParent, dp(62))
         }
         addView(candScroll)
 
@@ -412,10 +423,19 @@ class KeyboardView(context: Context, private val host: Host) :
         // カメラは入力方式の中では持てない(権限を自分で求められない)ので、
         // ここは**アプリのカメラ面を開くだけ**の入口にしてある
         val cameraTab = smallButton("カメラ") { host.openCamera() }
-        // **4つとも同じ幅**にする。並びとしては対等な引き方(部首／読み／手書き／カメラ)
-        // なので、1つだけが余りを全部取ると狙う幅がばらばらになって押しにくい
+        // **4つとも同じ幅・同じ大きさ**にする。並びとしては対等な引き方
+        // (部首／読み／手書き／カメラ)なので、幅も字の大きさもばらばらだと
+        // どれが今どの状態なのか読めず、狙う幅も毎回変わって押しにくい。
+        //
+        // 幅は weight で等分する(横幅0＋weight1＝中の字の長さに引っ張られない)。
+        // 字の大きさと余白もここで揃え直す(smallButton と tabButton で既定が違う)
         for ((i, v) in listOf(radicalTab, kanaToggle, hwToggle, cameraTab).withIndex()) {
-            v.setPadding(dp(2), dp(7), dp(2), dp(7)) // 高さも揃える
+            v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            v.setPadding(dp(2), dp(8), dp(2), dp(8))
+            v.setSingleLine() // 「手書き」だけ2行になって行の高さが変わるのを防ぐ
+            // 塗りも揃える。状態を持つ3つ(部首・読み・手書き)はこのあと
+            // rebuildKeys が塗り直すので、ここで置くのは「選んでいない」見た目
+            v.background = keyBg(Color.TRANSPARENT, colBorder)
             v.layoutParams = LinearLayout.LayoutParams(0, wrap, 1f).apply {
                 if (i > 0) marginStart = dp(4)
             }
@@ -499,7 +519,7 @@ class KeyboardView(context: Context, private val host: Host) :
         composingLabel.text = readableComposing(host.composingText)
         if (host.composingText.isNotEmpty()) {
             clearResumedNote()
-            calmBackButton()
+            calmSwitchButton()
         }
         runSearch()
     }
@@ -527,18 +547,18 @@ class KeyboardView(context: Context, private val host: Host) :
 
     /**
      * 送った。読みは残す（同じ読みで次の字を探すことがある）。
-     * 自動では戻らない代わりに「戻る」の色を上げて、次の一手を示す
+     * 自動では切り替わらない代わりに地球儀キーの色を上げて、次の一手を示す
      */
     fun onSent() {
         clearResumedNote()
-        backButton.setTextColor(colAccent)
-        backButton.background = keyBg(colAccentBg, colAccent)
+        switchButton.setTextColor(colAccent)
+        switchButton.background = keyBg(colAccentBg, colAccent)
     }
 
-    /** 打ち始めたら「戻る」の強調は引っ込める（続けて組んでいる最中なので） */
-    private fun calmBackButton() {
-        backButton.setTextColor(colSub)
-        backButton.background = keyBg(Color.TRANSPARENT, colBorder)
+    /** 打ち始めたら地球儀キーの強調は引っ込める（続けて組んでいる最中なので） */
+    private fun calmSwitchButton() {
+        switchButton.setTextColor(colSub)
+        switchButton.background = keyBg(Color.TRANSPARENT, colBorder)
     }
 
     /**
@@ -610,14 +630,17 @@ class KeyboardView(context: Context, private val host: Host) :
         row.addView(history)
         row.addView(favorites)
         row.addView(toolButton(Icons.PALETTE, "着せ替え") { cycleTheme() })
-        // 残りを押し広げて「戻る」を右端へ
+        // 残りを押し広げて地球儀キーを右端へ
         row.addView(View(context), LayoutParams(0, dp(1), 1f))
-        // 文章の続きは普段のキーボードで打つ道具立てなので、帰り道を必ず出しておく。
-        // 長押しなら入力方法の選択リスト(戻り先を自分で選びたいとき)
-        backButton = toolButton(Icons.BACK, "戻る", onLongTap = { host.openImePicker() }) {
-            host.goBack()
-        }
-        row.addView(backButton)
+        // 文章の続きは普段のキーボードで打つ道具立てなので、出口を必ず出しておく。
+        // **ほかの日本語入力と同じ地球儀キー**にしてあるので、押せば入力方法が
+        // 切り替わり、長押しすれば選択リストが出る(移り先を自分で選びたいとき)
+        switchButton = toolButton(
+            Icons.GLOBE,
+            "キーボードを切り替える",
+            onLongTap = { host.openImePicker() },
+        ) { host.switchKeyboard() }
+        row.addView(switchButton)
         return row
     }
 
@@ -631,8 +654,8 @@ class KeyboardView(context: Context, private val host: Host) :
         const val STAR_OUTLINE = 0xF599
         const val PALETTE = 0xF27E
 
-        /** 「戻る」(arrow-undo-outline)。元の入力方法へ帰る */
-        const val BACK = 0xF143
+        /** 地球儀(globe-outline)。ほかの入力方法へ切り替える */
+        const val GLOBE = 0xF350
     }
 
     private fun toolButton(
@@ -784,10 +807,10 @@ class KeyboardView(context: Context, private val host: Host) :
                 TextView(context).apply {
                     text = h.ch
                     setTextColor(if (host.dict.isExt(h.index)) colSub else colText)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
                     typeface = fontFor(h.ch)
                     gravity = Gravity.CENTER
-                    minWidth = dp(46)
+                    minWidth = dp(52)
                     setPadding(dp(6), dp(4), dp(6), dp(4))
                     background = keyBg(
                         if (h.exact) colAccentBg else colCard,
@@ -804,7 +827,7 @@ class KeyboardView(context: Context, private val host: Host) :
                         true
                     }
                     feedbackOnPress()
-                    layoutParams = LinearLayout.LayoutParams(wrap, dp(44)).apply { marginEnd = dp(4) }
+                    layoutParams = LinearLayout.LayoutParams(wrap, dp(52)).apply { marginEnd = dp(4) }
                 },
             )
         }
@@ -820,7 +843,7 @@ class KeyboardView(context: Context, private val host: Host) :
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
                     gravity = Gravity.CENTER
                     setPadding(dp(8), dp(4), dp(8), dp(4))
-                    layoutParams = LinearLayout.LayoutParams(wrap, dp(44))
+                    layoutParams = LinearLayout.LayoutParams(wrap, dp(52))
                 },
             )
         }
@@ -848,7 +871,7 @@ class KeyboardView(context: Context, private val host: Host) :
             isClickable = true
             setOnClickListener { onTap() }
             feedbackOnPress()
-            layoutParams = LinearLayout.LayoutParams(wrap, dp(44)).apply { marginEnd = dp(4) }
+            layoutParams = LinearLayout.LayoutParams(wrap, dp(52)).apply { marginEnd = dp(4) }
         }
 
     // ---- キーの並び ----
@@ -986,8 +1009,8 @@ class KeyboardView(context: Context, private val host: Host) :
         val screenDp = dm.heightPixels / dm.density
         val h = Height.of(host.store.heightMode())
         val cap = (screenDp * h.screenMax - CHROME_DP).toInt()
-        val want = ((if (kanaOpen) 268 else if (hwOpen) 252 else 168) * h.scale).toInt()
-        return dp(want.coerceAtMost(cap).coerceAtLeast(140))
+        val want = ((if (kanaOpen) 300 else if (hwOpen) 288 else 208) * h.scale).toInt()
+        return dp(want.coerceAtMost(cap).coerceAtLeast(160))
     }
 
     /**
@@ -1000,9 +1023,9 @@ class KeyboardView(context: Context, private val host: Host) :
      * キーは core/data/keyboard.ts の KEY_HEIGHTS と同じ。
      */
     private enum class Height(val key: String, val scale: Float, val screenMax: Float) {
-        SMALL("small", 1.0f, 0.62f),
-        MEDIUM("medium", 1.22f, 0.70f),
-        LARGE("large", 1.45f, 0.78f),
+        SMALL("small", 1.0f, 0.70f),
+        MEDIUM("medium", 1.22f, 0.78f),
+        LARGE("large", 1.45f, 0.84f),
         ;
 
         companion object {
