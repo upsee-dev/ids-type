@@ -52,3 +52,9 @@ modules/*/android/.gradle/
 
 # EAS のローカル資格情報(アップロード鍵のパスワードが平文で入る)
 credentials.json
+
+# iOS拡張の辞書・フォントは prebuild(plugins/withKatachiIme.js)が
+# ime/assets/ と assets/fonts/ から複製する生成物。二重に持たない
+targets/keyboard/*.tsv
+targets/keyboard/KatachiExt*.ttf
+targets/keyboard/KatachiParts.ttf
