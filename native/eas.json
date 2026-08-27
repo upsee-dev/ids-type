@@ -7,7 +7,8 @@
     "production": {
       "channel": "production",
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "credentialsSource": "local"
       }
     },
     "preview": {
@@ -20,10 +21,14 @@
       "ios": {
         "appleId": "upsee.haruki@gmail.com",
         "ascAppId": "6796351470",
-        "appleTeamId": "W8P3V5NG4R"
+        "appleTeamId": "W8P3V5NG4R",
+        "ascApiKeyPath": "../store/AuthKey/ASC_AuthKey.p8",
+        "ascApiKeyId": "4G6V7GBJWG",
+        "ascApiKeyIssuerId": "74b488cc-124b-40ea-994c-e044f7a9874b"
       },
       "android": {
-        "track": "internal"
+        "track": "internal",
+        "serviceAccountKeyPath": "../store/AuthKey/GPC_AuthKey.json"
       }
     }
   }

@@ -49,3 +49,6 @@ yarn-error.*
 # ローカル Expo モジュールの gradle 生成物(ソースは modules/*/android/src/)
 modules/*/android/build/
 modules/*/android/.gradle/
+
+# EAS のローカル資格情報(アップロード鍵のパスワードが平文で入る)
+credentials.json
