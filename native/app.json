@@ -13,7 +13,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.upsee.idskanjitype",
       "appleTeamId": "W8P3V5NG4R",
-      "buildNumber": "16",
+      "buildNumber": "17",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.upsee.idskanjitype",
-      "versionCode": 16,
+      "versionCode": 17,
       "adaptiveIcon": {
         "backgroundColor": "#FBFBF9",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -64,8 +64,9 @@
       [
         "expo-camera",
         {
-          "//": "紙や画面の字をカメラで読み取るため。読み取りは端末の中だけで完結し、写真は保存も送信もしない",
+          "//": "紙や画面の字をカメラで読み取るため。読み取りは端末の中だけで完結し、写真は保存も送信もしない。写真だけで録画はしないので、マイクの許可(iOS の NSMicrophoneUsageDescription / Android の RECORD_AUDIO)は両方とも外す",
           "cameraPermission": "紙や画面に出てきた漢字を読み取って探すために使います。写真は端末の外へ出ません。",
+          "microphonePermission": false,
           "recordAudioAndroid": false
         }
       ],

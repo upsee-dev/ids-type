@@ -559,6 +559,15 @@ JDK 17 は `/opt/homebrew/opt/openjdk@17`、Android SDK は `~/Library/Android/s
   `-allowProvisioningUpdates` と ASC の APIキーで自動生成させる。
   上げる前に `--validate-app` を通すと、弾かれる原因を先に潰せる
 
+**使う許可の説明文（purpose string）は、雛形のままだと審査を自動で弾かれる。**
+使わない許可は文言ごと消す。Apple の自動チェックは
+`Allow $(PRODUCT_NAME) to access your microphone` のような既定文を
+「中身が無い」と見なす（1.0.9 / build 16 がこれで却下された。expo-camera が
+NSMicrophoneUsageDescription を既定で足すせいで、録画しないのにマイクの説明文が
+入っていた。`app.json` の expo-camera に `"microphonePermission": false` を
+足して外した）。カメラのように実際に使うものは、何のために使い、
+撮ったものがどこへ行くのかまで書く。
+
 **アプリレコードだけは App Store Connect の Web UI で作る必要がある**
 （API は `apps` の CREATE を許可していない。レコードが無いと `altool` は
 `Cannot determine the Apple ID from Bundle ID` で止まる）。
