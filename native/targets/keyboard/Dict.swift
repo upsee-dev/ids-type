@@ -40,6 +40,16 @@ final class Dict {
     /// 1バイトに畳む
     private var refKind: [UInt8] = []
 
+    /// 総画数。**拡張漢字も含めた全字ぶん**持つ(Unihan の kTotalStrokes)。
+    /// 最大でも84画なので1バイトで足りる。0=データなし
+    private var strokes: [UInt8] = []
+
+    /// 別の分解(空白区切り)の範囲。同じ字でも表によって切り方が違うので
+    /// (丟 = ⿱王厶 / ⿱一去)、**どの組み合わせで打っても引ける**よう控えてある。
+    /// 作り方は web/scripts/build-data/merge.mts
+    private var altStart: [Int32] = []
+    private var altEnd: [Int32] = []
+
     /// 字(String) -> 添字。検索の閉包計算で引くので、これは作らざるを得ない
     private var index: [String: Int] = [:]
 
@@ -78,6 +88,24 @@ final class Dict {
 
     /// ref の出所。0=なし 1=資料 2=異体字 3=推定(声符)
     func refKind(at i: Int) -> Int { i < refKind.count ? Int(refKind[i]) : 0 }
+
+    /// 総画数。0=データなし
+    func strokes(at i: Int) -> Int { i < strokes.count ? Int(strokes[i]) : 0 }
+
+    /// その字の分解ぜんぶ(主＋別の分解)。並びは辞書のまま＝主が先。
+    /// TypeScript/Kotlin 版と候補の並びを揃えるため、この順番は変えないこと
+    func idsList(of ch: String) -> [String] {
+        guard let i = index[ch] else {
+            if let p = partIds[ch] { return [p] }
+            return []
+        }
+        let primary = ids(at: i)
+        if primary.isEmpty { return [] }
+        guard i < altStart.count else { return [primary] }
+        let a = string(altStart[i], altEnd[i])
+        if a.isEmpty { return [primary] }
+        return [primary] + a.split(separator: " ").map(String.init)
+    }
     func index(of ch: String) -> Int? { index[ch] }
 
     func ids(of ch: String) -> String? {
@@ -156,8 +184,8 @@ final class Dict {
         base: Int32, hasMeta: Bool, tab: UInt8
     ) {
         // フィールドの区切り位置を集める
-        //   ja  : char\tids\tgrade\tfreq\ton\tkun\t人名\t参考\t参考の出所
-        //   ext : char\tids\t参考\t参考の出所
+        //   ja  : char\tids\tgrade\tfreq\ton\tkun\t人名\t参考\t参考の出所\t画数\t別の分解
+        //   ext : char\tids\t参考\t参考の出所\t画数\t別の分解
         var cuts: [Int] = []
         var i = from
         while i < to {
@@ -196,10 +224,21 @@ final class Dict {
             let (rs, re) = span(6)
             refStart.append(rs); refEnd.append(re)
             refKind.append(kindCode(p, cuts.count > 7 ? cuts[7] + 1 : to, to))
+            // 画数と別の分解は後ろの列。列が無い古い辞書では 0 / 空
+            strokes.append(
+                UInt8(clamping: cuts.count > 8 ? int(p, cuts[8] + 1, to) : 0),
+            )
+            let (as9, ae9) = span(9)
+            altStart.append(as9); altEnd.append(ae9)
         } else {
             let (rs, re) = span(1)
             refStart.append(rs); refEnd.append(re)
             refKind.append(kindCode(p, cuts.count > 2 ? cuts[2] + 1 : to, to))
+            strokes.append(
+                UInt8(clamping: cuts.count > 3 ? int(p, cuts[3] + 1, to) : 0),
+            )
+            let (as4, ae4) = span(4)
+            altStart.append(as4); altEnd.append(ae4)
         }
         // Swift の String は正規等価で比較・ハッシュする。互換漢字(U+F902 車)は
         // 統合漢字(U+8ECA 車)と等価判定されるので、素直に代入すると後から読む

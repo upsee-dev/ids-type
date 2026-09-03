@@ -82,6 +82,12 @@ export interface UnihanData {
   variants: Map<string, string[]>;
   /** 字 → 康熙部首番号(1〜214)。声符を選ぶときに「部首でないほう」を取るのに使う */
   radical: Map<string, number>;
+  /**
+   * 字 → 総画数(kTotalStrokes)。**CJK漢字102,998字ぜんぶにある**ので、
+   * KANJIDIC2 の 13,108字しか持たない画数と違い、10万字を同じ土俵で絞り込める。
+   * 読みで引いた候補を画数で絞るのはこの値(KANJIDIC2 側があればそちらを優先)。
+   */
+  strokes: Map<string, number>;
 }
 
 /**
@@ -92,6 +98,7 @@ export function loadUnihan(): UnihanData {
   const japanese = new Map<string, string[]>();
   const variants = new Map<string, string[]>();
   const radical = new Map<string, number>();
+  const strokes = new Map<string, number>();
 
   const eachLine = (name: string, fn: (ch: string, field: string, value: string) => void) => {
     for (const line of readZipEntry(SRC.unihanZip, name).toString("utf8").split("\n")) {
@@ -115,13 +122,20 @@ export function loadUnihan(): UnihanData {
     variants.set(ch, list);
   });
   eachLine("Unihan_IRGSources.txt", (ch, field, value) => {
+    if (field === "kTotalStrokes") {
+      // 字源によって画数が割れることがある("13 14" のように並ぶ)。
+      // 先頭が J/中国系の代表値なのでそれを取る
+      const n = parseInt(value.split(" ")[0], 10);
+      if (n > 0) strokes.set(ch, n);
+      return;
+    }
     // "9.7" = 部首9・部首以外7画。'つきは簡体字の部首を表す
     if (field !== "kRSUnicode") return;
     const n = parseInt(value.split(" ")[0].replace("'", ""), 10);
     if (n >= 1 && n <= 214) radical.set(ch, n);
   });
 
-  return { japanese, variants, radical };
+  return { japanese, variants, radical, strokes };
 }
 
 /**

@@ -22,6 +22,17 @@ export function splitDictionary(
   idsMap: Map<string, string>,
   /** 参考・推定の読み。正式な読みが無い字だけ埋まる(readings.mts) */
   refOf: (ch: string) => RefReading,
+  /**
+   * 総画数(Unihan の kTotalStrokes)。**10万字ぜんぶにある**ので、
+   * KANJIDIC2 の画数しか無かった 13,108字の壁が無くなり、
+   * 読みで引いた候補を画数で絞れるようになる
+   */
+  strokesOf: (ch: string) => number,
+  /**
+   * 別の分解(空なら無し)。表によって切り方が違う字を、
+   * どの組み合わせで打っても引けるようにするための控え(merge.mts)
+   */
+  altOf: (ch: string) => string[],
 ): SplitResult {
   /** 参考の読みと出所を、辞書に入れる2つの文字列にする */
   const refPair = (ch: string): [string, string] => {
@@ -39,12 +50,13 @@ export function splitDictionary(
       m.freq,
       m.on.join(" "),
       m.kun.join(" "),
-      m.strokes,
+      m.strokes || strokesOf(ch),
       m.rad,
       m.meaning.join(", "),
       m.nanori.join(" "),
       ref,
       refKind,
+      altOf(ch).join(" "),
     ];
   }
 
@@ -52,7 +64,9 @@ export function splitDictionary(
   const parts: RawData["parts"] = {};
   for (const [ch, ids] of idsMap) {
     if (ch in chars) continue;
-    if (isIdeograph(ch)) ext[ch] = [ids, ...refPair(ch)];
+    if (isIdeograph(ch)) {
+      ext[ch] = [ids, ...refPair(ch), strokesOf(ch), altOf(ch).join(" ")];
+    }
     else parts[ch] = ids;
   }
 
@@ -65,7 +79,7 @@ export function splitDictionary(
     for (let cp = lo; cp <= hi; cp++) {
       const ch = String.fromCodePoint(cp);
       if (ch in chars || ch in ext) continue;
-      ext[ch] = ["", ...refPair(ch)];
+      ext[ch] = ["", ...refPair(ch), strokesOf(ch), altOf(ch).join(" ")];
       extNoIds++;
     }
   }
@@ -74,7 +88,9 @@ export function splitDictionary(
   const leaves = new Set<string>();
   const allIds = [
     ...Object.values(chars).map((v) => v[0]),
+    ...Object.values(chars).map((v) => v[11]),
     ...Object.values(ext).map((v) => v[0]),
+    ...Object.values(ext).map((v) => v[4]),
     ...Object.values(parts),
   ];
   for (const ids of allIds) {

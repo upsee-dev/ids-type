@@ -105,10 +105,12 @@ final class FlickKanaView: UIView {
         key.chars.isEmpty ? colSub : colText
     }
 
-    /// 0=中央 1=左 2=上 3=右 4=下
+    /// 0=中央 1=左 2=上 3=右 4=下。
+    /// しきい値は**動いた距離**で見る(縦横それぞれではなく)。斜めに払ったときに
+    /// 縦横のどちらも届かず中央(あ段)になってしまう、が無くなる
     fileprivate func direction(dx: CGFloat, dy: CGFloat) -> Int {
         let t = Self.flickThreshold
-        if abs(dx) < t, abs(dy) < t { return 0 }
+        if dx * dx + dy * dy < t * t { return 0 }
         if abs(dx) > abs(dy) { return dx < 0 ? 1 : 3 }
         return dy < 0 ? 2 : 4
     }
@@ -147,6 +149,23 @@ private final class KanaKeyView: UIView {
     private unowned let pad: FlickKanaView
     private var down = CGPoint.zero
 
+    /// 指が**いちばん遠かった**ところ(と、そのときの距離の2乗)。向きはここで決める。
+    /// 放るように払うと離す瞬間には戻ってきていることがあり、終点だけ見ると
+    /// 中央(あ段)になってしまう
+    private var far = CGPoint.zero
+    private var farD2: CGFloat = 0
+
+    /// 指のいまの位置を控える。いちばん遠かったところだけ残す
+    private func track(_ p: CGPoint) {
+        let dx = p.x - down.x
+        let dy = p.y - down.y
+        let d2 = dx * dx + dy * dy
+        if d2 > farD2 {
+            farD2 = d2
+            far = CGPoint(x: dx, y: dy)
+        }
+    }
+
     init(key: Kana.Key, pad: FlickKanaView) {
         self.key = key
         self.pad = pad
@@ -176,6 +195,8 @@ private final class KanaKeyView: UIView {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = touches.first else { return }
         down = t.location(in: self)
+        far = .zero
+        farD2 = 0
         pad.style(self, pressed: true)
         pad.delegate?.flickTapFeedback()
         if !key.chars.isEmpty { pad.delegate?.flickPreview(key.chars[0]) }
@@ -183,9 +204,8 @@ private final class KanaKeyView: UIView {
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = touches.first, !key.chars.isEmpty else { return }
-        let p = t.location(in: self)
-        let dir = pad.direction(dx: p.x - down.x, dy: p.y - down.y)
-        pad.delegate?.flickPreview(pad.char(key, dir))
+        track(t.location(in: self))
+        pad.delegate?.flickPreview(pad.char(key, pad.direction(dx: far.x, dy: far.y)))
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -202,8 +222,8 @@ private final class KanaKeyView: UIView {
             return
         }
         guard let t = touches.first else { return }
-        let p = t.location(in: self)
-        pad.commit(key, pad.direction(dx: p.x - down.x, dy: p.y - down.y))
+        track(t.location(in: self))
+        pad.commit(key, pad.direction(dx: far.x, dy: far.y))
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {

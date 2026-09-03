@@ -81,7 +81,13 @@ const NEAR_MAX = 99;
 export class Engine {
   private chars = new Map<string, CharMeta>();
   private decompMap = new Map<string, string>(); // 全分解(候補字+部品)
+  /**
+   * 別の分解。表によって切り方が違う字だけ(13,000字ほど)。
+   * 「その組み合わせでは引けない字」を無くすための控え(merge.mts)
+   */
+  private altMap = new Map<string, string[]>();
   private treeCache = new Map<string, Node | null>();
+  private treesCache = new Map<string, Node[]>();
   private closureCache = new Map<string, Set<string>>();
   private leafCountCache = new Map<string, number>();
 
@@ -99,7 +105,20 @@ export class Engine {
   constructor(raw: RawData) {
     for (const [
       ch,
-      [ids, grade, freq, on, kun, strokes, rad, meaning, nanori, ref, refKind],
+      [
+        ids,
+        grade,
+        freq,
+        on,
+        kun,
+        strokes,
+        rad,
+        meaning,
+        nanori,
+        ref,
+        refKind,
+        alt,
+      ],
     ] of Object.entries(raw.chars)) {
       this.chars.set(ch, {
         ids,
@@ -117,19 +136,23 @@ export class Engine {
         ext: false,
       });
       if (ids) this.decompMap.set(ch, ids);
+      if (alt) this.altMap.set(ch, alt.split(" ").filter(Boolean));
     }
     // ext も検索候補。chars のあとに入れるので、同点のときは KANJIDIC2 側が先に並ぶ
     for (const [ch, entry] of Object.entries(raw.ext ?? {})) {
       if (this.chars.has(ch)) continue;
       // 旧形式(IDSの文字列だけ)の辞書でも動くようにしておく
-      const [ids, ref, refKind] = typeof entry === "string" ? [entry, "", ""] : entry;
+      const [ids, ref, refKind, strokes, alt] =
+        typeof entry === "string" ? [entry, "", "", 0, ""] : entry;
       this.chars.set(ch, {
         ids,
         grade: 0,
         freq: 0,
         on: "",
         kun: "",
-        strokes: 0,
+        // 画数は Unihan の kTotalStrokes。**拡張漢字9万字にもある**ので、
+        // 学年・頻度と違って10万字を同じ土俵で絞り込める
+        strokes: strokes ?? 0,
         rad: 0,
         meaning: "",
         nanori: "",
@@ -138,6 +161,7 @@ export class Engine {
         ext: true,
       });
       if (ids) this.decompMap.set(ch, ids);
+      if (alt) this.altMap.set(ch, alt.split(" ").filter(Boolean));
     }
     for (const [ch, ids] of Object.entries(raw.parts))
       this.decompMap.set(ch, ids);
@@ -149,6 +173,33 @@ export class Engine {
     const t = ids ? (parseNodes(toTokens(ids))[0] ?? null) : null;
     this.treeCache.set(ch, t);
     return t;
+  }
+
+  /**
+   * その字の分解**ぜんぶ**(主＋別の分解)。
+   *
+   * 同じ字でも表によって切り方が違う(丟 = ⿱一去 / ⿱王厶)。どちらを思い浮かべるかは
+   * 人によるので、**打った組み合わせがどれか1つに当たれば引ける**ようにする。
+   * 並びは辞書に入っている順で固定(主が先)＝Kotlin/Swift 版と候補の並びが揃う。
+   */
+  idsList(ch: string): string[] {
+    const primary = this.decompMap.get(ch);
+    const alt = this.altMap.get(ch);
+    if (!primary) return [];
+    return alt ? [primary, ...alt] : [primary];
+  }
+
+  /** 分解ぜんぶを構文木にしたもの(順番は idsList と同じ) */
+  trees(ch: string): Node[] {
+    const hit = this.treesCache.get(ch);
+    if (hit) return hit;
+    const out: Node[] = [];
+    for (const ids of this.idsList(ch)) {
+      const t = parseNodes(toTokens(ids))[0];
+      if (t) out.push(t);
+    }
+    this.treesCache.set(ch, out);
+    return out;
   }
 
   // 字の再帰部品閉包(自身+全部品、正規化+弱い同一視も追加)
@@ -172,14 +223,16 @@ export class Engine {
   }
 
   private subClosure(ch: string): Set<string> {
-    const ids = this.decompMap.get(ch);
     const out = new Set<string>();
-    if (!ids) return out;
-    for (const t of toTokens(ids)) {
-      if (isIDC(t)) continue;
-      const n = norm(t);
-      if (n === ch) continue;
-      for (const s of this.closure(n)) out.add(s);
+    // **主の分解だけでなく別の分解の部品も入れる**。表によって切り方が違うので、
+    // 片方しか見ないと「その組み合わせでは引けない字」ができる
+    for (const ids of this.idsList(ch)) {
+      for (const t of toTokens(ids)) {
+        if (isIDC(t)) continue;
+        const n = norm(t);
+        if (n === ch) continue;
+        for (const s of this.closure(n)) out.add(s);
+      }
     }
     return out;
   }
@@ -205,10 +258,12 @@ export class Engine {
       return this.closureOfNode(c).has(q) ? 1 : 0;
     }
     if (typeof c === "string") {
-      const sub = this.tree(c); // 葉を展開して再帰(例: 果 → ⿱田木)
-      if (!sub || typeof sub === "string") return 0;
-      const m = this.match(q, sub, depth + 1);
-      return m ? 1 : 0;
+      // 葉を展開して再帰(例: 果 → ⿱田木)。別の分解も順に試す
+      for (const sub of this.trees(c)) {
+        if (typeof sub === "string") continue;
+        if (this.match(q, sub, depth + 1)) return 1;
+      }
+      return 0;
     }
     if (q.op !== c.op || q.kids.length !== c.kids.length) return 0;
     let best = 2;
@@ -293,9 +348,14 @@ export class Engine {
     if (typeof first !== "string") {
       // 構造検索
       for (const [ch, meta] of this.chars) {
-        const t = this.tree(ch);
-        if (!t || typeof t === "string") continue;
-        const m = this.match(first, t);
+        // 分解ぜんぶを試して、いちばん良く当たったものを採る。
+        // 「⿰王厶」で打っても「⿱一去」で打っても 丟 が出る
+        let m = 0;
+        for (const t of this.trees(ch)) {
+          if (typeof t === "string") continue;
+          m = Math.max(m, this.match(first, t));
+          if (m === 2) break;
+        }
         if (m) results.push({ ch, exact: m === 2, meta });
       }
       const asked = this.askedLeaves(first);
@@ -333,15 +393,17 @@ export class Engine {
    */
   private madeOfExactly(ch: string, want: string[]): boolean {
     if (want.length === 1 && norm(ch) === want[0]) return true;
-    const ids = this.decompMap.get(ch);
-    if (!ids) return false;
-    const parts = toTokens(ids)
-      .filter((t) => !isIDC(t))
-      .map(norm)
-      .sort();
-    if (parts.length !== want.length) return false;
     const sorted = [...want].sort();
-    return parts.every((p, i) => p === sorted[i]);
+    // どれか1つの分解が打ったものと過不足なく一致すれば完全一致
+    for (const ids of this.idsList(ch)) {
+      const parts = toTokens(ids)
+        .filter((t) => !isIDC(t))
+        .map(norm)
+        .sort();
+      if (parts.length !== want.length) continue;
+      if (parts.every((p, i) => p === sorted[i])) return true;
+    }
+    return false;
   }
 
   /**
@@ -514,7 +576,7 @@ export class Engine {
    * かな(読み)と U+XXXX・16進(コードポイント)も受け付ける。
    */
   list(q: ListQuery = {}): ListPage {
-    const { block, jaOnly = false, offset = 0, limit = 200 } = q;
+    const { block, jaOnly = false, offset = 0, limit = 200, strokes = 0 } = q;
     const query = (q.query ?? "").trim();
 
     let pool: string[];
@@ -562,6 +624,11 @@ export class Engine {
     const filtered = pool.filter((ch) => {
       const m = this.chars.get(ch)!;
       if (jaOnly && m.ext) return false;
+      // 画数の絞り込み。30 は「30画以上」(そこから先は字が少ないので束ねる)。
+      // 画数を持たない字(0)は、絞り込みを指定した時点で外す
+      if (strokes > 0 && !(strokes >= STROKE_MAX ? m.strokes >= STROKE_MAX : m.strokes === strokes)) {
+        return false;
+      }
       if (b) {
         const cp = ch.codePointAt(0)!;
         if (cp < b.lo || cp > b.hi) return false;
@@ -578,6 +645,13 @@ export class Engine {
     };
   }
 }
+
+/**
+ * 画数チップの上限。ここ以上は「30画以上」として1つに束ねる
+ * (30画を超える字は10万字のうち1%ほどしかなく、1画きざみでは選びにくい)。
+ * Kotlin/Swift 側の STROKE_MAX と同じ値にすること。
+ */
+export const STROKE_MAX = 30;
 
 const KANA = /^[ぁ-ゖァ-ヺーｰ゙-゜\s]+$/;
 const CODE = /^(?:u\+)?[0-9a-f]{4,6}$/i;

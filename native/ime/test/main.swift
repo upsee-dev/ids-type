@@ -60,10 +60,13 @@ checkOrder("宀女", "安"); checkOrder("OC囗玉", "国"); checkOrder("木木",
 // 読みで引けることを見る。TypeScript 版(test-engine.mts の checkReading)と
 // 同じ問いを投げているので、返る並びも突き合わせられる
 func checkReading(_ q: String, _ expectFirst: String, _ note: String) {
-    let hits = engine.byReading(q, limit: 12)
-    let ok = hits.first == expectFirst
+    let r = engine.byReading(q, limit: 12)
+    let ok = r.items.first == expectFirst
     if !ok { fail += 1 }
-    print("\(ok ? "OK " : "NG ") [reading] \"\(q)\" -> \(hits.joined(separator: " "))  (\(note))")
+    print(
+        "\(ok ? "OK " : "NG ") [reading] \"\(q)\" -> \(r.items.joined(separator: " "))"
+            + "  (全\(r.total)件・\(note))",
+    )
 }
 checkReading("つち", "土", "正式(音訓)が先頭")
 checkReading("あきら", "朗", "人名読みでも引ける")

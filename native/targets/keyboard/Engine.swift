@@ -43,6 +43,7 @@ final class Engine {
 
     private let dict: Dict
     private var treeCache: [String: Ids.Node?] = [:]
+    private var treesCache: [String: [Ids.Node]] = [:]
     private var closureCache: [String: ClosureBox] = [:]
     private var leafCountCache: [String: Int] = [:]
     private var cache: Cached?
@@ -67,6 +68,11 @@ final class Engine {
     /// 余分の数え上げの頭打ち。Int を溢れさせないため
     private static let nearMax = 99
 
+    /// 画数チップの上限。ここ以上は「30画以上」として1つに束ねる
+    /// (30画を超える字は10万字のうち1%ほどで、1画きざみでは選びにくい)。
+    /// core/engine.ts の STROKE_MAX・Kotlin の STROKE_MAX と同じ値にすること
+    static let strokeMax = 30
+
     init(dict: Dict) { self.dict = dict }
 
     // MARK: - 分解木
@@ -77,6 +83,18 @@ final class Engine {
         let t = (s?.isEmpty ?? true) ? nil : Ids.parse(s!)
         treeCache[ch] = t
         return t
+    }
+
+    /// その字の分解**ぜんぶ**(主＋別の分解)を構文木にしたもの。
+    ///
+    /// 同じ字でも表によって切り方が違う(丟 = ⿱王厶 / ⿱一去)。どちらを思い浮かべるかは
+    /// 人によるので、**打った組み合わせがどれか1つに当たれば引ける**ようにする。
+    /// 並びは辞書のまま(主が先)＝TypeScript/Kotlin 版と候補の並びが揃う。
+    private func trees(_ ch: String) -> [Ids.Node] {
+        if let c = treesCache[ch] { return c }
+        let out = dict.idsList(of: ch).compactMap { Ids.parse($0) }
+        treesCache[ch] = out
+        return out
     }
 
     // MARK: - 部品の閉包(自身＋再帰的に到達できる全部品)
@@ -101,13 +119,16 @@ final class Engine {
     }
 
     private func subClosure(_ ch: String) -> Set<String> {
-        guard let s = dict.ids(of: ch), !s.isEmpty else { return [] }
         var out = Set<String>()
-        for t in s {
-            if Ids.isIdc(t) { continue }
-            let n = Ids.norm(String(t))
-            if n == ch { continue }
-            out.formUnion(closure(n))
+        // **主の分解だけでなく別の分解の部品も入れる**。表によって切り方が違うので、
+        // 片方しか見ないと「その組み合わせでは引けない字」ができる
+        for s in dict.idsList(of: ch) {
+            for t in s {
+                if Ids.isIdc(t) { continue }
+                let n = Ids.norm(String(t))
+                if n == ch { continue }
+                out.formUnion(closure(n))
+            }
         }
         return out
     }
@@ -143,9 +164,12 @@ final class Engine {
         case .op(let qop, let qkids):
             switch c {
             case .leaf(let cch):
-                // 葉を展開して再帰(例: 果 → ⿱田木)
-                guard let sub = tree(cch), case .op = sub else { return 0 }
-                return match(q, sub, depth + 1) != 0 ? 1 : 0
+                // 葉を展開して再帰(例: 果 → ⿱田木)。別の分解も順に試す
+                for sub in trees(cch) {
+                    guard case .op = sub else { continue }
+                    if match(q, sub, depth + 1) != 0 { return 1 }
+                }
+                return 0
             case .op(let cop, let ckids):
                 guard qop == cop, qkids.count == ckids.count else { return 0 }
                 var best = 2
@@ -221,10 +245,14 @@ final class Engine {
     /// 操作子なしで打ったときの「完全一致」の見分け方。当たった字は候補の先頭へ出す。
     private func madeOfExactly(_ ch: String, _ want: [String]) -> Bool {
         if want.count == 1, Ids.norm(ch) == want[0] { return true }
-        guard let ids = dict.ids(of: ch), !ids.isEmpty else { return false }
-        let parts = ids.filter { !Ids.isIdc($0) }.map { Ids.norm(String($0)) }
-        if parts.count != want.count { return false }
-        return parts.sorted() == want.sorted()
+        let sorted = want.sorted()
+        // どれか1つの分解が打ったものと過不足なく一致すれば完全一致
+        for ids in dict.idsList(of: ch) {
+            let parts = ids.filter { !Ids.isIdc($0) }.map { Ids.norm(String($0)) }
+            if parts.count != want.count { continue }
+            if parts.sorted() == sorted { return true }
+        }
+        return false
     }
 
     /// 入力が求めている部品の数。? は数えない(埋まるぶんは「余分」として効く)
@@ -304,8 +332,14 @@ final class Engine {
             }
             for i in 0..<dict.count {
                 let ch = dict.char(at: i)
-                guard let t = tree(ch), case .op = t else { continue }
-                let m = match(q, t)
+                // 分解ぜんぶを試して、いちばん良く当たったものを採る。
+                // 「⿱王厶」で打っても「⿱一去」で打っても 丟 が出る
+                var m = 0
+                for t in trees(ch) {
+                    guard case .op = t else { continue }
+                    m = max(m, match(q, t))
+                    if m == 2 { break }
+                }
                 if m != 0, seen.insert(ch).inserted {
                     hits.append(Hit(index: i, ch: ch, exact: m == 2))
                 }
@@ -342,27 +376,44 @@ final class Engine {
     /// 当たった読みの段を第一の並び順にする。そうしないと、声符から推しただけの
     /// 字が、辞書に載っている読みの字を押しのけて前に出てしまう。
     ///
-    /// 走査は日本の字(13,108)を先に見て、**limit 件そろわなかったときだけ**
-    /// 拡張漢字9万字も見る。よくある読みは前半で埋まるので、打鍵ごとに
-    /// 10万字を舐めることにはならない。
-    func byReading(_ query: String, limit: Int = 60) -> [String] {
+    /// **該当する字は打ち切らずに全部数える**。60件で切ると「この読みの字は
+    /// これで全部」なのか「まだ先にあるのか」が打つ側から分からないので、
+    /// total を返してページで送れるようにしてある。走査は10万字ぶんだが、
+    /// 呼ぶ側が別スレッドに逃がしている(runReadingSearch)。
+    ///
+    /// strokes を渡すと**画数で絞り込む**(0=絞らない)。画数は Unihan の
+    /// kTotalStrokes で10万字ぜんぶにあるので、拡張漢字にも効く。
+    /// strokeMax(30)は「30画以上」の意味。
+    func byReading(
+        _ query: String,
+        strokes: Int = 0,
+        offset: Int = 0,
+        limit: Int = 60,
+    ) -> (items: [String], total: Int) {
         let kana = Kana.toHiragana(query.trimmingCharacters(in: .whitespaces))
-        if kana.isEmpty { return [] }
+        if kana.isEmpty { return ([], 0) }
         // 上位に並び順(段→素点)、下位20bitに添字を詰めて Int 1本で並べる
         var hits: [Int] = []
         hits.reserveCapacity(limit * 4)
-        func scan(_ from: Int, _ to: Int) {
-            for i in from..<to {
-                let rank = readingRank(i, kana)
-                if rank == 0 { continue }
-                let key = rank * Self.readingStep + score(i, false)
-                hits.append((key << 20) | i)
-            }
+        // 拡張漢字を読み終える前は**日本の字までしか見ない**。読み込みは別スレッドで
+        // 走っていて、増えている最中の配列を端から舐めると、まだ書き終わっていない
+        // 場所を読みかねない。読み終わったあとは10万字ぜんぶを数える
+        let n = dict.extLoaded ? dict.count : dict.jaCount
+        for i in 0..<n {
+            if strokes > 0, !strokeHit(dict.strokes(at: i), strokes) { continue }
+            let rank = readingRank(i, kana)
+            if rank == 0 { continue }
+            let key = rank * Self.readingStep + score(i, false)
+            hits.append((key << 20) | i)
         }
-        scan(0, dict.jaCount)
-        if hits.count < limit { scan(dict.jaCount, dict.count) }
         hits.sort()
-        return hits.prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
+        let page = hits.dropFirst(offset).prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
+        return (page, hits.count)
+    }
+
+    /// 画数の絞り込み。strokeMax は「それ以上」を束ねる
+    private func strokeHit(_ n: Int, _ want: Int) -> Bool {
+        want >= Self.strokeMax ? n >= Self.strokeMax : n == want
     }
 
     /// 打った読みがその字のどの読みに当たったか。小さいほど先に出す。0 = 当たらない。

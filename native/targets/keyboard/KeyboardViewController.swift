@@ -39,13 +39,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         didSet { onComposingChanged() }
     }
 
-    /// 送る欄。候補から選んだ字がここに溜まり、「送る」で初めて相手の欄へ入る。
-    /// 1字だけでなく続けて選べるのは、難しい字が続く語(人名・地名)を
-    /// まとめて組めるようにするため
-    private var outbox = "" {
-        didSet { onOutboxChanged() }
-    }
-
     /// 部品パレットの種類。**かたち(操作子)はタブに含めない**。
     /// 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
     /// かたちは候補の下に常時出しておき、タブは部品の出し分けだけに使う。
@@ -53,6 +46,22 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// 読みのかな面もタブにしない。タブにするとかたちの行も候補も引っ込んでしまい、
     /// 部品を1つ読みから出したいだけなのに面ごと往復させられる。
     /// かな面は**パレットと入れ替える出し入れ**にしてある
+
+    /// 読みで引くときの画数の絞り込み。0=指定なし、Engine.strokeMax は「それ以上」
+    private var readingStrokes = 0
+
+    /// 読みで引いた字の何ページめを見ているか(0始まり)と、該当した全件数
+    private var readingPage = 0
+    private var readingTotal = 0
+
+    /// 読みの面の絞り込み行。面を閉じると捨てる
+    private weak var readingCount: UILabel?
+    private weak var readingPrev: UIButton?
+    private weak var readingNext: UIButton?
+    private weak var readingChips: UIStackView?
+
+    /// 読みで引いた字の1ページの件数。候補と同じ数にそろえてある
+    private static let readingPageSize = 60
 
     /// かなの面を出しているか
     private var kanaOpen = false
@@ -63,7 +72,10 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// **キーボード拡張はカメラを使えない**(App Extension にカメラ権限が下りない)ので、
     /// ここは「アプリで使えます」と伝えるだけの面。並びを4つに揃えるためのタブでもある
     private var cameraOpen = false
-    private var strokeGroup = "common"
+    /// 部品パレットのいまの群。先頭は**お気に入り**——★に入れてきた字を並べる。
+    /// 何度も出す字は人によって違うので、固定の部品表より自分の★のほうが速い
+    /// (漢字はそれ自体がほかの字の部品にもなるので、部品としても打てる)
+    private var strokeGroup = "favorites"
     private var searchSeq = 0
     private var readingSeq = 0
     private var hwSeq = 0
@@ -152,11 +164,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     }
 
     private let composingLabel = UILabel()
-    /// 送る欄と、その中身を相手の欄へ入れるボタン。
-    /// 行ごと畳めるようにしてある(空のあいだは案内文しか出ないので場所がもったいない)
-    private let outboxLabel = UILabel()
-    private weak var outboxRow: UIStackView?
-    private var sendButton: UIButton!
     /// 地球儀キー(キーボードの切り替え)。送った直後だけ色を上げて次の一手を示す
     private var switchButton: UIButton!
     /// かなの面・手書きの面の出し入れ
@@ -302,40 +309,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         top.addArrangedSubview(smallButton("消", #selector(onClear)))
         root.addArrangedSubview(top)
 
-        // ── 送る欄 ──
-        // 組み立て中のかたちコードとは別物なので行を分けてラベルを付ける。
-        // 候補を選んでもここに入るだけで、相手のテキスト欄はまだ変わらない
-        // (押し間違いが相手の本文に残らないようにするため)。
-        // 相手の欄に触るのは「送る」を押したときだけ
-        let out = UIStackView()
-        out.axis = .horizontal
-        out.spacing = 6
-        out.alignment = .center
-        let outTag = UILabel()
-        outTag.text = "送る"
-        outTag.font = .systemFont(ofSize: 10)
-        outTag.textColor = colSub
-        outTag.setContentHuggingPriority(.required, for: .horizontal)
-        out.addArrangedSubview(outTag)
-        outboxLabel.font = extFont1?.withSize(22) ?? .systemFont(ofSize: 22)
-        outboxLabel.textColor = colText
-        out.addArrangedSubview(outboxLabel)
-        // 選び直しは1字ずつ。全部やめたいときは長押し
-        // (上の「消」は組み立て中のかたちコードだけを消す。選んだ字まで一緒に
-        //  消えると、3字選んだあとに1字組み間違えただけで全部やり直しになる)
-        let undo = smallButton("取消", #selector(onDropSelected))
-        undo.addGestureRecognizer(
-            UILongPressGestureRecognizer(target: self, action: #selector(onClearSelected(_:))),
-        )
-        out.addArrangedSubview(undo)
-        sendButton = smallButton("送る", #selector(onSend))
-        out.addArrangedSubview(sendButton)
-        // 何も選んでいないあいだは畳む。案内文だけの行に1行ぶんの高さを
-        // 使っていると、そのぶんフリック面や手書きの枠が削られる
-        out.isHidden = true
-        outboxRow = out
-        root.addArrangedSubview(out)
-
         // 他のキーボードから戻ってきたとき、勝手に字が残っているように見えないよう
         // 1行だけ断る。打ち始めれば消える
         resumedNote.font = .systemFont(ofSize: 10)
@@ -442,7 +415,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
         buildStrokeChips()
         rebuildKeys()
-        onOutboxChanged() // 送る欄の案内文と、押せない見た目の「送る」を最初に当てる
     }
 
     // MARK: - 道具の帯(履歴・お気に入り・着せ替え)
@@ -533,7 +505,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             style(b, fill: colCard, stroke: colBorder)
             b.widthAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
             b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
-            // 棚の字も「選ぶ」まで。相手の欄へ入るのは「送る」のとき
+            // 棚の字はタップでそのまま相手の欄へ送る
             b.addAction(UIAction { [weak self] _ in self?.select(ch) }, for: .touchUpInside)
             addFavoriteLongPress(to: b, ch: ch)
             shelfRow.addArrangedSubview(b)
@@ -597,11 +569,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private func deleteOne() {
         if !composing.isEmpty {
             composing.removeLast()   // Character 単位なのでサロゲートペアも1文字
-        } else if !outbox.isEmpty {
-            // 組み立て中が空なら、選んだ字を1つ取り消す。相手の欄を消しに行く前に、
-            // まず自分の手元を消すのが順番として自然
-            outbox.removeLast()
         } else {
+            // 組み立て中が空なら相手の欄を消す。選んだ字はその場で送っているので、
+            // 押し間違いの取り消しもここが受ける
             textDocumentProxy.deleteBackward()
         }
     }
@@ -638,32 +608,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     @objc private func onClear() { composing = "" }
 
-    @objc private func onDropSelected() {
-        guard !outbox.isEmpty else { return }
-        outbox.removeLast()
-    }
-
-    @objc private func onClearSelected(_ g: UILongPressGestureRecognizer) {
-        guard g.state == .began, !outbox.isEmpty else { return }
-        tapFeedback()
-        outbox = ""
-    }
-
-    /// 送る欄の中身をカーソル位置へ。**ここが相手の欄に触る唯一の場所**。
-    /// 自動では切り替わらない代わりに地球儀キーの色を上げて次の一手を示す
-    @objc private func onSend() {
-        guard !outbox.isEmpty else { return }
-        textDocumentProxy.insertText(outbox)
-        outbox = ""
-        composing = ""
-        dismissResumedNote()
-        store.clearPending()
-        if let b = switchButton {
-            b.tintColor = colAccent
-            style(b, fill: colAccentBg, stroke: colAccent)
-        }
-    }
-
     /// 地球儀キー。文章の続きを打つために別のキーボードへ移る。
     ///
     /// handleInputModeList が**押せば次へ・長押しなら選択リスト**まで面倒を見る
@@ -677,30 +621,26 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     private func insert(_ s: String) { composing += s }
 
-    /// 候補を**選ぶ**。ここではまだ相手の欄に触らない。
-    /// 触るのは [onSend] のときだけ(押し間違いを相手の本文に残さないため)
+    /// 候補を選ぶ＝**その場で相手のカーソル位置へ送る**。
+    ///
+    /// 以前は「送る欄」にいったん溜めて、「送る」を押したときだけ相手の欄に触って
+    /// いた(押し間違いが本文に残らないように)。ただしこの道具は1字を入れるために
+    /// 呼ばれるので、選んだあとにもう一手要ることのほうが高くつく——押し間違いは
+    /// ⌫1回で消せるが、毎回の余分な1手は消せない。
+    ///
+    /// 自動では入力方法を切り替えない代わりに、地球儀キーの色を上げて次の一手を示す。
     private func select(_ ch: String) {
         composing = ""
-        outbox += ch
-        // 選んだ字はアプリと共有の履歴へ。アプリで調べた字をキーボードで打つ／
+        textDocumentProxy.insertText(ch)
+        // 送った字はアプリと共有の履歴へ。アプリで調べた字をキーボードで打つ／
         // キーボードで打った字をアプリで見返す、を両方向でつなぐ
         store.remember(ch)
         dismissResumedNote()
         if shelf != .none { refreshShelf() }
-    }
-
-    /// 送る欄の見た目。何も選んでいないあいだは行ごと畳む
-    private func onOutboxChanged() {
-        let ready = !outbox.isEmpty
-        outboxRow?.isHidden = !ready
-        outboxLabel.text = outbox
-        outboxLabel.textColor = colText
-        outboxLabel.font = extFont1?.withSize(22) ?? .systemFont(ofSize: 22)
-        guard let b = sendButton else { return }
-        b.isEnabled = ready
-        b.setTitleColor(ready ? themeColor { $0.onAccent } : colSub, for: .normal)
-        style(b, fill: ready ? colAccent : colCard, stroke: ready ? colAccent : colBorder)
-        persist()
+        if let b = switchButton {
+            b.tintColor = colAccent
+            style(b, fill: colAccentBg, stroke: colAccent)
+        }
     }
 
     /// 他のキーボードから戻ってきたときに続きを出す。
@@ -713,11 +653,10 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         // 書いた画までは覚えていない。読みの面に戻すときは手書きの面を閉じる
         if p.kana { hwOpen = false }
         // didSet が persist を呼ぶので、時刻だけが更新されるが害はない
-        outbox = p.outbox
         composing = p.code
         rebuildKeys()
         resumedNote.alpha = 1
-        resumedNote.isHidden = p.code.isEmpty && p.outbox.isEmpty && p.reading.isEmpty
+        resumedNote.isHidden = p.code.isEmpty && p.reading.isEmpty
     }
 
     /// 断り書きを引っ込める。**行そのものは残して透明にするだけ**にする。
@@ -733,7 +672,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private func persist() {
         store.savePending(
             SharedStore.Pending(
-                code: composing, outbox: outbox, reading: reading, kana: kanaOpen,
+                code: composing, reading: reading, kana: kanaOpen,
             ),
         )
     }
@@ -808,7 +747,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             b.widthAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
             b.accessibilityLabel = h.ch
             b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
-            // タップは「選ぶ」だけ。相手のテキスト欄に入るのは「送る」のとき
+            // タップした時点で相手のテキスト欄へ送る
             b.addAction(UIAction { [weak self] _ in self?.select(h.ch) }, for: .touchUpInside)
             addFavoriteLongPress(to: b, ch: h.ch)
             candidateRow.addArrangedSubview(b)
@@ -853,7 +792,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     private func buildStrokeChips() {
         strokeRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let groups = [("common", "よく使う")] + Palettes.difficult.map { ($0.strokes, "\($0.strokes)画") }
+        let groups = [("favorites", "お気に入り")] + Palettes.difficult.map { ($0.strokes, "\($0.strokes)画") }
         for (key, label) in groups {
             let active = strokeGroup == key
             let b = UIButton(type: .system)
@@ -933,7 +872,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
      * キーボードの高さ。面ごとに要るものが違うので出し分ける。
      *
      * 読みのフリック面(4段)も手書きの枠も、**スクロールさせずに全部出す**のが要件。
-     * 上の帯(組み立て中・送る・候補・かたち・タブ)だけで 250pt ほど要るので、
+     * 上の帯(組み立て中・候補・かたち・タブ)だけで 250pt ほど要るので、
      * その下に面ぶんを足した高さを自分で取りに行く。
      * ただし画面の 62% を超えない。小さい端末では面の側が詰まるだけで、
      * 「下が見えない」ことにはならない(フリックのキーも枠も余りを分け合うため)。
@@ -1026,9 +965,32 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         ])
         keyArea.addArrangedSubview(scroll)
 
-        let parts: [String] = strokeGroup == "common"
-            ? Palettes.radical.map(String.init)
-            : (Palettes.difficult.first { $0.strokes == strokeGroup }?.parts.map(String.init) ?? [])
+        if strokeGroup == "favorites" {
+            // ★に入れてきた字。タップで部品としてかたちコードへ、長押しでそのまま送る
+            let favs = store.favorites
+            if favs.isEmpty {
+                let note = UILabel()
+                note.text = "お気に入りはまだありません。候補を長押しすると★に入ります。"
+                note.font = .systemFont(ofSize: 11)
+                note.textColor = colSub
+                note.numberOfLines = 0
+                grid.addArrangedSubview(note)
+                return
+            }
+            rows(favs.map { ch in
+                let b = key(ch, size: 20) { [weak self] in self?.insert(ch) }
+                b.accessibilityValue = ch
+                b.addGestureRecognizer(
+                    UILongPressGestureRecognizer(
+                        target: self, action: #selector(onFavoritePartLongPress(_:)),
+                    ),
+                )
+                return b
+            }, cols: 8, into: grid)
+            return
+        }
+        let parts: [String] =
+            Palettes.difficult.first { $0.strokes == strokeGroup }?.parts.map(String.init) ?? []
         rows(parts.map { p in key(p, size: 20) { [weak self] in self?.insert(p) } },
              cols: 8, into: grid)
     }
@@ -1068,7 +1030,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// 読みの面。断り書き・読みの欄・引けた字・フリックのかな面の4段。
     ///
     /// 引けた字はタップで**かたちコードに部品として足す**（つち→土 を足して
-    /// 〈左右〉土… と組む）。長押しはその字を送る欄へ入れる
+    /// 〈左右〉土… と組む）。長押しはその字をそのまま相手の欄へ送る
     /// （読みが分かっている字はこれが最短で、組み直す必要がない）。
     ///
     /// **文章を打つ面ではない**。ここで打ったかなが相手の欄に入ることはなく、
@@ -1104,6 +1066,47 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         head.spacing = 6
         keyArea.addArrangedSubview(head)
 
+        // 件数・ページ送り・画数の絞り込みを**1行**に収める。
+        // 読みだけだと「こう」で4,634字出るので、全部見られるようにページを持ち、
+        // 画数で絞れるようにする(画数は10万字ぜんぶにあるので拡張漢字にも効く)。
+        // 行を増やすとそのぶんフリック面が縮むため、3つを同じ行に入れてある
+        let count = UILabel()
+        count.text = "画数で絞る"
+        count.font = .systemFont(ofSize: 10)
+        count.textColor = colSub
+        count.setContentHuggingPriority(.required, for: .horizontal)
+        readingCount = count
+
+        let prev = readingPagerButton("‹", #selector(onReadingPrev))
+        let next = readingPagerButton("›", #selector(onReadingNext))
+        readingPrev = prev
+        readingNext = next
+
+        let chips = UIStackView()
+        chips.axis = .horizontal
+        chips.spacing = 4
+        chips.translatesAutoresizingMaskIntoConstraints = false
+        let chipScroll = UIScrollView()
+        chipScroll.showsHorizontalScrollIndicator = false
+        chipScroll.addSubview(chips)
+        NSLayoutConstraint.activate([
+            chips.topAnchor.constraint(equalTo: chipScroll.topAnchor),
+            chips.bottomAnchor.constraint(equalTo: chipScroll.bottomAnchor),
+            chips.leadingAnchor.constraint(equalTo: chipScroll.leadingAnchor),
+            chips.trailingAnchor.constraint(equalTo: chipScroll.trailingAnchor),
+            chips.heightAnchor.constraint(equalTo: chipScroll.heightAnchor),
+            chipScroll.heightAnchor.constraint(equalToConstant: 28),
+        ])
+        readingChips = chips
+
+        let filter = UIStackView(arrangedSubviews: [count, prev, next, chipScroll])
+        filter.axis = .horizontal
+        filter.spacing = 4
+        filter.alignment = .center
+        keyArea.addArrangedSubview(filter)
+        buildReadingStrokeChips()
+        refreshReadingFilter()
+
         let hits = UIStackView()
         hits.axis = .horizontal
         hits.spacing = 4
@@ -1136,6 +1139,77 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
         refreshReadingLabel()
         runReadingSearch()
+    }
+
+    /// 絞り込み行のページ送りキー。行の高さを増やさないよう画数チップと同じ大きさ
+    private func readingPagerButton(_ label: String, _ action: Selector) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle(label, for: .normal)
+        b.titleLabel?.font = .systemFont(ofSize: 12)
+        b.setTitleColor(colAccent, for: .normal)
+        b.widthAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
+        b.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        style(b, fill: .clear, stroke: colBorder)
+        b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+        b.addTarget(self, action: action, for: .touchUpInside)
+        return b
+    }
+
+    /// 画数チップ。0=絞らない、strokeMax(30)は「それ以上」。
+    /// 部品パレットの画数チップと同じ見た目にしてある(覚え直さなくていいように)
+    private func buildReadingStrokeChips() {
+        guard let row = readingChips else { return }
+        row.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for n in 0...Engine.strokeMax {
+            let active = readingStrokes == n
+            let b = UIButton(type: .system)
+            b.setTitle(
+                n == 0 ? "全部" : n >= Engine.strokeMax ? "\(Engine.strokeMax)画+" : "\(n)画",
+                for: .normal,
+            )
+            b.titleLabel?.font = .systemFont(ofSize: 11)
+            b.setTitleColor(active ? colAccent : colSub, for: .normal)
+            b.contentEdgeInsets = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
+            b.widthAnchor.constraint(greaterThanOrEqualToConstant: 40).isActive = true
+            style(b, fill: active ? colAccentBg : .clear, stroke: active ? colAccent : colBorder)
+            b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+            b.addAction(UIAction { [weak self] _ in
+                self?.readingStrokes = n
+                self?.readingPage = 0
+                self?.buildReadingStrokeChips()
+                self?.runReadingSearch()
+            }, for: .touchUpInside)
+            row.addArrangedSubview(b)
+        }
+    }
+
+    @objc private func onReadingPrev() { turnReadingPage(-1) }
+    @objc private func onReadingNext() { turnReadingPage(1) }
+
+    /// 読みで引いた字のページ送り。全件を順に見られるようにするためのもの
+    private func turnReadingPage(_ d: Int) {
+        readingPage = min(max(0, readingPage + d), max(0, readingPages - 1))
+        runReadingSearch()
+    }
+
+    private var readingPages: Int {
+        readingTotal == 0
+            ? 1
+            : (readingTotal + Self.readingPageSize - 1) / Self.readingPageSize
+    }
+
+    /// 件数とページ送りの見た目。全件のうちどこを見ているかを出す
+    private func refreshReadingFilter() {
+        let pages = readingPages
+        readingCount?.text = readingTotal == 0
+            ? "画数で絞る"
+            : pages > 1 ? "全\(readingTotal)字 \(readingPage + 1)/\(pages)" : "全\(readingTotal)字"
+        for (b, on) in [(readingPrev, readingPage > 0), (readingNext, readingPage < pages - 1)] {
+            guard let b else { continue }
+            b.isEnabled = on
+            b.setTitleColor(on ? colAccent : colSub, for: .normal)
+            b.isHidden = pages <= 1
+        }
     }
 
     /// 打った読みと、指を置いているあいだの仮の1字(色を変えて後ろに付ける)
@@ -1181,13 +1255,19 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             hits.arrangedSubviews.forEach { $0.removeFromSuperview() }
             return
         }
-        // 1万3千字ぶんの読みを走査するので UI スレッドではやらない
+        // 10万字ぶんの読みを走査するので UI スレッドではやらない
+        let strokes = readingStrokes
+        let offset = readingPage * Self.readingPageSize
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let r = self.engine.byReading(q, limit: 60)
+            let r = self.engine.byReading(
+                q, strokes: strokes, offset: offset, limit: Self.readingPageSize,
+            )
             DispatchQueue.main.async {
                 guard seq == self.readingSeq else { return } // 古い結果は捨てる
-                self.showReadingHits(r)
+                self.readingTotal = r.total
+                self.showReadingHits(r.items)
+                self.refreshReadingFilter()
             }
         }
     }
@@ -1197,7 +1277,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         hits.arrangedSubviews.forEach { $0.removeFromSuperview() }
         guard !chars.isEmpty else {
             let l = UILabel()
-            l.text = dict.jaCount == 0 ? "辞書を読み込み中…" : "該当なし"
+            l.text = dict.jaCount == 0
+                ? "辞書を読み込み中…"
+                : readingStrokes > 0 ? "該当なし（画数の絞り込みを外すと出るかも）" : "該当なし"
             l.textColor = colSub
             l.font = .systemFont(ofSize: 12)
             hits.addArrangedSubview(l)
@@ -1234,7 +1316,15 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         afterReadingChanged()
     }
 
-    /// 読みから出た字の長押し。その字そのものを入れたいときの近道(送る欄へ)。
+    /// お気に入りの部品キーの長押し。その字そのものを入れたいときの近道。
+    /// タップはかたちコードへ部品として足す方(パレットは部品を出す場所なので)
+    @objc private func onFavoritePartLongPress(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began, let ch = g.view?.accessibilityValue else { return }
+        tapFeedback()
+        select(ch)
+    }
+
+    /// 読みから出た字の長押し。その字そのものを入れたいときの近道(そのまま送る)。
     /// タップはかたちコードへ部品として足す方(読みで部品を出すのが主目的)
     @objc private func onReadingHitLongPress(_ g: UILongPressGestureRecognizer) {
         guard g.state == .began, let ch = g.view?.accessibilityValue else { return }
@@ -1250,12 +1340,12 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// （通信はしない）。パターンは KanjiVG 由来の約6,400字で、常用・人名用・
     /// JIS第1〜2水準を覆う。ここに無い拡張漢字はかたちコードで組んで引く。
     ///
-    /// 引けた字は**タップで送る欄へ**。読みの面（タップで部品に足す）と逆なのは、
+    /// 引けた字は**タップでそのまま相手の欄へ**。読みの面（タップで部品に足す）と逆なのは、
     /// 手書きは「その字そのものが欲しい」から書くため。部品として使いたいときは
     /// 長押しでかたちコードに足せる。
     private func buildHandwritingArea() {
         let note = UILabel()
-        note.text = "読めない字は書いて引けます。タップで送る欄へ・長押しで部品に"
+        note.text = "読めない字は書いて引けます。タップで入れる・長押しで部品に"
         note.font = .systemFont(ofSize: 10)
         note.textColor = colSub
         keyArea.addArrangedSubview(note)
@@ -1388,7 +1478,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
             b.widthAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
             b.accessibilityLabel = m.ch
             b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
-            // タップは送る欄へ(手書きは「その字が欲しい」から書く)。
+            // タップでそのまま送る(手書きは「その字が欲しい」から書く)。
             // 部品として組みに使いたいときは長押しでかたちコードへ
             b.addAction(UIAction { [weak self] _ in self?.select(m.ch) }, for: .touchUpInside)
             let g = UILongPressGestureRecognizer(

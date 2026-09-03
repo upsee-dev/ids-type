@@ -22,11 +22,12 @@ import kotlin.concurrent.thread
  * 普段のキーボードで打ち、読めない字に出くわしたときだけこちらへ切り替える。
  * だから一連の流れは
  *
- *   かたちと部品で組む → 候補から**選ぶ**(送る欄に入る) → **送る**(相手の欄へ)
+ *   かたちと部品で組む → 候補から**選ぶ**(その場で相手の欄へ入る)
  *   → **地球儀キー**(普段の入力方法へ移る)
  *
- * になっている。組み立て中のかたちコードも、選んだ字も、送るまで相手の
- * テキスト欄には一切触らない。押し間違いが相手の本文に残らないようにするため。
+ * になっている。組み立て中のかたちコードは相手のテキスト欄には出さない
+ * （「LR日」のような途中の記号が本文に見えないように）。相手の欄に入るのは
+ * **選んだ字だけ**で、押し間違いは⌫（手元が空なら相手の欄を1字消す）で戻す。
  *
  * 以前は composing text として相手の欄に下線つきで出していたが、
  * 「LR日」のような組み立て途中の記号が相手のアプリの本文に見えてしまい、
@@ -58,13 +59,6 @@ class KatachiImeService : InputMethodService() {
     /** 入力中のかたちコード(例: "LR日")。相手の欄には出さない */
     private var composing = StringBuilder()
 
-    /**
-     * 送る欄。候補から選んだ字がここに溜まり、「送る」で初めて相手の欄へ入る。
-     * 1字だけでなく続けて選べるようにしてあるのは、難しい字が続く語(人名・地名)を
-     * まとめて組めるようにするため。
-     */
-    private var outbox = StringBuilder()
-
     override fun onCreate() {
         super.onCreate()
         dict = Dict()
@@ -87,7 +81,6 @@ class KatachiImeService : InputMethodService() {
             override val handwriting get() = this@KatachiImeService.handwriting
             override val store get() = this@KatachiImeService.sharedStore
             override val composingText get() = composing.toString()
-            override val outboxText get() = outbox.toString()
 
             override fun insert(s: String) {
                 composing.append(s)
@@ -100,13 +93,16 @@ class KatachiImeService : InputMethodService() {
                     val cp = composing.codePointBefore(composing.length)
                     composing.setLength(composing.length - Character.charCount(cp))
                     updateComposing()
-                } else if (outbox.isNotEmpty()) {
-                    // 組み立て中が空なら、選んだ字を1つ取り消す。相手の欄を消しに
-                    // 行く前に、まず自分の手元を消すのが順番として自然
-                    dropSelected()
                 } else {
-                    // 手元に何も無ければ相手のテキストを消す
-                    currentInputConnection?.deleteSurroundingText(1, 0)
+                    // 組み立て中が空なら相手のテキストを消す。選んだ字はその場で
+                    // 送っているので、押し間違いの取り消しもここが受ける。
+                    // **拡張漢字(𠮟 など)はUTF-16で2つ**。1つだけ消すとペアの片割れが
+                    // 残って豆腐になるので、サロゲートペアは2つまとめて消す
+                    val ic = currentInputConnection
+                    val before = ic?.getTextBeforeCursor(2, 0) ?: ""
+                    val pair = before.length == 2 &&
+                        Character.isSurrogatePair(before[0], before[1])
+                    ic?.deleteSurroundingText(if (pair) 2 else 1, 0)
                 }
             }
 
@@ -116,41 +112,25 @@ class KatachiImeService : InputMethodService() {
             }
 
             /**
-             * 候補を**選ぶ**。ここではまだ相手の欄に触らない。
-             * 触るのは [send] のときだけ（押し間違いを相手の本文に残さないため）。
+             * 候補を選ぶ＝**その場で相手のカーソル位置へ送る**。
+             *
+             * 以前は「送る欄」にいったん溜めて、「送る」を押したときだけ相手の欄に
+             * 触っていた（押し間違いが本文に残らないように）。ただしこの道具は
+             * 1字を入れるために呼ばれるので、選んだあとにもう一手要ることのほうが
+             * 高くつく——押し間違いは⌫1回で消せるが、毎回の余分な1手は消せない。
+             *
+             * 消すのは⌫（組み立て中が空なら相手の欄を1字消す）。
              */
             override fun select(ch: String) {
                 composing.setLength(0)
-                outbox.append(ch)
-                // 選んだ字はアプリと共有の履歴へ。アプリで調べた字をキーボードで
+                currentInputConnection?.commitText(ch, 1)
+                // 送った字はアプリと共有の履歴へ。アプリで調べた字をキーボードで
                 // 打つ／キーボードで打った字をアプリで見返す、を両方向でつなぐ
                 sharedStore.remember(ch)
                 view?.onComposingChanged()
-                view?.onOutboxChanged()
                 view?.onSelected()
-                persist()
-            }
-
-            override fun dropSelected() {
-                this@KatachiImeService.dropSelected()
-            }
-
-            override fun clearSelected() {
-                outbox.setLength(0)
-                view?.onOutboxChanged()
-                persist()
-            }
-
-            /** 送る欄の中身をカーソル位置へ。ここが相手の欄に触る唯一の場所 */
-            override fun send() {
-                if (outbox.isEmpty()) return
-                currentInputConnection?.commitText(outbox.toString(), 1)
-                outbox.setLength(0)
-                composing.setLength(0)
-                view?.onComposingChanged()
-                view?.onOutboxChanged()
                 view?.onSent()
-                sharedStore.clearPending()
+                persist()
             }
 
             /**
@@ -209,17 +189,8 @@ class KatachiImeService : InputMethodService() {
 
     private fun updateComposing() {
         // 相手の欄には出さない。組み立て途中はキーボードの中だけで見せ、
-        // 送る欄の中身を「送る」で押したときだけ commitText でカーソルへ送る
+        // 候補を選んだ時点で commitText でカーソルへ送る
         view?.onComposingChanged()
-        persist()
-    }
-
-    /** 送る欄の末尾1字を取り消す(サロゲートペアは1字として) */
-    private fun dropSelected() {
-        if (outbox.isEmpty()) return
-        val cp = outbox.codePointBefore(outbox.length)
-        outbox.setLength(outbox.length - Character.charCount(cp))
-        view?.onOutboxChanged()
         persist()
     }
 
@@ -233,7 +204,6 @@ class KatachiImeService : InputMethodService() {
         sharedStore.savePending(
             Store.Pending(
                 code = composing.toString(),
-                outbox = outbox.toString(),
                 reading = view?.readingText ?: "",
                 kana = view?.kanaOpen ?: false,
             ),
@@ -248,8 +218,6 @@ class KatachiImeService : InputMethodService() {
         val p = sharedStore.loadPending() ?: return
         composing.setLength(0)
         composing.append(p.code)
-        outbox.setLength(0)
-        outbox.append(p.outbox)
         view?.restore(p)
     }
 
@@ -258,9 +226,7 @@ class KatachiImeService : InputMethodService() {
         // 覚えてから手元を空にする。次に開いたとき onStartInputView が戻す
         persist()
         composing.setLength(0)
-        outbox.setLength(0)
         view?.onComposingChanged()
-        view?.onOutboxChanged()
     }
 
     override fun onDestroy() {

@@ -74,7 +74,11 @@ export interface Result {
 export interface RawData {
   /**
    * KANJIDIC2 収録字。
-   * [IDS, 学年, 頻度順位, 音, 訓, 画数, 部首番号, 意味(英), 人名読み, 参考の読み, 参考の出所]
+   * [IDS, 学年, 頻度順位, 音, 訓, 画数, 部首番号, 意味(英), 人名読み, 参考の読み,
+   *  参考の出所, 別の分解]
+   *
+   * 別の分解は空白区切り(無ければ "")。同じ字でも表によって切り方が違うので、
+   * **どの組み合わせで打っても引ける**ように控えてある(merge.mts)
    */
   chars: Record<
     string,
@@ -90,13 +94,15 @@ export interface RawData {
       string,
       string,
       string,
+      string,
     ]
   >;
   /**
-   * それ以外の CJK 統合漢字・互換漢字。[IDS, 参考の読み, 参考の出所]。
-   * IDS の "" は分解データなし、読みの "" は補完できなかった字
+   * それ以外の CJK 統合漢字・互換漢字。[IDS, 参考の読み, 参考の出所, 画数, 別の分解]。
+   * IDS の "" は分解データなし、読みの "" は補完できなかった字。
+   * 画数は Unihan の kTotalStrokes(全字にある)。0=データなし
    */
-  ext: Record<string, [string, string, string]>;
+  ext: Record<string, [string, string, string, number, string]>;
   /** 漢字でない部品(部首補助・筆画など)。検索候補には出さないが分解には使う */
   parts: Record<string, string>;
 }
@@ -108,6 +114,13 @@ export interface ListQuery {
   query?: string;
   /** KANJIDIC2 収録字(読みのある日本の漢字)だけに絞る */
   jaOnly?: boolean;
+  /**
+   * 画数で絞り込む。0/未指定は絞らない。
+   * 画数は10万字ぜんぶにあるので(Unihan kTotalStrokes)、読みと重ねて使える。
+   * 30 を指定したときだけは「30画以上」の意味にする(それ以上は数が少なく、
+   * 1画きざみのチップを増やしても選びにくいだけなので)
+   */
+  strokes?: number;
   offset?: number;
   limit?: number;
 }

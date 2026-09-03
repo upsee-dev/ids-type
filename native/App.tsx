@@ -820,6 +820,7 @@ function Screen() {
       <KatachiKeyboard
         engine={engine}
         theme={t}
+        favorites={favorites}
         onInsert={insert}
         // 手書き候補のタップ・読み候補の長押しは、候補一覧のタップと同じ扱いで
         // 出力へためる(履歴にも残す)。詳細も開くので、書いた字の読みがすぐ分かる

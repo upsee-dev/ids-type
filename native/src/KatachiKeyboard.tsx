@@ -12,7 +12,7 @@ import {
   kanaCycle,
   OPERATORS,
   PRIMARY_CODES,
-  RADICAL_PALETTE,
+  STROKE_MAX,
   type Engine,
 } from "./engine";
 import { OperatorIcon } from "./OperatorIcon";
@@ -49,9 +49,16 @@ const SIDE_PADDING = 12;
 const READING_ROW = 36;
 const HIT_ROW = 44;
 
+/** 引けた字の1ページぶん。候補欄と同じ数にそろえてある */
+const READING_PAGE = 60;
+
+/** 画数チップ。0=指定なし、STROKE_MAX は「それ以上」 */
+const STROKE_CHIPS = [0, ...Array.from({ length: STROKE_MAX }, (_, i) => i + 1)];
+
 export function KatachiKeyboard({
   engine,
   theme,
+  favorites,
   onInsert,
   onCommit,
   maxHeight,
@@ -61,6 +68,8 @@ export function KatachiKeyboard({
 }: {
   engine: Engine | null;
   theme: Theme;
+  /** ★に入れてきた字。部首タブの先頭「お気に入り」に並べる */
+  favorites: string[];
   onInsert: (s: string) => void;
   /** 字を出力欄へ入れる(手書き候補のタップ・読み候補の長押し) */
   onCommit: (ch: string) => void;
@@ -77,7 +86,15 @@ export function KatachiKeyboard({
     if (cameraRequest) setTab("camera");
   }, [cameraRequest]);
   const [showAllOps, setShowAllOps] = useState(false);
-  const { width } = useWindowDimensions();
+  const { width, height: screenH } = useWindowDimensions();
+
+  /**
+   * 面の高さ。**カメラだけは打鍵の面より大きく取る**。
+   * フリックや手書きと違って指を置いて動かす場所ではなく、写した字が
+   * 大きいほど読み取りが当たるので、枠の小ささがそのまま失敗になる。
+   */
+  const padHeight =
+    tab === "camera" ? Math.min(maxHeight * 1.7, screenH * 0.5) : maxHeight;
 
   const ops = useMemo(() => {
     const primary = PRIMARY_CODES.map(c => OPERATORS.find(o => o.code === c)!).filter(Boolean);
@@ -196,7 +213,7 @@ export function KatachiKeyboard({
       {tab !== "radical" ? (
         <View
           style={{
-            height: maxHeight,
+            height: padHeight,
             backgroundColor: theme.card,
             padding: SIDE_PADDING,
             paddingTop: GAP,
@@ -229,7 +246,12 @@ export function KatachiKeyboard({
           keyboardShouldPersistTaps="always"
         >
           {tab === "radical" && (
-            <RadicalTab width={partW} theme={theme} onInsert={onInsert} />
+            <RadicalTab
+              width={partW}
+              theme={theme}
+              favorites={favorites}
+              onInsert={onInsert}
+            />
           )}
         </ScrollView>
       )}
@@ -238,27 +260,34 @@ export function KatachiKeyboard({
 }
 
 /**
- * 部首・偏旁タブ。既定は日本語向けに絞った RADICAL_PALETTE、
+ * 部首・偏旁タブ。先頭は**お気に入り**——これまで★に入れてきた字をそのまま並べ、
  * 画数チップを選ぶと zi.tools の「難輸入部件」全541件をその画数ぶんだけ出す。
  * 541件を一度に並べると探せないので、zi.tools と同じく画数で区切っている。
+ *
+ * 先頭が固定の部品表(RADICAL_PALETTE)ではなくお気に入りなのは、この道具で
+ * 何度も出す字は人によって違うため。お気に入りに入れた字は**部品としても打てる**
+ * （漢字はそれ自体がほかの字の部品になる）。
  */
 function RadicalTab({
   width,
   theme,
+  favorites,
   onInsert,
 }: {
   width: number;
   theme: Theme;
+  /** ★に入れてきた字（アプリとシステムキーボードで同じ1つを見る） */
+  favorites: string[];
   onInsert: (s: string) => void;
 }) {
-  const [group, setGroup] = useState<string>("common");
+  const [group, setGroup] = useState<string>("favorites");
   const parts = useMemo(() => {
-    if (group === "common") return RADICAL_PALETTE;
+    if (group === "favorites") return favorites;
     return [...(DIFFICULT_COMPONENTS.find(g => g.strokes === group)?.parts ?? "")];
-  }, [group]);
+  }, [group, favorites]);
 
   const chips = [
-    { key: "common", label: "よく使う" },
+    { key: "favorites", label: "お気に入り" },
     ...DIFFICULT_COMPONENTS.map(g => ({ key: g.strokes, label: `${g.strokes}画` })),
   ];
 
@@ -293,7 +322,17 @@ function RadicalTab({
           </Pressable>
         ))}
       </ScrollView>
-      <PartGrid parts={parts} width={width} theme={theme} onInsert={onInsert} />
+      <PartGrid
+        parts={parts}
+        width={width}
+        theme={theme}
+        onInsert={onInsert}
+        empty={
+          group === "favorites"
+            ? "まだありません。字を選んで★を押すと入ります。"
+            : undefined
+        }
+      />
     </View>
   );
 }
@@ -309,6 +348,11 @@ function RadicalTab({
  *
  * 引けた字は**タップでかたちコードに部品として足す**／**長押しで出力へ**
  * (システムキーボードの「タップで部品・長押しで送る欄」と同じ並び)。
+ *
+ * **該当する字は打ち切らない**。「こう」で4,634字あるような読みでも、
+ * 60字で切ると「これで全部」なのか分からないので、全件数を出して
+ * ページで送れるようにしてある。加えて**画数で絞り込める**——画数は
+ * Unicode(Unihan)の値で10万字ぜんぶにあるので、拡張漢字にも効く。
  */
 function SearchTab({
   engine,
@@ -324,16 +368,32 @@ function SearchTab({
   const [reading, setReading] = useState("");
   // 指を置いているあいだの仮の字。読みの欄に色を変えて出す(ポップアップは出さない)
   const [preview, setPreview] = useState<string | null>(null);
+  /** 画数の絞り込み。0=指定なし。STROKE_MAX は「それ以上」 */
+  const [strokes, setStrokes] = useState(0);
+  const [page, setPage] = useState(0);
 
-  const hits = useMemo(() => {
+  const found = useMemo(() => {
     const q = reading.trim();
-    if (!engine || !q) return [];
+    if (!engine || !q) return { items: [] as string[], total: 0 };
     // 読み・部品・符号位置のどれでも引ける（Engine#list がまとめて面倒を見る）。
     // **日本の字に絞らない**。10万字ぜんぶが読みを持つようになったので
     // (正式→人名→参考→推定の順に並ぶ)、絞ると拡張漢字が読みで引けなくなる。
     // よく使う字が先に出る並びはエンジン側で保証されている
-    return engine.list({ query: q, limit: 60 }).items.map(i => i.ch);
-  }, [engine, reading]);
+    const r = engine.list({
+      query: q,
+      strokes,
+      offset: page * READING_PAGE,
+      limit: READING_PAGE,
+    });
+    return { items: r.items.map(i => i.ch), total: r.total };
+  }, [engine, reading, strokes, page]);
+
+  const hits = found.items;
+  const pages = Math.ceil(found.total / READING_PAGE);
+
+  // 打ち直し・絞り込みの変更で1ページめに戻す(前のページ位置に残ると
+  // 「打ったのに何も出ない」ように見える)
+  const resetPage = () => setPage(0);
 
   const dropLast = (s: string) => [...s].slice(0, -1).join("");
 
@@ -362,11 +422,92 @@ function SearchTab({
         </View>
         <Pressable
           onPressIn={() => haptic("delete")}
-          onPress={() => setReading("")}
+          onPress={() => {
+            resetPage();
+            setReading("");
+          }}
           style={[styles.readingClear, { borderColor: theme.border }]}
         >
           <Text style={{ fontSize: 12, color: theme.sub }}>消</Text>
         </Pressable>
+      </View>
+
+      {/* ── 件数・ページ送り・画数の絞り込み(1行にまとめる) ──
+          読みだけだと「こう」で4,634字出る。**全部出す**ために件数とページ送りを持ち、
+          画数で絞れるようにする(画数は10万字ぜんぶにあるので拡張漢字にも効く)。
+          行を増やすとそのぶんフリック面が縮むので、3つを同じ行に収めてある */}
+      <View style={styles.filterRow}>
+        <Text style={{ fontSize: 10, color: theme.sub, minWidth: 54 }} numberOfLines={1}>
+          {found.total > 0 ? `全${found.total}字` : "画数で絞る"}
+        </Text>
+        {pages > 1 && (
+          <>
+            <Pressable
+              onPressIn={() => haptic("toggle")}
+              onPress={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              style={[styles.pagerBtn, { borderColor: theme.border }]}
+            >
+              <Text style={{ fontSize: 11, color: page === 0 ? theme.faint : theme.accent }}>
+                ‹
+              </Text>
+            </Pressable>
+            <Text style={{ fontSize: 10, color: theme.sub }}>
+              {page + 1}/{pages}
+            </Text>
+            <Pressable
+              onPressIn={() => haptic("toggle")}
+              onPress={() => setPage(p => Math.min(pages - 1, p + 1))}
+              disabled={page >= pages - 1}
+              style={[styles.pagerBtn, { borderColor: theme.border }]}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: page >= pages - 1 ? theme.faint : theme.accent,
+                }}
+              >
+                ›
+              </Text>
+            </Pressable>
+          </>
+        )}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.strokeRow}
+        >
+          {STROKE_CHIPS.map(n => {
+            const on = strokes === n;
+            return (
+              <Pressable
+                key={n}
+                onPressIn={() => haptic("toggle")}
+                onPress={() => {
+                  setStrokes(n);
+                  resetPage();
+                }}
+                style={[
+                  styles.strokeChip,
+                  {
+                    borderColor: on ? theme.accent : theme.border,
+                    backgroundColor: on ? theme.accentBg : "transparent",
+                  },
+                ]}
+              >
+                <Text style={{ fontSize: 11, color: on ? theme.accent : theme.sub }}>
+                  {n === 0
+                    ? "全部"
+                    : n >= STROKE_MAX
+                      ? `${STROKE_MAX}画+`
+                      : `${n}画`}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* ── 引けた字(1行)。タップ=部品として足す / 長押し=出力へ ──
@@ -410,7 +551,9 @@ function SearchTab({
         ) : (
           <Text style={{ fontSize: 11, color: theme.faint, alignSelf: "center" }}>
             {reading.trim()
-              ? "該当なし"
+              ? strokes > 0
+                ? "該当なし（画数の絞り込みを外すと出るかもしれません）"
+                : "該当なし"
               : "引けた字は タップで部品に・長押しで出力へ。かたちの選択は残ります"}
           </Text>
         )}
@@ -419,17 +562,27 @@ function SearchTab({
       {/* ── 12キーフリック面 ── */}
       <FlickKanaPad
         theme={theme}
-        onAppend={ch => setReading(r => r + ch)}
-        onReplaceLast={ch => setReading(r => dropLast(r) + ch)}
-        onCycleLast={() =>
+        onAppend={ch => {
+          resetPage();
+          setReading(r => r + ch);
+        }}
+        onReplaceLast={ch => {
+          resetPage();
+          setReading(r => dropLast(r) + ch);
+        }}
+        onCycleLast={() => {
+          resetPage();
           setReading(r => {
             const last = [...r].pop();
             if (!last) return r;
             const next = kanaCycle(last);
             return next ? dropLast(r) + next : r;
-          })
-        }
-        onBackspace={() => setReading(dropLast)}
+          });
+        }}
+        onBackspace={() => {
+          resetPage();
+          setReading(dropLast);
+        }}
         onPreview={setPreview}
       />
     </View>
@@ -490,6 +643,23 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 8,
   },
   chipRow: { flexDirection: "row", alignItems: "center", gap: 5, paddingBottom: 6 },
+  strokeRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  strokeChip: {
+    minWidth: 44,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 4, height: 30 },
+  pagerBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
   // 指で狙える大きさを確保する。字に合わせて詰めると高さが20ptほどしかなくなり、
   // 隣の画数を押してしまう
   chip: {

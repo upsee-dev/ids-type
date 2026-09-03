@@ -1,6 +1,14 @@
 package com.upsee.katachi.ime
 
 /**
+ * 画数チップの上限。ここ以上は「30画以上」として1つに束ねる
+ * (30画を超える字は10万字のうち1%ほどで、1画きざみでは選びにくい)。
+ * core/engine.ts の STROKE_MAX・Swift の strokeMax と同じ値にすること。
+ * キーボードの画面(KeyboardView)も同じ値でチップを並べるので、クラスの外に置く。
+ */
+const val STROKE_MAX = 30
+
+/**
  * 検索エンジン。core/engine.ts の Kotlin 移植。
  *
  * 入力(かたちコード＋部品) → 候補漢字。やることは2つだけ:
@@ -35,11 +43,13 @@ class Engine(private val dict: Dict) {
 
         /** 余分の数え上げの頭打ち。Int を溢れさせないため */
         const val NEAR_MAX = 99
+
     }
 
     data class Hit(val index: Int, val ch: String, val exact: Boolean)
 
     private val treeCache = HashMap<String, Ids.Node?>(4096)
+    private val treesCache = HashMap<String, List<Ids.Node>>(4096)
     private val closureCache = HashMap<String, Set<String>>(4096)
     private val leafCountCache = HashMap<String, Int>(4096)
 
@@ -48,6 +58,17 @@ class Engine(private val dict: Dict) {
     private fun tree(ch: String): Ids.Node? = treeCache.getOrPut(ch) {
         val s = dict.idsOf(ch)
         if (s.isNullOrEmpty()) null else Ids.parse(s)
+    }
+
+    /**
+     * その字の分解**ぜんぶ**(主＋別の分解)を構文木にしたもの。
+     *
+     * 同じ字でも表によって切り方が違う(丟 = ⿱王厶 / ⿱一去)。どちらを思い浮かべるかは
+     * 人によるので、**打った組み合わせがどれか1つに当たれば引ける**ようにする。
+     * 並びは辞書のまま(主が先)＝TypeScript/Swift 版と候補の並びが揃う。
+     */
+    private fun trees(ch: String): List<Ids.Node> = treesCache.getOrPut(ch) {
+        dict.idsListOf(ch).mapNotNull { Ids.parse(it) }
     }
 
     // ---- 部品の閉包(自身＋再帰的に到達できる全部品) ----
@@ -70,13 +91,16 @@ class Engine(private val dict: Dict) {
     }
 
     private fun subClosure(ch: String): Set<String> {
-        val s = dict.idsOf(ch) ?: return emptySet()
         val out = HashSet<String>(8)
-        for (t in Ids.tokens(s)) {
-            if (t.length == 1 && Ids.isIdc(t[0])) continue
-            val n = Ids.norm(t)
-            if (n == ch) continue
-            out.addAll(closure(n))
+        // **主の分解だけでなく別の分解の部品も入れる**。表によって切り方が違うので、
+        // 片方しか見ないと「その組み合わせでは引けない字」ができる
+        for (s in dict.idsListOf(ch)) {
+            for (t in Ids.tokens(s)) {
+                if (t.length == 1 && Ids.isIdc(t[0])) continue
+                val n = Ids.norm(t)
+                if (n == ch) continue
+                out.addAll(closure(n))
+            }
         }
         return out
     }
@@ -108,10 +132,12 @@ class Engine(private val dict: Dict) {
         }
         q as Ids.Node.Op
         if (c is Ids.Node.Leaf) {
-            // 葉を展開して再帰(例: 果 → ⿱田木)
-            val sub = tree(c.ch)
-            if (sub == null || sub is Ids.Node.Leaf) return 0
-            return if (match(q, sub, depth + 1) != 0) 1 else 0
+            // 葉を展開して再帰(例: 果 → ⿱田木)。別の分解も順に試す
+            for (sub in trees(c.ch)) {
+                if (sub is Ids.Node.Leaf) continue
+                if (match(q, sub, depth + 1) != 0) return 1
+            }
+            return 0
         }
         c as Ids.Node.Op
         if (q.op != c.op || q.kids.size != c.kids.size) return 0
@@ -196,13 +222,16 @@ class Engine(private val dict: Dict) {
      */
     private fun madeOfExactly(ch: String, want: List<String>): Boolean {
         if (want.size == 1 && Ids.norm(ch) == want[0]) return true
-        val ids = dict.idsOf(ch)
-        if (ids.isNullOrEmpty()) return false
-        val parts = Ids.tokens(ids)
-            .filter { !(it.length == 1 && Ids.isIdc(it[0])) }
-            .map { Ids.norm(it) }
-        if (parts.size != want.size) return false
-        return parts.sorted() == want.sorted()
+        val sorted = want.sorted()
+        // どれか1つの分解が打ったものと過不足なく一致すれば完全一致
+        for (ids in dict.idsListOf(ch)) {
+            val parts = Ids.tokens(ids)
+                .filter { !(it.length == 1 && Ids.isIdc(it[0])) }
+                .map { Ids.norm(it) }
+            if (parts.size != want.size) continue
+            if (parts.sorted() == sorted) return true
+        }
+        return false
     }
 
     /** 入力が求めている部品の数。? は数えない(埋まるぶんは「余分」として効く) */
@@ -282,9 +311,15 @@ class Engine(private val dict: Dict) {
             val q = Ids.parse(compiled) ?: return Result(emptyList(), Mode.EMPTY)
             if (q is Ids.Node.Leaf) return Result(emptyList(), Mode.EMPTY)
             for (i in dict.chars.indices) {
-                val t = tree(dict.chars[i])
-                if (t == null || t is Ids.Node.Leaf) continue
-                val m = match(q, t)
+                // 分解ぜんぶを試して、いちばん良く当たったものを採る。
+                // 「⿱王厶」で打っても「⿱一去」で打っても 丟 が出る
+                var m = 0
+                for (t in trees(dict.chars[i])) {
+                    if (t is Ids.Node.Leaf) continue
+                    val v = match(q, t)
+                    if (v > m) m = v
+                    if (m == 2) break
+                }
                 if (m != 0) hits.add(Hit(i, dict.chars[i], m == 2))
             }
             val asked = askedLeaves(q)
@@ -321,29 +356,49 @@ class Engine(private val dict: Dict) {
      * 当たった読みの段を第一の並び順にする。そうしないと、声符から推しただけの
      * 字が、辞書に載っている読みの字を押しのけて前に出てしまう。
      *
-     * 走査は日本の字(13,108)を先に見て、**limit 件そろわなかったときだけ**
-     * 拡張漢字9万字も見る。よくある読みは前半で埋まるので、打鍵ごとに
-     * 10万字を舐めることにはならない。
+     * **該当する字は打ち切らずに全部数える**。60件で切ると「この読みの字は
+     * これで全部」なのか「まだ先にあるのか」が打つ側から分からないので、
+     * total を返してページで送れるようにしてある。走査は10万字ぶんだが、
+     * 呼ぶ側が別スレッドに逃がしている(KeyboardView#runReadingSearch)。
+     *
+     * strokes を渡すと**画数で絞り込む**(0=絞らない)。画数は Unihan の
+     * kTotalStrokes で10万字ぜんぶにあるので、拡張漢字にも効く。
+     * STROKE_MAX(30)は「30画以上」の意味。
      */
-    fun byReading(query: String, limit: Int = 60): List<String> {
+    fun byReading(
+        query: String,
+        strokes: Int = 0,
+        offset: Int = 0,
+        limit: Int = 60,
+    ): Page {
         val kana = Kana.toHiragana(query.trim())
-        if (kana.isEmpty()) return emptyList()
+        if (kana.isEmpty()) return Page(emptyList(), 0)
         // 上位20bitに並び順(段→素点)、下位20bitに添字を詰めて Long 1本で並べる
         // (段と素点を別に持つと、比較のたびに読みを組み直すことになる)
         val hits = ArrayList<Long>(limit * 4)
-        fun scan(from: Int, until: Int) {
-            for (i in from until until) {
-                val rank = readingRank(i, kana)
-                if (rank == 0) continue
-                val key = rank.toLong() * READING_STEP + score(i, false)
-                hits.add((key shl 20) or i.toLong())
-            }
+        // 拡張漢字を読み終える前は**日本の字までしか見ない**。読み込みは別スレッドで
+        // 走っていて、増えている最中の配列を端から舐めると、まだ書き終わっていない
+        // 場所を読みかねない(extLoaded は @Volatile なので、true が見えた時点で
+        // それまでの書き込みも見えている)。読み終わったあとは10万字ぜんぶを数える
+        val n = if (dict.extLoaded) dict.chars.size else dict.jaCount
+        for (i in 0 until n) {
+            if (strokes > 0 && !strokeHit(dict.strokesAt(i), strokes)) continue
+            val rank = readingRank(i, kana)
+            if (rank == 0) continue
+            val key = rank.toLong() * READING_STEP + score(i, false)
+            hits.add((key shl 20) or i.toLong())
         }
-        scan(0, dict.jaCount)
-        if (hits.size < limit) scan(dict.jaCount, dict.chars.size)
         hits.sort()
-        return hits.take(limit).map { dict.chars[(it and 0xFFFFF).toInt()] }
+        val page = hits.drop(offset).take(limit).map { dict.chars[(it and 0xFFFFF).toInt()] }
+        return Page(page, hits.size)
     }
+
+    /** 読みで引いた結果の1ページぶんと、該当した総数 */
+    data class Page(val items: List<String>, val total: Int)
+
+    /** 画数の絞り込み。STROKE_MAX は「それ以上」を束ねる */
+    private fun strokeHit(n: Int, want: Int): Boolean =
+        if (want >= STROKE_MAX) n >= STROKE_MAX else n == want
 
     /**
      * 打った読みがその字のどの読みに当たったか。小さいほど先に出す。0 = 当たらない。

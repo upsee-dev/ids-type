@@ -5,13 +5,19 @@
 // タブ区切りの素朴なテキストにしておくと、行を split するだけで読めて
 // 中間オブジェクトも作らずに済む。
 //
-//   dict-ja.tsv    KANJIDIC2 収録字   char \t ids \t grade \t freq \t on \t kun \t 人名 \t 参考 \t 参考の出所
-//   dict-ext.tsv   それ以外の漢字      char \t ids \t 参考 \t 参考の出所
+//   dict-ja.tsv    KANJIDIC2 収録字   char \t ids \t grade \t freq \t on \t kun \t 人名 \t 参考 \t 参考の出所 \t 画数 \t 別の分解
+//   dict-ext.tsv   それ以外の漢字      char \t ids \t 参考 \t 参考の出所 \t 画数 \t 別の分解
 //   dict-parts.tsv 漢字でない部品      char \t ids
 //
 // 読みの列が3つ増えているのは、KANJIDIC2 に無い字も読みで引けるようにするため
 // (作り方は readings.mts)。正式(on/kun)・人名・参考は列を分けて持ち、
 // キーボード側もその区別のまま並べる。
+//
+// **画数と別の分解は末尾の列**。画数(Unihan の kTotalStrokes)は10万字ぜんぶに
+// あるので、読みで引いた候補を画数で絞れる(KANJIDIC2 の画数は 13,108字にしか
+// 無かった)。別の分解は空白区切りで、表によって切り方が違う字を
+// **どの組み合わせで打っても引ける**ようにするための控え(merge.mts)。
+// 列は必ず末尾に足すこと——古い辞書を読んでも前の列の位置が動かない。
 //
 // 分けてあるのは、IME 側が「日本語の字だけ先に読んで検索可能にし、
 // 拡張漢字は後から読む」という段階読み込みをできるようにするため。
@@ -252,15 +258,16 @@ export function emitImeDict(data: RawData, outDir: string): string[] {
 
   const ja: string[] = [];
   for (const [ch, v] of Object.entries(data.chars)) {
-    const [ids, grade, freq, on, kun, , , , nanori, ref, refKind] = v;
+    const [ids, grade, freq, on, kun, strokes, , , nanori, ref, refKind, alt] = v;
     ja.push(
-      `${ch}\t${ids}\t${grade}\t${freq}\t${on}\t${kun}\t${nanori}\t${ref}\t${refKind}`,
+      `${ch}\t${ids}\t${grade}\t${freq}\t${on}\t${kun}\t${nanori}\t${ref}` +
+        `\t${refKind}\t${strokes}\t${alt}`,
     );
   }
 
   const ext: string[] = [];
-  for (const [ch, [ids, ref, refKind]] of Object.entries(data.ext)) {
-    ext.push(`${ch}\t${ids}\t${ref}\t${refKind}`);
+  for (const [ch, [ids, ref, refKind, strokes, alt]] of Object.entries(data.ext)) {
+    ext.push(`${ch}\t${ids}\t${ref}\t${refKind}\t${strokes}\t${alt}`);
   }
 
   const parts: string[] = [];

@@ -109,12 +109,15 @@ export function CameraPad({
       </Text>
 
       {/* 読み取れた字。手書きタブと同じ作法（タップ＝出力／長押し＝部品）。
-          撮った字はそのまま欲しい場面がほとんどなので、主動作をタップに置く */}
+          撮った字はそのまま欲しい場面がほとんどなので、主動作をタップに置く。
+          **撮る前は行ごと出さない**。ここは指を置いて動かす面ではないので、
+          空の行に46ptを取られるより、そのぶんカメラの枠を大きくする */}
+      {hits.length > 0 && (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         keyboardShouldPersistTaps="always"
-        style={{ height: 46 }}
+        style={{ height: 46, flexGrow: 0 }}
         contentContainerStyle={{ gap: 4, alignItems: "center" }}
       >
         {hits.map((ch) => (
@@ -140,42 +143,49 @@ export function CameraPad({
           </Pressable>
         ))}
       </ScrollView>
+      )}
 
-      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <View
-          style={{
-            flex: 1,
-            overflow: "hidden",
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          <CameraView ref={cam} style={{ flex: 1 }} facing="back" animateShutter={false} />
-        </View>
+      {/* カメラの枠は**面いっぱい**に取る。小さい枠だと字を大きく写せず、
+          読み取りそのものが当たらなくなる（写った字が小さいほど当たらない）。
+          シャッターは横に並べず枠の上に重ねる＝そのぶん枠が横にも広がる */}
+      <View
+        style={{
+          flex: 1,
+          overflow: "hidden",
+          borderRadius: 10,
+          borderWidth: 1,
+          borderColor: theme.border,
+        }}
+      >
+        <CameraView ref={cam} style={{ flex: 1 }} facing="back" animateShutter={false} />
         <Pressable
           onPress={shoot}
           disabled={busy}
+          accessibilityLabel="撮って読み取る"
           style={{
+            position: "absolute",
+            alignSelf: "center",
+            bottom: 10,
             width: 58,
             height: 58,
             borderRadius: 29,
             borderWidth: 3,
-            borderColor: theme.accent,
+            borderColor: "#FFFFFF",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: busy ? theme.accentBg : "transparent",
+            // 明るい紙の上でも輪が見えるよう、下に薄い影を敷く
+            backgroundColor: "rgba(0,0,0,0.25)",
           }}
         >
           {busy ? (
-            <ActivityIndicator color={theme.accent} />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
             <View
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
-                backgroundColor: theme.accent,
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: "#FFFFFF",
               }}
             />
           )}

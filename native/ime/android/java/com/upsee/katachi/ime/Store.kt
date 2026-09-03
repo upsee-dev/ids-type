@@ -49,8 +49,6 @@ class Store(context: Context) {
     data class Pending(
         /** 組み立て中のかたちコード(例: "LR日") */
         val code: String,
-        /** 送る欄。候補から選んだ字 */
-        val outbox: String,
         /** 打ちかけの読み */
         val reading: String,
         /** かなの面を出していたか */
@@ -114,13 +112,12 @@ class Store(context: Context) {
 
     /** 何も無ければ消す。打鍵のたびに呼ばれるので、書く中身は小さく保つ */
     fun savePending(p: Pending) {
-        if (p.code.isEmpty() && p.outbox.isEmpty() && p.reading.isEmpty()) {
+        if (p.code.isEmpty() && p.reading.isEmpty()) {
             prefs.edit().remove(PENDING).apply()
             return
         }
         val o = JSONObject()
             .put("code", p.code)
-            .put("out", p.outbox)
             .put("reading", p.reading)
             .put("kana", p.kana)
             .put("at", System.currentTimeMillis())
@@ -135,7 +132,6 @@ class Store(context: Context) {
             if (System.currentTimeMillis() - o.optLong("at") > PENDING_TTL_MS) return null
             Pending(
                 code = o.optString("code"),
-                outbox = o.optString("out"),
                 reading = o.optString("reading"),
                 kana = o.optBoolean("kana"),
             )

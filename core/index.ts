@@ -19,6 +19,7 @@ export {
   Engine,
   SORT_MODES,
   DEFAULT_SORT,
+  STROKE_MAX,
   type SortMode,
 } from "./engine.ts";
 

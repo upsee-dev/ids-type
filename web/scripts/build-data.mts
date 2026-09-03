@@ -36,7 +36,7 @@ ensureOutDirs();
 const kanjidic = loadKanjidic2();
 console.log(`KANJIDIC2: ${kanjidic.size} 字`);
 
-const { ids, log: mergeLog } = mergeIds(kanjidic, mode);
+const { ids, alt, log: mergeLog } = mergeIds(kanjidic, mode);
 for (const line of mergeLog) console.log(line);
 
 // 読みの補完。KANJIDIC2 が読みを持つのは13,108字だけなので、
@@ -47,7 +47,13 @@ console.log(
 );
 const refOf = makeRefReadings(kanjidic, ids, unihan);
 
-const data = splitDictionary(kanjidic, ids, refOf);
+const data = splitDictionary(
+  kanjidic,
+  ids,
+  refOf,
+  ch => unihan.strokes.get(ch) ?? 0,
+  ch => alt.get(ch) ?? [],
+);
 console.log(`
 chars(KANJIDIC2):   ${Object.keys(data.chars).length}
 ext(その他の漢字):  ${Object.keys(data.ext).length} (うち分解なし ${data.extNoIds})
@@ -76,6 +82,9 @@ for (const line of verifyLog) console.log(line);
     if (nanori) n.nanori++;
   }
   for (const [, ref, kind] of Object.values(data.ext)) count(ref, kind);
+  const noStrokes =
+    Object.values(data.chars).filter(v => !v[5]).length +
+    Object.values(data.ext).filter(v => !v[3]).length;
 
   const total = Object.keys(data.chars).length + Object.keys(data.ext).length;
   const pct = (x: number) => `${((x / total) * 100).toFixed(1)}%`;
@@ -86,7 +95,9 @@ for (const line of verifyLog) console.log(line);
       参考(Unihan の日本語読み): ${n.u}  ${pct(n.u)}
       推定(異体字から):          ${n.v}  ${pct(n.v)}
       推定(声符から):            ${n.p}  ${pct(n.p)}
-      読みなし:                  ${n.none}  ${pct(n.none)}`);
+      読みなし:                  ${n.none}  ${pct(n.none)}
+
+画数(Unihan kTotalStrokes)が無い字: ${noStrokes}`);
 }
 
 // ネイティブIME(Android/iOS)はキーボードの起動が速くないと使いものにならないので、

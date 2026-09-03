@@ -122,6 +122,44 @@ checkReading("あきら", "朗", "人名読みでも引ける");
 checkReading("いずくんぞ", "烏", "資料にしか無い読みでも引ける");
 checkReading("ぎょう", "行", "よく使う字が先");
 
+/**
+ * 画数での絞り込み。画数は Unihan の kTotalStrokes で**10万字ぜんぶ**にあるので、
+ * KANJIDIC2 に無い拡張漢字も絞れる。読みと重ねて使う(「こう」で674字→数十字)。
+ */
+const checkStrokes = (q: string, n: number) => {
+  const all = e.list({ query: q, limit: 1 }).total;
+  const { items, total } = e.list({ query: q, strokes: n, limit: 200 });
+  const bad = items.filter(i => i.meta.strokes !== n);
+  const ok = total > 0 && total < all && bad.length === 0;
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [strokes] "${q}" ${n}画 -> ${total}件 / 絞る前 ${all}件` +
+      `  ${items.slice(0, 10).map(i => i.ch).join(" ")}` +
+      (bad.length ? `  画数違い:${bad.map(b => b.ch).join("")}` : ""),
+  );
+};
+checkStrokes("こう", 6);
+checkStrokes("つち", 11);
+
+/**
+ * 別の分解でも引けること。表によって字の切り方が違うので(丟 = ⿱王厶 / ⿱一去)、
+ * **どちらの組み合わせで打っても**同じ字が出ないと「その人には引けない字」になる。
+ * 部品だけで打ったときと、かたち(操作子)つきで打ったときの両方を見る。
+ */
+const checkAlt = (q: string, want: string) => {
+  const { results, total } = e.search(q, 20);
+  const ok = results.some(r => r.ch === want);
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [alt] "${q}" -> ${results.slice(0, 8).map(r => r.ch).join(" ")}` +
+      `  (${total}件)  期待:${want}`,
+  );
+};
+checkAlt("王厶", "丟"); // CJKVI の分解
+checkAlt("一去", "丟"); // BabelStone の分解
+checkAlt("UD王厶", "丟");
+checkAlt("UD一去", "丟");
+
 /** 読みの持ち方。正式・人名・参考が混ざらずに入っていること */
 const checkMeta = (ch: string, want: Record<string, string>) => {
   const m = e.meta(ch)!;

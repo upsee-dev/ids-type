@@ -8,10 +8,12 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import kotlin.math.abs
+import kotlin.math.max
 
 /**
  * 読みを打つための12キーフリック面。
@@ -26,6 +28,20 @@ import kotlin.math.abs
  *
  * フリックできない人のために、同じキーを続けて叩くと あ→い→う→え→お と
  * 送るトグル入力も受ける（標準のかなキーボードと同じ）。
+ *
+ * **向きの取り方はここが要**。取りこぼしを無くすために3つ手を打ってある。
+ *
+ *  1. 押した瞬間に親へ `requestDisallowInterceptTouchEvent`。この面は
+ *     縦スクロールできる入れ物(keyScroll)の中にあるので、そうしないと
+ *     **下フリック(お段)や上フリック(う段)がスクロールに取られて**
+ *     ACTION_CANCEL で消える。Android だけで起きる取りこぼしはこれが原因
+ *  2. 指の**いちばん遠かった位置**で向きを決める。指を放るように動かすと
+ *     離す瞬間には戻ってきていることがあり、終点だけ見ると中央(あ段)になる
+ *  3. しきい値は**距離**で見る(縦横の大きいほうではなく)。斜めに払ったとき、
+ *     縦横それぞれでは届かないのに実際は十分動いている、が無くなる
+ *
+ * 指の追跡は**押した指のID**で行う。2本目の指が同じキーに触れても
+ * 座標が入れ替わらない(速く打つと親指2本が重なる)。
  */
 @SuppressLint("ViewConstructor")
 class FlickKanaView(
@@ -53,7 +69,11 @@ class FlickKanaView(
     }
 
     private companion object {
-        /** これ以上動いたらフリックとみなす(dp)。小さすぎると普通のタップが滑る */
+        /**
+         * これ以上動いたらフリックとみなす(dp)。**距離**で見る。
+         * 小さすぎると普通のタップが滑り、大きすぎると払ったつもりが中央になる。
+         * キーの幅のおよそ1/4(標準のかなキーボードと同じ勘定)
+         */
         const val FLICK_THRESHOLD_DP = 18
 
         /** 同じキーの叩き直しをトグルとして扱う間合い(ms) */
@@ -110,30 +130,63 @@ class FlickKanaView(
 
         var downX = 0f
         var downY = 0f
+        // いちばん遠かった位置(と、そのときの距離の2乗)。向きはここで決める
+        var farX = 0f
+        var farY = 0f
+        var farD2 = 0f
+        // 押した指のID。2本目の指が同じキーに触れても取り違えないため
+        var pointer = MotionEvent.INVALID_POINTER_ID
+
+        fun track(x: Float, y: Float) {
+            val dx = x - downX
+            val dy = y - downY
+            val d2 = dx * dx + dy * dy
+            if (d2 > farD2) {
+                farD2 = d2
+                farX = dx
+                farY = dy
+            }
+        }
+
         v.setOnTouchListener { view, e ->
-            when (e.action) {
+            when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    pointer = e.getPointerId(0)
                     downX = e.x
                     downY = e.y
+                    farX = 0f; farY = 0f; farD2 = 0f
+                    // **この面は縦スクロールの中にある**。断っておかないと、
+                    // 上下のフリックがスクロールに取られて ACTION_CANCEL になる
+                    view.parent?.requestDisallowInterceptTouchEvent(true)
                     host.keyFeedback(view, true)
                     paint(view, colAccentBg)
                     host.previewKana(key.chars[0])
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    host.previewKana(charAt(key, direction(e.x - downX, e.y - downY)))
+                    val i = e.findPointerIndex(pointer)
+                    if (i >= 0) {
+                        track(e.getX(i), e.getY(i))
+                        host.previewKana(charAt(key, direction(farX, farY)))
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    val i = e.findPointerIndex(pointer)
+                    if (i >= 0) track(e.getX(i), e.getY(i))
                     host.keyFeedback(view, false)
                     paint(view, colCard)
                     host.previewKana(null)
-                    commit(key, direction(e.x - downX, e.y - downY))
+                    view.parent?.requestDisallowInterceptTouchEvent(false)
+                    pointer = MotionEvent.INVALID_POINTER_ID
+                    commit(key, direction(farX, farY))
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     paint(view, colCard)
                     host.previewKana(null)
+                    view.parent?.requestDisallowInterceptTouchEvent(false)
+                    pointer = MotionEvent.INVALID_POINTER_ID
                     true
                 }
                 else -> false
@@ -142,12 +195,20 @@ class FlickKanaView(
         return v
     }
 
-    /** 0=中央 1=左 2=上 3=右 4=下 */
+    /**
+     * 0=中央 1=左 2=上 3=右 4=下。
+     * しきい値は**指が動いた距離**で見る(縦横それぞれではなく)。斜めに払ったとき
+     * 縦横のどちらも届かず中央になってしまう、が無くなる。
+     * 端末の最小移動量(touchSlop)より小さくはしない——手ぶれがフリックになるので
+     */
     private fun direction(dx: Float, dy: Float): Int {
-        val t = dp(FLICK_THRESHOLD_DP)
-        if (abs(dx) < t && abs(dy) < t) return 0
+        val t = max(dp(FLICK_THRESHOLD_DP).toFloat(), slop)
+        if (dx * dx + dy * dy < t * t) return 0
         return if (abs(dx) > abs(dy)) (if (dx < 0) 1 else 3) else (if (dy < 0) 2 else 4)
     }
+
+    /** 端末が「動かした」とみなす最小の移動量(px)。手ぶれの下限に使う */
+    private val slop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
 
     /** 向きに割り当てが無ければ中央の字（や行の左右など） */
     private fun charAt(key: Kana.Key, dir: Int): String =

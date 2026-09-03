@@ -19,15 +19,22 @@ import { haptic } from "./feedback";
  * トグル入力も受ける(標準のかなキーボードと同じ)。
  */
 
-/** これ以上動いたらフリックとみなす。小さすぎると普通のタップが滑る */
+/**
+ * これ以上動いたらフリックとみなす。**距離**で見る(縦横それぞれではなく)。
+ * 小さすぎると普通のタップが滑り、大きすぎると払ったつもりが中央になる
+ */
 const FLICK_THRESHOLD = 18;
 
 /** 同じキーの叩き直しをトグルとして扱う間合い(ミリ秒) */
 const TOGGLE_WINDOW = 900;
 
-/** 0=中央 1=左 2=上 3=右 4=下 */
+/**
+ * 0=中央 1=左 2=上 3=右 4=下。
+ * しきい値は**動いた距離**で見る。縦横それぞれで見ると、斜めに払ったときに
+ * どちらも届かず中央(あ段)になってしまう
+ */
 function direction(dx: number, dy: number): number {
-  if (Math.abs(dx) < FLICK_THRESHOLD && Math.abs(dy) < FLICK_THRESHOLD) return 0;
+  if (dx * dx + dy * dy < FLICK_THRESHOLD * FLICK_THRESHOLD) return 0;
   if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 1 : 3;
   return dy < 0 ? 2 : 4;
 }
@@ -132,12 +139,20 @@ function KanaKeyView({
 }) {
   const [pressed, setPressed] = useState(false);
   const down = useRef({ x: 0, y: 0 });
+  /**
+   * 指が**いちばん遠かった**ところ。向きはここで決める。
+   * 放るように払うと離す瞬間には戻ってきていることがあり、
+   * 終点だけ見ると中央(あ段)になってしまう
+   */
+  const far = useRef({ x: 0, y: 0, d2: 0 });
 
-  const dirOf = (e: GestureResponderEvent) =>
-    direction(
-      e.nativeEvent.locationX - down.current.x,
-      e.nativeEvent.locationY - down.current.y,
-    );
+  const track = (e: GestureResponderEvent) => {
+    const dx = e.nativeEvent.locationX - down.current.x;
+    const dy = e.nativeEvent.locationY - down.current.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 > far.current.d2) far.current = { x: dx, y: dy, d2 };
+    return direction(far.current.x, far.current.y);
+  };
 
   const isChar = k.chars.length > 0;
 
@@ -157,17 +172,20 @@ function KanaKeyView({
           x: e.nativeEvent.locationX,
           y: e.nativeEvent.locationY,
         };
+        far.current = { x: 0, y: 0, d2: 0 };
         setPressed(true);
         haptic("key"); // 触覚は指が触れた瞬間に返す
         if (isChar) onPreview(k.chars[0]);
       }}
       onResponderMove={(e) => {
-        if (isChar) onPreview(kanaFlick(k, dirOf(e)));
+        const dir = track(e);
+        if (isChar) onPreview(kanaFlick(k, dir));
       }}
       onResponderRelease={(e) => {
+        const dir = track(e);
         setPressed(false);
         onPreview(null);
-        onRelease(isChar ? dirOf(e) : 0);
+        onRelease(isChar ? dir : 0);
       }}
       onResponderTerminate={() => {
         setPressed(false);

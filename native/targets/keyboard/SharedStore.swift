@@ -44,8 +44,6 @@ struct SharedStore {
     struct Pending {
         /// 組み立て中のかたちコード(例: "LR日")
         let code: String
-        /// 送る欄。候補から選んだ字
-        let outbox: String
         /// 打ちかけの読み
         let reading: String
         /// かなの面を出していたか
@@ -120,13 +118,12 @@ struct SharedStore {
 
     /// 何も無ければ消す。打鍵のたびに呼ばれるので中身は小さく保つ
     func savePending(_ p: Pending) {
-        if p.code.isEmpty, p.outbox.isEmpty, p.reading.isEmpty {
+        if p.code.isEmpty, p.reading.isEmpty {
             defaults.removeObject(forKey: Self.pendingKey)
             return
         }
         let o: [String: Any] = [
             "code": p.code,
-            "out": p.outbox,
             "reading": p.reading,
             "kana": p.kana,
             "at": Date().timeIntervalSince1970,
@@ -147,7 +144,6 @@ struct SharedStore {
         guard Date().timeIntervalSince1970 - at <= Self.pendingTTL else { return nil }
         return Pending(
             code: o["code"] as? String ?? "",
-            outbox: o["out"] as? String ?? "",
             reading: o["reading"] as? String ?? "",
             kana: o["kana"] as? Bool ?? false,
         )
