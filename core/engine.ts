@@ -6,6 +6,7 @@ import { CODE2IDC, isIDC, readableIds } from "./ids/operators.ts";
 import { norm, SOFT } from "./ids/normalize.ts";
 import { parseNodes, toTokens, WILD, type Node } from "./ids/parse.ts";
 import { ALL_BLOCKS, blockOf, type Block } from "./data/blocks.ts";
+import { CURVE_STROKES } from "./data/palettes.ts";
 import type {
   CharMeta,
   ListPage,
@@ -88,6 +89,8 @@ export class Engine {
   private altMap = new Map<string, string[]>();
   private treeCache = new Map<string, Node | null>();
   private treesCache = new Map<string, Node[]>();
+  /** 曲線の画(CURVE_STROKES)を正規化して持つ。「曲線を含む」の絞り込みで見る */
+  private curves = new Set([...CURVE_STROKES].map(norm));
   private closureCache = new Map<string, Set<string>>();
   private leafCountCache = new Map<string, number>();
 
@@ -316,12 +319,14 @@ export class Engine {
     limit = 200,
     sort: SortMode = DEFAULT_SORT,
     offset = 0,
+    curvesOnly = false,
   ): { results: Result[]; mode: string; total: number } {
     const compiled = Engine.compile(input);
     if (!compiled) return { results: [], mode: "empty", total: 0 };
-    const key = `${compiled}\u0000${sort}`;
+    // 絞り込みは total にも効く(ページ送りが合わなくなるので、切り出す前に落とす)
+    const key = `${compiled}\u0000${sort}\u0000${curvesOnly ? "c" : ""}`;
     if (key !== this.lastKey) {
-      const found = this.searchAll(compiled, sort);
+      const found = this.searchAll(compiled, sort, curvesOnly);
       this.lastKey = key;
       this.lastAll = found.results;
       this.lastMode = found.mode;
@@ -338,6 +343,7 @@ export class Engine {
   private searchAll(
     compiled: string,
     sort: SortMode,
+    curvesOnly = false,
   ): { results: Result[]; mode: string } {
     const nodes = parseNodes(toTokens(compiled));
     if (!nodes.length) return { results: [], mode: "empty" };
@@ -356,7 +362,8 @@ export class Engine {
           m = Math.max(m, this.match(first, t));
           if (m === 2) break;
         }
-        if (m) results.push({ ch, exact: m === 2, meta });
+        if (m && (!curvesOnly || this.hasCurve(ch)))
+          results.push({ ch, exact: m === 2, meta });
       }
       const asked = this.askedLeaves(first);
       results.sort(
@@ -376,6 +383,7 @@ export class Engine {
     for (const [ch, meta] of this.chars) {
       const cl = this.closure(ch);
       if (!tokens.every((t) => cl.has(t))) continue;
+      if (curvesOnly && !this.hasCurveIn(cl)) continue;
       results.push({ ch, exact: this.madeOfExactly(ch, want), meta });
     }
     const asked = tokens.reduce((n, t) => n + this.leafCount(t), 0);
@@ -383,6 +391,16 @@ export class Engine {
       (a, b) => this.sortKey(a, sort, asked) - this.sortKey(b, sort, asked),
     );
     return { results, mode: "parts" };
+  }
+
+  /** 分解のどこかに曲線の画(CURVE_STROKES)を持つ字か */
+  hasCurve(ch: string): boolean {
+    return this.hasCurveIn(this.closure(ch));
+  }
+
+  private hasCurveIn(closure: Set<string>): boolean {
+    for (const c of this.curves) if (closure.has(c)) return true;
+    return false;
   }
 
   /**

@@ -37,6 +37,8 @@ export default function Home() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [mode, setMode] = useState("empty");
+  /** 「曲線を含む」の絞り込み。分解のどこかに丸みのある画を持つ字だけ残す */
+  const [curvesOnly, setCurvesOnly] = useState(false);
   const [output, setOutput] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -100,18 +102,24 @@ export default function Home() {
   useEffect(() => {
     if (!engine || composing) return;
     const t = setTimeout(() => {
-      const found = engine.search(query, CAND_PAGE, sortMode, page * CAND_PAGE);
+      const found = engine.search(
+        query,
+        CAND_PAGE,
+        sortMode,
+        page * CAND_PAGE,
+        curvesOnly,
+      );
       setResults(found.results);
       setTotal(found.total);
       setMode(found.mode);
     }, 120);
     return () => clearTimeout(t);
-  }, [engine, query, composing, sortMode, page]);
+  }, [engine, query, composing, sortMode, page, curvesOnly]);
 
   // 打ち直したり並び順を変えたりしたら1ページめに戻す
   useEffect(() => {
     setPage(0);
-  }, [query, sortMode]);
+  }, [query, sortMode, curvesOnly]);
 
   // ボタン挿入後にキャレット位置を復元(常に末尾に飛ばさない)
   useLayoutEffect(() => {
@@ -345,6 +353,23 @@ export default function Home() {
                     (page + 1) * CAND_PAGE,
                   ).toLocaleString()}件目`}
               </p>
+              {/* 曲線の絞り込み。部品では言い表しにくい「丸みのある画」を持つ字だけに
+                  減らせる(どの画を曲線と見るかは core/data/palettes.ts の CURVE_STROKES) */}
+              <div className="flex shrink-0 gap-1">
+                <button
+                  onPointerDown={keepFocus}
+                  onClick={() => setCurvesOnly((v) => !v)}
+                  title="分解のどこかに丸みのある画(弯・鉤・捺・円)を持つ字だけに絞る"
+                  aria-pressed={curvesOnly}
+                  className={
+                    curvesOnly
+                      ? "rounded-full border border-indigo-400 bg-indigo-50 px-2 py-0.5 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                      : "rounded-full border border-stone-300 px-2 py-0.5 dark:border-stone-700"
+                  }
+                >
+                  曲線を含む
+                </button>
+              </div>
               {/* 候補の並び順。打ちながら切り替えられるよう候補の真上に置く */}
               <div className="flex shrink-0 gap-1">
                 {SORT_MODES.map((m) => (
@@ -369,8 +394,9 @@ export default function Home() {
 
           {engine && query && mode !== "empty" && results.length === 0 && (
             <p className="py-6 text-center text-sm text-stone-500">
-              該当なし。部品を減らすか <b>?</b>
-              (なんでも)に置き換えてみてください。
+              {curvesOnly
+                ? "該当なし。「曲線を含む」を外すと出るかもしれません。"
+                : "該当なし。部品を減らすか、別の分解で試してみてください。"}
             </p>
           )}
 
@@ -464,14 +490,6 @@ export default function Home() {
               spellCheck={false}
               className="kanji min-w-0 flex-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2.5 text-lg outline-none focus:border-indigo-500 dark:border-stone-700 dark:bg-stone-950"
             />
-            <button
-              onPointerDown={keepFocus}
-              onClick={() => insert("?")}
-              title="なんでもいい部品"
-              className="shrink-0 rounded-lg border border-stone-300 px-3 py-2.5 text-sm text-stone-600 active:bg-stone-100 dark:border-stone-700 dark:text-stone-300"
-            >
-              ?
-            </button>
             <button
               onPointerDown={keepFocus}
               onClick={backspace}

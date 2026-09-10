@@ -218,6 +218,8 @@ function Screen() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [mode, setMode] = useState("empty");
+  /** 「曲線を含む」の絞り込み。分解のどこかに丸みのある画を持つ字だけ残す */
+  const [curvesOnly, setCurvesOnly] = useState(false);
   const [output, setOutput] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -271,12 +273,18 @@ function Screen() {
   // 打ち直したり並び順を変えたりしたら1ページめに戻す
   useEffect(() => {
     setPage(0);
-  }, [query, sortMode]);
+  }, [query, sortMode, curvesOnly]);
 
   useEffect(() => {
     if (!engine) return;
     const id = setTimeout(() => {
-      const found = engine.search(query, CAND_PAGE, sortMode, page * CAND_PAGE);
+      const found = engine.search(
+        query,
+        CAND_PAGE,
+        sortMode,
+        page * CAND_PAGE,
+        curvesOnly,
+      );
       setResults(found.results);
       setTotal(found.total);
       setMode(found.mode);
@@ -285,7 +293,7 @@ function Screen() {
       wasEmpty.current = nowEmpty;
     }, 120);
     return () => clearTimeout(id);
-  }, [engine, query, sortMode, page]);
+  }, [engine, query, sortMode, page, curvesOnly]);
 
   const pageCount = Math.max(1, Math.ceil(total / CAND_PAGE));
 
@@ -345,13 +353,41 @@ function Screen() {
   const heightScale = KEY_HEIGHTS.find(h => h.key === keyHeight)?.scale ?? 1;
   const keyboardMaxHeight = Math.min(height * 0.34 * heightScale, 280 * heightScale, height * 0.5);
 
+  /**
+   * 端末のキーボードが出ているぶんの高さ(Android だけ)。
+   *
+   * Android は 15 から画面の端まで描く(edge-to-edge)のが既定になり、IME が出ても
+   * **窓が縮まなくなった**——adjustResize を指定してあっても、アプリはキーボードの
+   * 裏にそのまま描かれ、⌨ を押すと入力欄も候補もキーボードに隠れてしまう。
+   * そこで出ている高さぶんだけ下に余白を足して、アプリの側を上へ逃がす。
+   * (iOS は KeyboardAvoidingView が同じことをするので、そちらに任せる)
+   */
+  const [kbHeight, setKbHeight] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const show = Keyboard.addListener("keyboardDidShow", e =>
+      setKbHeight(e.endCoordinates?.height ?? 0),
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKbHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const lifted = Platform.OS === "android" && kbHeight > 0;
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: t.bg, paddingBottom: lifted ? kbHeight : 0 }}
+      // キーボードが出ている間の下端はキーボードなので、下の余白は
+      // 二重に取らない(IME の高さはナビゲーションバーのぶんも含んでいる)
+      edges={lifted ? ["top"] : ["top", "bottom"]}
+    >
       <StatusBar style={t.dark ? "light" : "dark"} />
 
       {/* ⌨ で端末のキーボードに切り替えたとき、下段の入力欄が
           キーボードに隠れて打っている文字が見えなくならないよう持ち上げる。
-          Android は OS の adjustResize が同じことをするので iOS だけ */}
+          Android は edge-to-edge で窓が縮まないので、上の kbHeight で逃がす */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -538,18 +574,40 @@ function Screen() {
         )}
 
         {engine && !!query && (
-          <Text style={[s.status, { color: t.sub }]}>
-            {mode === "structure"
-              ? `構造マッチ: ${total.toLocaleString()}件(枠付き=完全一致)`
-              : mode === "parts"
-                ? `部品を含む字: ${total.toLocaleString()}件`
-                : "かたちか部品を入力してください"}
-            {total > CAND_PAGE &&
-              `　${(page * CAND_PAGE + 1).toLocaleString()}〜${Math.min(
-                total,
-                (page + 1) * CAND_PAGE,
-              ).toLocaleString()}件目`}
-          </Text>
+          <View style={s.statusRow}>
+            <Text style={[s.status, { color: t.sub, flex: 1 }]}>
+              {mode === "structure"
+                ? `構造マッチ: ${total.toLocaleString()}件(枠付き=完全一致)`
+                : mode === "parts"
+                  ? `部品を含む字: ${total.toLocaleString()}件`
+                  : "かたちか部品を入力してください"}
+              {total > CAND_PAGE &&
+                `　${(page * CAND_PAGE + 1).toLocaleString()}〜${Math.min(
+                  total,
+                  (page + 1) * CAND_PAGE,
+                ).toLocaleString()}件目`}
+            </Text>
+            {/* 曲線の絞り込み。部品では言い表しにくい「丸みのある画」を持つ字だけに
+                減らせる(どの画を曲線と見るかは core/data/palettes.ts の CURVE_STROKES) */}
+            <Pressable
+              onPressIn={() => haptic("toggle")}
+              onPress={() => setCurvesOnly(v => !v)}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: curvesOnly }}
+              accessibilityLabel="曲線を含む字だけに絞る"
+              style={[
+                s.chip,
+                {
+                  borderColor: curvesOnly ? t.accent : t.border,
+                  backgroundColor: curvesOnly ? t.accentBg : "transparent",
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 11, color: curvesOnly ? t.accent : t.sub }}>
+                曲線を含む
+              </Text>
+            </Pressable>
+          </View>
         )}
 
         <FlatList
@@ -565,7 +623,9 @@ function Screen() {
           ListEmptyComponent={
             engine && !!query && mode !== "empty" ? (
               <Text style={[s.notice, { color: t.sub }]}>
-                該当なし。部品を減らすか ? (なんでも)に置き換えてみてください。
+                {curvesOnly
+                  ? "該当なし。「曲線を含む」を外すと出るかもしれません。"
+                  : "該当なし。部品を減らすか、別の分解で試してみてください。"}
               </Text>
             ) : null
           }
@@ -762,7 +822,7 @@ function Screen() {
           }
           style={[
             // ここだけは「押せば端末のキーボードが出る」と分かってほしいので、
-            // 他の小さなキー(? ⌫ ✕)より横に広く取り、常に色を敷いて浮かせる
+            // 他の小さなキー(⌫ ✕)より横に広く取り、常に色を敷いて浮かせる
             s.keyboardBtn,
             {
               borderColor: t.accent,
@@ -785,16 +845,6 @@ function Screen() {
           >
             {directInput ? "閉じる" : "キーボード"}
           </Text>
-        </Pressable>
-        {/* ? は「任意の1字」として欄にそのまま入る文字なので、アイコンに
-            置き換えず打てる字のまま見せる */}
-        <Pressable
-          onPressIn={() => haptic("key")}
-          onPress={() => insert("?")}
-          accessibilityLabel="任意の1字(?)を入れる"
-          style={[s.smallBtn, { borderColor: t.border }]}
-        >
-          <Text style={{ color: t.sub, fontSize: 16 }}>?</Text>
         </Pressable>
         <Pressable
           onPressIn={() => haptic("delete")}
@@ -979,6 +1029,13 @@ const s = StyleSheet.create({
   },
   notice: { textAlign: "center", paddingVertical: 24, fontSize: 13 },
   status: { fontSize: 11, paddingHorizontal: 12, paddingVertical: 6 },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingRight: 12,
+    paddingVertical: 2,
+  },
   emptyState: { paddingHorizontal: 24, paddingVertical: 24, gap: 12 },
   exampleRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   chip: {
