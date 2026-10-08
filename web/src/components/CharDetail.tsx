@@ -16,8 +16,8 @@ import { GRADE_LABEL } from "@/lib/labels";
  * 入力画面(コンパクト)と一覧画面(コピーボタンつき)で共有している。
  *
  * 読みは**正式かどうかで見た目を変える**。KANJIDIC2 の音訓だけを大きい字で出し、
- * 人名読み・参考・推定は小さく、断り書きつきで下に置く
- * (辞書に載っている読みと、こちらで推した読みを同じ顔で出さないため)。
+ * 人名読み・参考・外国語の読みは小さく、断り書きつきで下に置く
+ * (辞書に載っている読みと、そうでない読みを同じ顔で出さないため)。
  */
 export function CharDetail({
   ch,
@@ -69,8 +69,8 @@ export function CharDetail({
         ) : null}
 
         {/* ── 正式ではない読み ──
-            人名読み(KANJIDIC2 の nanori)と、KANJIDIC2 に無い字の参考・推定。
-            見出しで出所が分かるようにしてある(推定は当たるのが6割ほど) */}
+            人名読み(KANJIDIC2 の nanori)と、資料にしか無い参考の読み・外国語の読み。
+            見出しで出所が分かるようにしてある */}
         {(meta.nanori || meta.ref) && (
           <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
             {meta.nanori && (
@@ -89,9 +89,9 @@ export function CharDetail({
                 <span
                   className="mr-1.5 text-[10px] text-stone-400"
                   title={
-                    meta.refKind[0] === "u"
-                      ? "資料(Unihan)にある読み。KANJIDIC2 の音訓ではない"
-                      : "こちらで推した読み。当たるのは6割ほどなので当てにしないこと"
+                    meta.refKind[0] === "i"
+                      ? "日本語の読みではない。IRG の審査資料で提案国が書き添えた読みをカタカナに書き写したもの"
+                      : "資料にある日本語の読み。KANJIDIC2 の音訓ではない"
                   }
                 >
                   {refReadingLabel(meta.refKind)}

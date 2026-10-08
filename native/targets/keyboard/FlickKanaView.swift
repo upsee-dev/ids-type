@@ -47,14 +47,67 @@ final class FlickKanaView: UIView {
     private var lastStep = 0
     private var lastTapAt: TimeInterval = 0
 
-    init(text: UIColor, sub: UIColor, card: UIColor, border: UIColor, accentBg: UIColor) {
+    /// 読みを打つ入力方法。"flick"(12キー) / "godan" / "romaji"(QWERTY)。
+    /// ローマ字と Godan は**打った字がローマ字**なので、かなに直してから渡す
+    private let layout: String
+
+    /// ローマ字の打ちかけ("k" や "ky")。読みの欄に色を変えて出す
+    private var romaji = ""
+
+    /// この面はローマ字を打つ面か(Godan も中身はローマ字)
+    private var isRomaji: Bool { layout == "romaji" || layout == "godan" }
+
+    /// ローマ字面の並び。パソコンと同じ QWERTY
+    private static let romajiRows = ["qwertyuiop", "asdfghjkl-", "zxcvbnm"]
+
+    init(
+        text: UIColor, sub: UIColor, card: UIColor, border: UIColor, accentBg: UIColor,
+        layout: String = "flick",
+    ) {
         colText = text
         colSub = sub
         colCard = card
         colBorder = border
         colAccentBg = accentBg
+        self.layout = layout
         super.init(frame: .zero)
         build()
+    }
+
+    /// 打つ面の並び。Godan とローマ字は Kana.Key に移して、以降の扱いを1本にする
+    private var rows: [[Kana.Key]] {
+        switch layout {
+        case "godan":
+            return Godan.rows.map { $0.map { Kana.Key(label: $0.label, chars: $0.chars) } }
+                + [[Kana.Key(label: Kana.backspace, chars: [])]]
+        case "romaji":
+            return Self.romajiRows.enumerated().map { i, r in
+                r.map { Kana.Key(label: String($0), chars: [String($0)]) }
+                    + (i == Self.romajiRows.count - 1
+                        ? [Kana.Key(label: Kana.backspace, chars: [])] : [])
+            }
+        default:
+            return Kana.rows
+        }
+    }
+
+    /// ローマ字を1字足して、かなに直せたぶんだけ読みへ送る
+    fileprivate func appendLetter(_ c: String) {
+        romaji += c
+        let r = Kana.romajiToKana(romaji)
+        for ch in r.kana { delegate?.flickAppend(String(ch)) }
+        romaji = r.rest
+        delegate?.flickPreview(r.rest.isEmpty ? nil : r.rest)
+    }
+
+    /// 打ちかけがあるうちは、まずそちらを1字消す
+    fileprivate func backspace() {
+        if romaji.isEmpty {
+            delegate?.flickBackspace()
+        } else {
+            romaji.removeLast()
+            delegate?.flickPreview(romaji.isEmpty ? nil : romaji)
+        }
     }
 
     @available(*, unavailable)
@@ -74,7 +127,7 @@ final class FlickKanaView: UIView {
             root.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
 
-        for row in Kana.rows {
+        for row in rows {
             let line = UIStackView()
             line.axis = .horizontal
             line.spacing = 4
@@ -122,6 +175,12 @@ final class FlickKanaView: UIView {
     }
 
     fileprivate func commit(_ key: Kana.Key, _ dir: Int) {
+        // ローマ字の面は「押した向きの字を1つ足す」だけ。叩き直しの巡りは
+        // かなの面だけのもの(ローマ字は同じキーを続けて打つので、巡らせると tt が打てない)
+        if isRomaji {
+            appendLetter(char(key, dir))
+            return
+        }
         let now = Date.timeIntervalSinceReferenceDate
         if dir == 0, key.label == lastLabel, now - lastTapAt < Self.toggleWindow {
             // 叩き直し。割り当てのある向きだけを あ→い→う→え→お の順に巡る
@@ -215,7 +274,7 @@ private final class KanaKeyView: UIView {
         // 「小゛゜」と「⌫」は向きを持たない。押した回数だけ効く
         if key.chars.isEmpty {
             if key.label == Kana.backspace {
-                pad.delegate?.flickBackspace()
+                pad.backspace()
             } else {
                 pad.delegate?.flickCycleLast()
             }

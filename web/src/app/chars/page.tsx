@@ -260,7 +260,7 @@ export default function CharsPage() {
 
           <footer className="mt-6 text-[10px] leading-relaxed text-stone-400 dark:text-stone-500">
             実線枠＝KANJIDIC2 収録(正式な音訓・学年つき)、破線枠＝それ以外の CJK
-            統合漢字(読みは資料からの参考・部品からの推定)。端末にフォントが無い字は
+            統合漢字(読みは資料からの参考。日本語の読みが無い字は IRG の外国語の読みを書き写したもの)。端末にフォントが無い字は
             Plangothic (SIL OFL 1.1)
             の分割フォントを読み込んで表示します。それでも □
             になる字はフォント未収録です(表示だけの問題で、コピーすれば正しく貼り付けられます)。

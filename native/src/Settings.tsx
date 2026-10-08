@@ -1,6 +1,8 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   KEY_HEIGHTS,
+  KANA_LAYOUTS,
+  type KanaLayout,
   SORT_MODES,
   THEMES,
   type KeyHeight,
@@ -29,6 +31,8 @@ export function Settings({
   onPickSort,
   keyHeight,
   onPickHeight,
+  kanaLayout,
+  onPickKanaLayout,
   historyCount,
   favoriteCount,
   onClearHistory,
@@ -45,6 +49,8 @@ export function Settings({
   onPickSort: (mode: SortMode) => void;
   keyHeight: KeyHeight;
   onPickHeight: (h: KeyHeight) => void;
+  kanaLayout: KanaLayout;
+  onPickKanaLayout: (l: KanaLayout) => void;
   historyCount: number;
   favoriteCount: number;
   onClearHistory: () => void;
@@ -110,6 +116,30 @@ export function Settings({
             </Note>
             <Note theme={t}>
               システムキーボードでも同じ順になります。
+            </Note>
+          </Section>
+
+          <Section title="読みの入力方法" theme={t}>
+            <View style={s.wrap}>
+              {KANA_LAYOUTS.map(l => (
+                <Chip
+                  key={l.id}
+                  theme={t}
+                  active={kanaLayout === l.id}
+                  label={l.label}
+                  onPress={() => onPickKanaLayout(l.id)}
+                />
+              ))}
+            </View>
+            <Note theme={t}>
+              {kanaLayout === "flick"
+                ? "日本のスマホで標準の12キーフリック。あ行のキーを左右上下に払って い・う・え・お を出します。"
+                : kanaLayout === "romaji"
+                  ? "パソコンと同じローマ字入力。tuchi → つち のように、かなに直せたぶんから読み欄に入ります。"
+                  : "Godan。左の列に母音（A I U E O）、中央と右に子音（K S T N / H M Y R W）。子音キーを右に払うと濁音（か→が）、左で半濁音（は→ぱ）です。"}
+            </Note>
+            <Note theme={t}>
+              システムキーボードでも同じ面が出ます。
             </Note>
           </Section>
 

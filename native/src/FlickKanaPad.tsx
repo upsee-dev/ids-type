@@ -1,6 +1,16 @@
 import { useRef, useState } from "react";
 import { StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
-import { KANA_BACKSPACE, KANA_ROWS, kanaFlick, type KanaKey } from "./engine";
+import {
+  GODAN_ROWS,
+  KANA_BACKSPACE,
+  KANA_DAKUTEN,
+  KANA_ROWS,
+  kanaFlick,
+  romajiToKana,
+  type GodanKey,
+  type KanaKey,
+  type KanaLayout,
+} from "./engine";
 import type { Theme } from "./theme";
 import { haptic } from "./feedback";
 
@@ -216,3 +226,201 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
 });
+
+
+/**
+ * Godan の面。**フリックと同じ指の動きで、出るのがローマ字**という違いだけ。
+ * 左列に母音・中央と右に子音が縦に並ぶ(core/data/godan.ts)。
+ * 打った文字は親が romajiToKana でかなに直す(打ちかけは薄く出る)。
+ */
+export function GodanPad({
+  theme,
+  onLetter,
+  onCycleLast,
+  onBackspace,
+  onPreview,
+}: {
+  theme: Theme;
+  /** ローマ字を1字打った */
+  onLetter: (s: string) => void;
+  onCycleLast: () => void;
+  onBackspace: () => void;
+  onPreview: (s: string | null) => void;
+}) {
+  return (
+    <View style={styles.pad}>
+      {GODAN_ROWS.map((row, ri) => (
+        <View key={ri} style={styles.row}>
+          {row.map((key: GodanKey) => (
+            <KanaKeyView
+              key={key.label}
+              k={key}
+              theme={theme}
+              onPreview={onPreview}
+              onRelease={(dir) => {
+                if (key.chars.length === 0) {
+                  onCycleLast();
+                  return;
+                }
+                onLetter(kanaFlick(key, dir));
+              }}
+            />
+          ))}
+        </View>
+      ))}
+      <View style={styles.row}>
+        <KanaKeyView
+          k={{ label: KANA_BACKSPACE, chars: [] }}
+          theme={theme}
+          onPreview={onPreview}
+          onRelease={onBackspace}
+        />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * ローマ字の面。パソコンの並び(QWERTY)をそのまま出す。
+ * フリックは使わないので、押したら1字。濁点キーは要らない
+ * (が→ga のようにローマ字のほうで書けるため)。
+ */
+const ROMAJI_ROWS = ["qwertyuiop", "asdfghjkl-", "zxcvbnm"];
+
+export function RomajiPad({
+  theme,
+  onLetter,
+  onBackspace,
+}: {
+  theme: Theme;
+  onLetter: (s: string) => void;
+  onBackspace: () => void;
+}) {
+  return (
+    <View style={styles.pad}>
+      {ROMAJI_ROWS.map((row, ri) => (
+        <View key={ri} style={styles.row}>
+          {[...row].map((c) => (
+            <TapKey key={c} label={c} theme={theme} onPress={() => onLetter(c)} />
+          ))}
+          {ri === ROMAJI_ROWS.length - 1 && (
+            <TapKey label={KANA_BACKSPACE} theme={theme} onPress={onBackspace} small />
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** 押すだけのキー。ローマ字面はフリックを見ないので responder を張らない */
+function TapKey({
+  label,
+  theme,
+  onPress,
+  small,
+}: {
+  label: string;
+  theme: Theme;
+  onPress: () => void;
+  small?: boolean;
+}) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <View
+      style={[
+        styles.key,
+        { backgroundColor: pressed ? theme.accentBg : theme.key, borderColor: theme.border },
+      ]}
+      onStartShouldSetResponder={() => true}
+      onResponderGrant={() => {
+        setPressed(true);
+        haptic("key");
+      }}
+      onResponderRelease={() => {
+        setPressed(false);
+        onPress();
+      }}
+      onResponderTerminate={() => setPressed(false)}
+    >
+      <Text
+        style={{
+          fontSize: small ? 12 : 18,
+          fontWeight: "500",
+          color: small ? theme.sub : theme.text,
+        }}
+      >
+        {label.toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * 読みを打つ面。入力方法で中身を差し替える(設定 katachi.kana)。
+ *
+ *   flick  … 12キーフリック。打った字がそのまま かな
+ *   romaji … QWERTY。打った字はローマ字で、かなに直してから読み欄へ
+ *   godan  … 左に母音・右に子音のローマ字フリック
+ *
+ * ローマ字と Godan は**打ちかけ**(k・ky など)が出るので、確定前の文字列は
+ * onPending で親へ返し、読み欄に薄く出す。
+ */
+export function KanaPad({
+  layout,
+  theme,
+  onAppend,
+  onReplaceLast,
+  onCycleLast,
+  onBackspace,
+  onPreview,
+  pending,
+  onPending,
+}: {
+  layout: KanaLayout;
+  theme: Theme;
+  onAppend: (ch: string) => void;
+  onReplaceLast: (ch: string) => void;
+  onCycleLast: () => void;
+  onBackspace: () => void;
+  onPreview: (ch: string | null) => void;
+  /** ローマ字の打ちかけ(かなに直せていない文字) */
+  pending: string;
+  onPending: (s: string) => void;
+}) {
+  if (layout === "flick") {
+    return (
+      <FlickKanaPad
+        theme={theme}
+        onAppend={onAppend}
+        onReplaceLast={onReplaceLast}
+        onCycleLast={onCycleLast}
+        onBackspace={onBackspace}
+        onPreview={onPreview}
+      />
+    );
+  }
+
+  /** ローマ字を1字足して、かなにできたぶんだけ読み欄へ送る */
+  const letter = (c: string) => {
+    const { kana, rest } = romajiToKana(pending + c);
+    if (kana) for (const ch of kana) onAppend(ch);
+    onPending(rest);
+  };
+  /** 打ちかけがあるうちは、まずそちらを1字消す */
+  const back = () => {
+    if (pending) onPending(pending.slice(0, -1));
+    else onBackspace();
+  };
+
+  return layout === "godan" ? (
+    <GodanPad
+      theme={theme}
+      onLetter={letter}
+      onCycleLast={onCycleLast}
+      onBackspace={back}
+      onPreview={onPreview}
+    />
+  ) : (
+    <RomajiPad theme={theme} onLetter={letter} onBackspace={back} />
+  );
+}

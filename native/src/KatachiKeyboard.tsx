@@ -8,16 +8,19 @@ import {
   useWindowDimensions,
 } from "react-native";
 import {
+  CURVE_KANJI,
   DIFFICULT_COMPONENTS,
   kanaCycle,
   OPERATORS,
   PRIMARY_CODES,
   STROKE_MAX,
   type Engine,
+  type KanaLayout,
 } from "./engine";
+import { loadKanaLayout } from "./prefs";
 import { OperatorIcon } from "./OperatorIcon";
 import { CameraPad } from "./CameraPad";
-import { FlickKanaPad } from "./FlickKanaPad";
+import { KanaPad } from "./FlickKanaPad";
 import { HandwritingPad } from "./HandwritingPad";
 import { fontFor, type Theme } from "./theme";
 import { haptic } from "./feedback";
@@ -31,7 +34,7 @@ type Tab = "radical" | "search" | "draw" | "camera";
 
 /** 4つとも同じ幅にする(styles.tab の flex:1)。並びとしては対等な引き方なので */
 const TABS: { id: Tab; label: string }[] = [
-  { id: "radical", label: "部首" },
+  { id: "radical", label: "部分" },
   { id: "search", label: "読み" },
   { id: "draw", label: "手書き" },
   { id: "camera", label: "カメラ" },
@@ -68,7 +71,7 @@ export function KatachiKeyboard({
 }: {
   engine: Engine | null;
   theme: Theme;
-  /** ★に入れてきた字。部首タブの先頭「お気に入り」に並べる */
+  /** ★に入れてきた字。部分タブの先頭「お気に入り」に並べる */
   favorites: string[];
   onInsert: (s: string) => void;
   /** 字を出力欄へ入れる(手書き候補のタップ・読み候補の長押し) */
@@ -85,7 +88,6 @@ export function KatachiKeyboard({
   useEffect(() => {
     if (cameraRequest) setTab("camera");
   }, [cameraRequest]);
-  const [showAllOps, setShowAllOps] = useState(false);
   const { width, height: screenH } = useWindowDimensions();
 
   /**
@@ -96,12 +98,12 @@ export function KatachiKeyboard({
   const padHeight =
     tab === "camera" ? Math.min(maxHeight * 1.7, screenH * 0.5) : maxHeight;
 
+  // かたちは**最初から全部**並べる(よく使う順が先頭・残りは横スクロール)。
+  // 「その他」で畳むと、使いたいかたちが畳まれた側にあるたびに1手増える
   const ops = useMemo(() => {
     const primary = PRIMARY_CODES.map(c => OPERATORS.find(o => o.code === c)!).filter(Boolean);
-    return showAllOps
-      ? [...primary, ...OPERATORS.filter(o => !PRIMARY_CODES.includes(o.code))]
-      : primary;
-  }, [showAllOps]);
+    return [...primary, ...OPERATORS.filter(o => !PRIMARY_CODES.includes(o.code))];
+  }, []);
 
 
   /**
@@ -135,18 +137,6 @@ export function KatachiKeyboard({
           <Text style={{ fontSize: 9, color: theme.sub, marginTop: 2 }}>{op.label}</Text>
         </Pressable>
       ))}
-      <Pressable
-        onPressIn={() => haptic("toggle")}
-        onPress={() => setShowAllOps(s => !s)}
-        style={[
-          styles.opKey,
-          { backgroundColor: "transparent", borderColor: theme.border, borderStyle: "dashed" },
-        ]}
-      >
-        <Text style={{ fontSize: 11, color: theme.sub }}>
-          {showAllOps ? "少なく" : "その他"}
-        </Text>
-      </Pressable>
     </ScrollView>
   );
 
@@ -260,9 +250,10 @@ export function KatachiKeyboard({
 }
 
 /**
- * 部首・偏旁タブ。先頭は**お気に入り**——これまで★に入れてきた字をそのまま並べ、
+ * 部分タブ。先頭は**お気に入り**——これまで★に入れてきた字をそのまま並べ、
  * 画数チップを選ぶと zi.tools の「難輸入部件」全541件をその画数ぶんだけ出す。
  * 541件を一度に並べると探せないので、zi.tools と同じく画数で区切っている。
+ * 「曲線を含む」は丸・渦・かなのような漢字らしくない丸みを持つ字の一覧(CURVE_KANJI)。
  *
  * 先頭が固定の部品表(RADICAL_PALETTE)ではなくお気に入りなのは、この道具で
  * 何度も出す字は人によって違うため。お気に入りに入れた字は**部品としても打てる**
@@ -283,11 +274,13 @@ function RadicalTab({
   const [group, setGroup] = useState<string>("favorites");
   const parts = useMemo(() => {
     if (group === "favorites") return favorites;
+    if (group === "curve") return [...CURVE_KANJI];
     return [...(DIFFICULT_COMPONENTS.find(g => g.strokes === group)?.parts ?? "")];
   }, [group, favorites]);
 
   const chips = [
     { key: "favorites", label: "お気に入り" },
+    { key: "curve", label: "曲線を含む" },
     ...DIFFICULT_COMPONENTS.map(g => ({ key: g.strokes, label: `${g.strokes}画` })),
   ];
 
@@ -353,6 +346,10 @@ function RadicalTab({
  * 60字で切ると「これで全部」なのか分からないので、全件数を出して
  * ページで送れるようにしてある。加えて**画数で絞り込める**——画数は
  * Unicode(Unihan)の値で10万字ぜんぶにあるので、拡張漢字にも効く。
+ * 読みを打たずに**画数だけ選んでも引ける**(読みの分からない字でも画数は数えられる)。
+ *
+ * 「U+」を押すとかなの面が16進の面に替わり、**符号位置で引ける**(U+4E00 → 一。
+ * 打ちかけの 2B81 なら U+2B810〜U+2B81F)。コード表や文献で番号だけ分かっている字用。
  */
 function SearchTab({
   engine,
@@ -368,16 +365,36 @@ function SearchTab({
   const [reading, setReading] = useState("");
   // 指を置いているあいだの仮の字。読みの欄に色を変えて出す(ポップアップは出さない)
   const [preview, setPreview] = useState<string | null>(null);
+  /**
+   * 読みを打つ入力方法。設定(共有領域)で選ぶので、システムキーボードでも同じ面が出る。
+   * 開いている間は変えられないので、最初に1回だけ読む
+   */
+  const [kanaLayout] = useState<KanaLayout>(loadKanaLayout);
+  /** ローマ字・Godan の打ちかけ(k・ky など)。かなに直せたぶんだけ reading に入る */
+  const [romajiPending, setRomajiPending] = useState("");
   /** 画数の絞り込み。0=指定なし。STROKE_MAX は「それ以上」 */
   const [strokes, setStrokes] = useState(0);
   const [page, setPage] = useState(0);
+  /**
+   * 符号位置(U+XXXX)で引く面を出しているか。出しているあいだはかなの面の代わりに
+   * 16進のキー(0〜F)が並ぶ。打った16進は hex に持ち、読みとは混ぜない
+   * (ローマ字の打ちかけの仕組みに A〜F を通すと、かなに化ける)
+   */
+  const [codeMode, setCodeMode] = useState(false);
+  const [hex, setHex] = useState("");
 
   const found = useMemo(() => {
-    const q = reading.trim();
-    if (!engine || !q) return { items: [] as string[], total: 0 };
-    // 読み・部品・符号位置のどれでも引ける（Engine#list がまとめて面倒を見る）。
-    // **日本の字に絞らない**。10万字ぜんぶが読みを持つようになったので
-    // (正式→人名→参考→推定の順に並ぶ)、絞ると拡張漢字が読みで引けなくなる。
+    const none = { items: [] as string[], total: 0 };
+    if (!engine) return none;
+    const q = codeMode ? (hex ? `U+${hex}` : "") : reading.trim();
+    // 読みが空でも**画数だけ選んでいれば、その画数の字を全部出す**(並びは読みと同じ
+    // 段→版順)。読めない字でも画数は数えられるので、それだけで探し始められる。
+    // 16進の面では何か打つまで出さない(画数だけの一覧は読みの面の役目)
+    if (!q && (codeMode || !strokes)) return none;
+    // 読み・符号位置のどれでも引ける（Engine#list がまとめて面倒を見る）。
+    // 符号位置は U+ を付けて渡すと、打ちかけ(2B81)が前方一致になる(U+2B810〜U+2B81F)。
+    // **日本の字に絞らない**。拡張漢字にも資料の読み(参考)や外国語の読みがあり
+    // (正式→人名→参考→外国語の順に並ぶ)、絞ると拡張漢字が読みで引けなくなる。
     // よく使う字が先に出る並びはエンジン側で保証されている
     const r = engine.list({
       query: q,
@@ -386,7 +403,7 @@ function SearchTab({
       limit: READING_PAGE,
     });
     return { items: r.items.map(i => i.ch), total: r.total };
-  }, [engine, reading, strokes, page]);
+  }, [engine, reading, strokes, page, codeMode, hex]);
 
   const hits = found.items;
   const pages = Math.ceil(found.total / READING_PAGE);
@@ -407,24 +424,65 @@ function SearchTab({
             { borderColor: theme.border, backgroundColor: theme.bg },
           ]}
         >
-          {reading || preview ? (
+          {codeMode ? (
+            hex ? (
+              <Text numberOfLines={1} style={{ fontSize: 16, color: theme.text }}>
+                <Text style={{ color: theme.sub }}>U+</Text>
+                {hex}
+              </Text>
+            ) : (
+              <Text numberOfLines={1} style={{ fontSize: 12, color: theme.faint }}>
+                符号位置を16進で（例: 4E00）
+              </Text>
+            )
+          ) : reading || preview || romajiPending ? (
             <Text numberOfLines={1} style={{ fontSize: 16, color: theme.text }}>
               {reading}
+              {/* ローマ字の打ちかけ(k・ky)。まだ かな にできていないので薄く出す */}
+              {!!romajiPending && (
+                <Text style={{ color: theme.sub }}>{romajiPending}</Text>
+              )}
               {preview != null && (
                 <Text style={{ color: theme.accent }}>{preview}</Text>
               )}
             </Text>
           ) : (
             <Text numberOfLines={1} style={{ fontSize: 12, color: theme.faint }}>
-              読みをフリックで（例: つち・かい）
+              {kanaLayout === "flick"
+                ? "読みをフリックで（例: つち・かい）"
+                : "読みをローマ字で（例: tuchi・kai）"}
             </Text>
           )}
         </View>
+        {/* 符号位置(U+XXXX)で引く面との切り替え。かなの面と16進の面は場所を
+            取り合うので入れ替える(面の高さは同じ＝キーの位置は動かない)。
+            切り替えるたびに読みも16進も空にする(混ざると何で引いたか分からない) */}
+        <Pressable
+          onPressIn={() => haptic("toggle")}
+          onPress={() => {
+            resetPage();
+            setCodeMode(m => !m);
+            setHex("");
+            setReading("");
+            setRomajiPending("");
+            setPreview(null);
+          }}
+          style={[
+            styles.readingClear,
+            {
+              borderColor: codeMode ? theme.accent : theme.border,
+              backgroundColor: codeMode ? theme.accent : "transparent",
+            },
+          ]}
+        >
+          <Text style={{ fontSize: 12, color: codeMode ? theme.onAccent : theme.sub }}>U+</Text>
+        </Pressable>
         <Pressable
           onPressIn={() => haptic("delete")}
           onPress={() => {
             resetPage();
-            setReading("");
+            if (codeMode) setHex("");
+            else setReading("");
           }}
           style={[styles.readingClear, { borderColor: theme.border }]}
         >
@@ -550,41 +608,123 @@ function SearchTab({
           ))
         ) : (
           <Text style={{ fontSize: 11, color: theme.faint, alignSelf: "center" }}>
-            {reading.trim()
+            {(codeMode ? hex : reading.trim() || strokes > 0)
               ? strokes > 0
                 ? "該当なし（画数の絞り込みを外すと出るかもしれません）"
                 : "該当なし"
-              : "引けた字は タップで部品に・長押しで出力へ。かたちの選択は残ります"}
+              : codeMode
+                ? "打った16進で始まる字が出ます（2B81 → U+2B810〜）"
+                : "読みを打つか、画数だけ選んでも出ます。タップで部品に・長押しで出力へ"}
           </Text>
         )}
       </ScrollView>
 
-      {/* ── 12キーフリック面 ── */}
-      <FlickKanaPad
-        theme={theme}
-        onAppend={ch => {
-          resetPage();
-          setReading(r => r + ch);
+      {/* ── 読みを打つ面(フリック / ローマ字 / Godan)、または16進の面 ── */}
+      {codeMode ? (
+        <HexPad
+          theme={theme}
+          onDigit={d => {
+            resetPage();
+            // 符号位置は最大6桁(U+10FFFF)。それより先は打っても足さない
+            setHex(h => (h.length < 6 ? h + d : h));
+          }}
+          onBackspace={() => {
+            resetPage();
+            setHex(h => h.slice(0, -1));
+          }}
+        />
+      ) : (
+        <KanaPad
+          layout={kanaLayout}
+          pending={romajiPending}
+          onPending={setRomajiPending}
+          theme={theme}
+          onAppend={ch => {
+            resetPage();
+            setReading(r => r + ch);
+          }}
+          onReplaceLast={ch => {
+            resetPage();
+            setReading(r => dropLast(r) + ch);
+          }}
+          onCycleLast={() => {
+            resetPage();
+            setReading(r => {
+              const last = [...r].pop();
+              if (!last) return r;
+              const next = kanaCycle(last);
+              return next ? dropLast(r) + next : r;
+            });
+          }}
+          onBackspace={() => {
+            resetPage();
+            setReading(dropLast);
+          }}
+          onPreview={setPreview}
+        />
+      )}
+    </View>
+  );
+}
+
+/**
+ * 16進の面(0〜F と ⌫)。符号位置で引くときにかなの面と入れ替えて出す。
+ * 段の数(4段)と面の高さはかなの面と同じにして、切り替えてもキーの位置が動かないようにする。
+ * 並びは電話の数字キーと同じ 1 2 3 を上に置き、右の2列に A〜F を足した形。
+ * システムキーボード(KeyboardView.kt / KeyboardViewController.swift)も同じ並び
+ */
+const HEX_ROWS = [
+  ["1", "2", "3", "A", "B"],
+  ["4", "5", "6", "C", "D"],
+  ["7", "8", "9", "E", "F"],
+];
+
+function HexPad({
+  theme,
+  onDigit,
+  onBackspace,
+}: {
+  theme: Theme;
+  onDigit: (d: string) => void;
+  onBackspace: () => void;
+}) {
+  const key = (label: string, flex: number, onPress: () => void, isDigit = true) => (
+    <Pressable
+      key={label}
+      onPressIn={() => haptic(isDigit ? "key" : "delete")}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.hexKey,
+        {
+          flex,
+          backgroundColor: pressed ? theme.accentBg : theme.key,
+          borderColor: theme.border,
+        },
+      ]}
+    >
+      <Text
+        style={{
+          fontSize: isDigit ? 18 : 12,
+          fontWeight: "500",
+          color: isDigit ? theme.text : theme.sub,
         }}
-        onReplaceLast={ch => {
-          resetPage();
-          setReading(r => dropLast(r) + ch);
-        }}
-        onCycleLast={() => {
-          resetPage();
-          setReading(r => {
-            const last = [...r].pop();
-            if (!last) return r;
-            const next = kanaCycle(last);
-            return next ? dropLast(r) + next : r;
-          });
-        }}
-        onBackspace={() => {
-          resetPage();
-          setReading(dropLast);
-        }}
-        onPreview={setPreview}
-      />
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+  return (
+    <View style={styles.hexPad}>
+      {HEX_ROWS.map((row, ri) => (
+        <View key={ri} style={styles.hexRow}>
+          {row.map(d => key(d, 1, () => onDigit(d)))}
+        </View>
+      ))}
+      {/* 最後の段は 0 を3列ぶん・⌫ を2列ぶん(数字キーと同じく 0 は 7 8 9 の下) */}
+      <View style={styles.hexRow}>
+        {key("0", 3, () => onDigit("0"))}
+        {key("⌫", 2, onBackspace, false)}
+      </View>
     </View>
   );
 }
@@ -691,6 +831,15 @@ const styles = StyleSheet.create({
   },
   // 候補が無いとき(案内文)も 44 のまま空けておく
   hitRow: { flexGrow: 0, height: HIT_ROW },
+  // 16進の面。かなの面(FlickKanaPad の pad/row/key)と同じ寸法にしてある
+  hexPad: { flex: 1, gap: 4 },
+  hexRow: { flex: 1, flexDirection: "row", gap: 4 },
+  hexKey: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+  },
   hitKey: {
     minWidth: 44,
     height: HIT_ROW,

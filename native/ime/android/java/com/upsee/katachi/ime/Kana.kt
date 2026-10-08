@@ -74,4 +74,52 @@ object Kana {
         }
         return sb.toString()
     }
+
+    /**
+     * ローマ字をかなに直す。表は Romaji.TABLE(core/data/romaji.ts から生成)。
+     * 打ちかけ(k・ky)は変換できないので second に残し、次の字と合わせて見る。
+     * TypeScript 版 romajiToKana と同じ結果になること。
+     */
+    fun romajiToKana(input: String): Pair<String, String> {
+        val kana = StringBuilder()
+        var buf = input.lowercase()
+        var rest = ""
+        while (buf.isNotEmpty()) {
+            // 促音: 同じ子音が2つ続いたら「っ」
+            if (buf.length >= 2 && buf[0] == buf[1] && buf[0] !in "aiueo" && buf[0] != 'n') {
+                kana.append("っ")
+                buf = buf.substring(1)
+                continue
+            }
+            var hit = ""
+            for (n in minOf(3, buf.length) downTo 1) {
+                val k = buf.substring(0, n)
+                if (Romaji.TABLE.containsKey(k)) {
+                    hit = k
+                    break
+                }
+            }
+            if (hit.isNotEmpty()) {
+                // "n" は次が母音や y なら な行になりうるので、1字だけなら待つ
+                if (hit == "n" && buf.length == 1) {
+                    rest = buf
+                    break
+                }
+                kana.append(Romaji.TABLE[hit])
+                buf = buf.substring(hit.length)
+                continue
+            }
+            if (buf[0] == 'n' && buf.length >= 2 && buf[1] !in "aiueoy'") {
+                kana.append("ん")
+                buf = buf.substring(1)
+                continue
+            }
+            if (Romaji.TABLE.keys.any { it.startsWith(buf) }) {
+                rest = buf
+                break
+            }
+            buf = buf.substring(1)
+        }
+        return Pair(kana.toString(), rest)
+    }
 }

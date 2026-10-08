@@ -62,8 +62,7 @@ final class Engine {
     /// 「近い順」で余分な部品1つぶんの重み。素点の最大(5,327,000)より大きくする
     private static let nearStep = 10_000_000
 
-    /// 読みで引いたときの「段」(正式→人名→参考→推定)1つぶんの重み
-    private static let readingStep = 10_000_000
+    /// 読みで引いたときの「段」(正式→人名→参考→外国語)1つぶんの重み
 
     /// 余分の数え上げの頭打ち。Int を溢れさせないため
     private static let nearMax = 99
@@ -372,7 +371,7 @@ final class Engine {
     /// 音読み(カタカナ)・訓読み(ひらがな)の両方を1本に見て部分一致で拾う。
     /// 訓読みの「あか.るい」「-がわ」の . と - は送り仮名・接辞の目印なので落とす。
     ///
-    /// 読みは**正式・人名・参考・推定の4段階**で持っているので(readings.mts)、
+    /// 読みは**正式・人名・参考・外国語の4段階**で持っているので(readings.mts)、
     /// 当たった読みの段を第一の並び順にする。そうしないと、声符から推しただけの
     /// 字が、辞書に載っている読みの字を押しのけて前に出てしまう。
     ///
@@ -392,7 +391,7 @@ final class Engine {
     ) -> (items: [String], total: Int) {
         let kana = Kana.toHiragana(query.trimmingCharacters(in: .whitespaces))
         if kana.isEmpty { return ([], 0) }
-        // 上位に並び順(段→素点)、下位20bitに添字を詰めて Int 1本で並べる
+        // 上位に並び順(段→Unicodeの追加版)、下位20bitに添字を詰めて Int 1本で並べる
         var hits: [Int] = []
         hits.reserveCapacity(limit * 4)
         // 拡張漢字を読み終える前は**日本の字までしか見ない**。読み込みは別スレッドで
@@ -401,9 +400,12 @@ final class Engine {
         let n = dict.extLoaded ? dict.count : dict.jaCount
         for i in 0..<n {
             if strokes > 0, !strokeHit(dict.strokes(at: i), strokes) { continue }
-            let rank = readingRank(i, kana)
-            if rank == 0 { continue }
-            let key = rank * Self.readingStep + score(i, false)
+            if readingRank(i, kana) == 0 { continue }
+            // 段(常用・人名用 → KANJIDIC2の残り → 拡張漢字)を作り、段の中は
+            // Unicode に追加された版の順。版だけで並べると URO の20,992字が
+            // 符号位置順に並ぶだけになり、つち→凷 のように常用漢字が埋もれる
+            let tier = dict.grade(at: i) > 0 ? 0 : (dict.isExt(i) ? 2 : 1)
+            let key = tier * Age.step + Age.key(dict.char(at: i))
             hits.append((key << 20) | i)
         }
         hits.sort()
@@ -416,11 +418,71 @@ final class Engine {
         want >= Self.strokeMax ? n >= Self.strokeMax : n == want
     }
 
+    /// 画数だけで引く。読みを打たずに画数のチップだけ選んだときに使う
+    /// (読めない字でも画数は数えられるので、それだけで探し始められる)。
+    ///
+    /// 並びは byReading と同じ**段(常用・人名用 → KANJIDIC2の残り → 拡張漢字) →
+    /// 段の中は Unicode に追加された版の順**。符号位置順のままだと拡張A(U+3400〜)が
+    /// 統合漢字より前に来て、常用漢字が数百字うしろに沈む。
+    /// core/engine.ts の list({ strokes }) と同じ並びになること。strokeMax は「それ以上」
+    func byStrokes(_ strokes: Int, offset: Int = 0, limit: Int = 60) -> (items: [String], total: Int) {
+        guard strokes > 0 else { return ([], 0) }
+        var hits: [Int] = []
+        hits.reserveCapacity(1024)
+        // 拡張漢字を読み終える前は日本の字までしか見ない(byReading と同じ理由)
+        let n = dict.extLoaded ? dict.count : dict.jaCount
+        for i in 0..<n {
+            if !strokeHit(dict.strokes(at: i), strokes) { continue }
+            let tier = dict.grade(at: i) > 0 ? 0 : (dict.isExt(i) ? 2 : 1)
+            let key = tier * Age.step + Age.key(dict.char(at: i))
+            hits.append((key << 20) | i)
+        }
+        hits.sort()
+        let page = hits.dropFirst(offset).prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
+        return (page, hits.count)
+    }
+
+    /// 符号位置で引く。hex は打った16進(U+ は付けない。1〜6桁)。
+    /// 打った番号そのものの字に加えて**その16進で始まる字**も返す
+    /// (2B81 → U+2B810〜U+2B81F)。キーボードの16進面で1桁ずつ打ちながら
+    /// 絞っていけるように。並びは符号位置順(＝番号そのものの字が先頭)。
+    /// core/engine.ts の list({ query: "U+…" }) と同じ当たり方・並びになること。
+    /// 符号位置は String を作らずに辞書のバイト列から読む(10万字ぶん見るため)
+    func byCode(
+        _ hex: String,
+        strokes: Int = 0,
+        offset: Int = 0,
+        limit: Int = 60,
+    ) -> (items: [String], total: Int) {
+        guard !hex.isEmpty, hex.count <= 6, let value = Int(hex, radix: 16) else { return ([], 0) }
+        // 上位に符号位置、下位20bitに添字を詰めて Int 1本で並べる
+        var hits: [Int] = []
+        let n = dict.extLoaded ? dict.count : dict.jaCount
+        for i in 0..<n {
+            let cp = dict.codePoint(at: i)
+            if !Self.codeHit(cp, value, hex.count) { continue }
+            if strokes > 0, !strokeHit(dict.strokes(at: i), strokes) { continue }
+            hits.append((cp << 20) | i)
+        }
+        hits.sort()
+        let page = hits.dropFirst(offset).prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
+        return (page, hits.count)
+    }
+
+    /// 符号位置 cp が、打った16進(value・digits 桁)に当たるか。番号そのものか、
+    /// U+XXXX の表記(4桁に満たなければ0で埋める)が打った桁で始まるか。
+    /// 文字列を作らずに桁をずらして比べる。core/engine.ts の codeHit と同じ式
+    static func codeHit(_ cp: Int, _ value: Int, _ digits: Int) -> Bool {
+        if cp == value { return true }
+        let len = cp < 0x10000 ? 4 : cp < 0x100000 ? 5 : 6
+        return len > digits && cp >> (4 * (len - digits)) == value
+    }
+
     /// 打った読みがその字のどの読みに当たったか。小さいほど先に出す。0 = 当たらない。
     ///   1 … 正式(KANJIDIC2 の音訓)
     ///   2 … 人名(nanori)。正式ではないが実際に使われる
-    ///   3 … 参考(資料にある読み)
-    ///   4 … 推定(異体字・声符から。当たるのは6割ほど)
+    ///   3 … 参考(資料にある日本語の読み)
+    ///   4 … 外国語の読み(IRG で提案国が書き添えた読みのカナ書き写し)
     private func readingRank(_ i: Int, _ kana: String) -> Int {
         func hit(_ s: String) -> Bool {
             if s.isEmpty { return false }
@@ -431,7 +493,11 @@ final class Engine {
         }
         if hit(dict.readings(at: i)) { return 1 }
         if hit(dict.nanori(at: i)) { return 2 }
-        if hit(dict.ref(at: i)) { return dict.refKind(at: i) == 1 ? 3 : 4 }
+        // 参考の読みは、日本語の読みが先の段、IRG の外国語の読みの書き写し(5)が後ろの段。
+        // core/data/types.ts の isJapaneseRef と同じ分け方
+        if hit(dict.ref(at: i)) {
+            return dict.refKind(at: i) == 5 ? 4 : 3
+        }
         return 0
     }
 }

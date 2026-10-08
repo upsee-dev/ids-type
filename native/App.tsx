@@ -33,6 +33,8 @@ import {
   refReadingLabel,
   THEMES,
   KEY_HEIGHTS,
+  KANA_LAYOUTS,
+  type KanaLayout,
   type KeyHeight,
   type Result,
   type SortMode,
@@ -48,8 +50,10 @@ import {
 } from "./src/feedback";
 import { Settings } from "./src/Settings";
 import {
+  loadKanaLayout,
   loadKeyHeight,
   loadSortMode,
+  saveKanaLayout,
   saveKeyHeight,
   saveSortMode,
 } from "./src/prefs";
@@ -134,6 +138,8 @@ function Screen() {
   const [sortMode, setSortMode] = useState<SortMode>(loadSortMode);
   /** システムキーボードの縦幅。アプリの中のキーボードには効かない */
   const [keyHeight, setKeyHeight] = useState<KeyHeight>(loadKeyHeight);
+  /** 読みを打つ入力方法(フリック / ローマ字 / Godan)。キーボードとも共有する */
+  const [kanaLayout, setKanaLayout] = useState<KanaLayout>(loadKanaLayout);
   useEffect(() => {
     AsyncStorage.multiGet([THEME_STORAGE_KEY, HAPTIC_STORAGE_KEY])
       .then(([[, theme], [, level]]) => {
@@ -159,6 +165,11 @@ function Screen() {
     haptic("toggle");
     setKeyHeight(next);
     saveKeyHeight(next);
+  };
+  const pickKanaLayout = (next: KanaLayout) => {
+    haptic("toggle");
+    setKanaLayout(next);
+    saveKanaLayout(next);
   };
   const pickHaptic = (next: HapticLevel) => {
     setLevel(next);
@@ -288,7 +299,9 @@ function Screen() {
       setResults(found.results);
       setTotal(found.total);
       setMode(found.mode);
-      const nowEmpty = !!query && found.mode !== "empty" && found.total === 0;
+      // 符号位置(U+4E00)は1桁ずつ打つあいだ 0件を通るのが普通なので、鳴らさない
+      const nowEmpty =
+        !!query && found.mode !== "empty" && found.mode !== "code" && found.total === 0;
       if (nowEmpty && !wasEmpty.current) haptic("warn");
       wasEmpty.current = nowEmpty;
     }, 120);
@@ -580,7 +593,9 @@ function Screen() {
                 ? `構造マッチ: ${total.toLocaleString()}件(枠付き=完全一致)`
                 : mode === "parts"
                   ? `部品を含む字: ${total.toLocaleString()}件`
-                  : "かたちか部品を入力してください"}
+                  : mode === "code"
+                    ? `符号位置: ${total.toLocaleString()}件`
+                    : "かたちか部品を入力してください"}
               {total > CAND_PAGE &&
                 `　${(page * CAND_PAGE + 1).toLocaleString()}〜${Math.min(
                   total,
@@ -623,9 +638,11 @@ function Screen() {
           ListEmptyComponent={
             engine && !!query && mode !== "empty" ? (
               <Text style={[s.notice, { color: t.sub }]}>
-                {curvesOnly
-                  ? "該当なし。「曲線を含む」を外すと出るかもしれません。"
-                  : "該当なし。部品を減らすか、別の分解で試してみてください。"}
+                {mode === "code"
+                  ? "該当なし。符号位置は U+ のあとに4〜6桁の16進で打ちます（例: U+4E00）。"
+                  : curvesOnly
+                    ? "該当なし。「曲線を含む」を外すと出るかもしれません。"
+                    : "該当なし。部品を減らすか、別の分解で試してみてください。"}
               </Text>
             ) : null
           }
@@ -694,8 +711,8 @@ function Screen() {
             <View style={{ flex: 1, gap: 2 }}>
               {/* 読みがいちばん知りたい情報なので先頭に大きく。
                   ただし**正式(KANJIDIC2の音訓)だけ**を大きい字で出し、
-                  人名・参考・推定は下に小さく、出所を添えて置く
-                  (辞書にある読みと、こちらで推した読みを同じ顔で出さない) */}
+                  人名・参考・外国語の読みは下に小さく、出所を添えて置く
+                  (辞書にある読みと、そうでない読みを同じ顔で出さない) */}
               {selMeta.on || selMeta.kun ? (
                 <Text style={{ color: t.text, fontSize: 14, fontWeight: "600" }}>
                   {[
@@ -902,6 +919,8 @@ function Screen() {
         onPickSort={pickSort}
         keyHeight={keyHeight}
         onPickHeight={pickHeight}
+        kanaLayout={kanaLayout}
+        onPickKanaLayout={pickKanaLayout}
         historyCount={history.length}
         favoriteCount={favorites.length}
         onClearHistory={clearHistory}

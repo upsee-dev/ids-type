@@ -38,8 +38,7 @@ class Engine(private val dict: Dict) {
         /** 「近い順」で余分な部品1つぶんの重み。素点の最大(5,327,000)より大きくする */
         const val NEAR_STEP = 10_000_000
 
-        /** 読みで引いたときの「段」(正式→人名→参考→推定)1つぶんの重み */
-        const val READING_STEP = 10_000_000L
+        /** 読みで引いたときの「段」(正式→人名→参考→外国語)1つぶんの重み */
 
         /** 余分の数え上げの頭打ち。Int を溢れさせないため */
         const val NEAR_MAX = 99
@@ -352,9 +351,9 @@ class Engine(private val dict: Dict) {
      * 訓読みの「あか.るい」「-がわ」の . と - は送り仮名・接辞の目印なので落とす。
      * 突き合わせ方は core/engine.ts の list({query}) と同じ。
      *
-     * 読みは**正式・人名・参考・推定の4段階**で持っているので(readings.mts)、
-     * 当たった読みの段を第一の並び順にする。そうしないと、声符から推しただけの
-     * 字が、辞書に載っている読みの字を押しのけて前に出てしまう。
+     * 読みは**正式・人名・参考・外国語の4段階**で持っているので(readings.mts)、
+     * 当たった読みの段を第一の並び順にする。そうしないと、外国語の読みを書き写した
+     * だけの字が、辞書に載っている日本語の読みの字を押しのけて前に出てしまう。
      *
      * **該当する字は打ち切らずに全部数える**。60件で切ると「この読みの字は
      * これで全部」なのか「まだ先にあるのか」が打つ側から分からないので、
@@ -373,8 +372,8 @@ class Engine(private val dict: Dict) {
     ): Page {
         val kana = Kana.toHiragana(query.trim())
         if (kana.isEmpty()) return Page(emptyList(), 0)
-        // 上位20bitに並び順(段→素点)、下位20bitに添字を詰めて Long 1本で並べる
-        // (段と素点を別に持つと、比較のたびに読みを組み直すことになる)
+        // 上位に並び順(段→Unicodeの追加版)、下位20bitに添字を詰めて Long 1本で並べる
+        // (段と版を別に持つと、比較のたびに読みを組み直すことになる)
         val hits = ArrayList<Long>(limit * 4)
         // 拡張漢字を読み終える前は**日本の字までしか見ない**。読み込みは別スレッドで
         // 走っていて、増えている最中の配列を端から舐めると、まだ書き終わっていない
@@ -383,9 +382,12 @@ class Engine(private val dict: Dict) {
         val n = if (dict.extLoaded) dict.chars.size else dict.jaCount
         for (i in 0 until n) {
             if (strokes > 0 && !strokeHit(dict.strokesAt(i), strokes)) continue
-            val rank = readingRank(i, kana)
-            if (rank == 0) continue
-            val key = rank.toLong() * READING_STEP + score(i, false)
+            if (readingRank(i, kana) == 0) continue
+            // 段(常用・人名用 → KANJIDIC2の残り → 拡張漢字)を作り、段の中は
+            // Unicode に追加された版の順。版だけで並べると URO の20,992字が
+            // 符号位置順に並ぶだけになり、つち→凷 のように常用漢字が埋もれる
+            val tier = if (dict.gradeAt(i) > 0) 0L else if (dict.isExt(i)) 2L else 1L
+            val key = tier * Age.STEP + Age.key(dict.chars[i])
             hits.add((key shl 20) or i.toLong())
         }
         hits.sort()
@@ -401,11 +403,72 @@ class Engine(private val dict: Dict) {
         if (want >= STROKE_MAX) n >= STROKE_MAX else n == want
 
     /**
+     * 画数だけで引く。読みを打たずに画数のチップだけ選んだときに使う
+     * (読めない字でも画数は数えられるので、それだけで探し始められる)。
+     *
+     * 並びは byReading と同じ**段(常用・人名用 → KANJIDIC2の残り → 拡張漢字) →
+     * 段の中は Unicode に追加された版の順**。符号位置順のままだと拡張A(U+3400〜)が
+     * 統合漢字より前に来て、常用漢字が数百字うしろに沈む。
+     * core/engine.ts の list({ strokes }) と同じ並びになること。STROKE_MAX は「それ以上」
+     */
+    fun byStrokes(strokes: Int, offset: Int = 0, limit: Int = 60): Page {
+        if (strokes <= 0) return Page(emptyList(), 0)
+        val hits = ArrayList<Long>(1024)
+        // 拡張漢字を読み終える前は日本の字までしか見ない(byReading と同じ理由)
+        val n = if (dict.extLoaded) dict.chars.size else dict.jaCount
+        for (i in 0 until n) {
+            if (!strokeHit(dict.strokesAt(i), strokes)) continue
+            val tier = if (dict.gradeAt(i) > 0) 0L else if (dict.isExt(i)) 2L else 1L
+            val key = tier * Age.STEP + Age.key(dict.chars[i])
+            hits.add((key shl 20) or i.toLong())
+        }
+        hits.sort()
+        val page = hits.drop(offset).take(limit).map { dict.chars[(it and 0xFFFFF).toInt()] }
+        return Page(page, hits.size)
+    }
+
+    /**
+     * 符号位置で引く。hex は打った16進(U+ は付けない。1〜6桁)。
+     * 打った番号そのものの字に加えて**その16進で始まる字**も返す
+     * (2B81 → U+2B810〜U+2B81F)。キーボードの16進面で1桁ずつ打ちながら
+     * 絞っていけるように。並びは符号位置順(＝番号そのものの字が先頭)。
+     * core/engine.ts の list({ query: "U+…" }) と同じ当たり方・並びになること。
+     * 走査は10万字ぶんだが、文字列を作らずに数を比べるだけなので数ms で済む
+     */
+    fun byCode(hex: String, strokes: Int = 0, offset: Int = 0, limit: Int = 60): Page {
+        if (hex.isEmpty() || hex.length > 6) return Page(emptyList(), 0)
+        val value = hex.toIntOrNull(16) ?: return Page(emptyList(), 0)
+        // 上位に符号位置、下位20bitに添字を詰めて Long 1本で並べる
+        val hits = ArrayList<Long>(64)
+        val n = if (dict.extLoaded) dict.chars.size else dict.jaCount
+        for (i in 0 until n) {
+            val cp = dict.chars[i].codePointAt(0)
+            if (!codeHit(cp, value, hex.length)) continue
+            if (strokes > 0 && !strokeHit(dict.strokesAt(i), strokes)) continue
+            hits.add((cp.toLong() shl 20) or i.toLong())
+        }
+        hits.sort()
+        val page = hits.drop(offset).take(limit).map { dict.chars[(it and 0xFFFFF).toInt()] }
+        return Page(page, hits.size)
+    }
+
+    /**
+     * 符号位置 cp が、打った16進(value・digits 桁)に当たるか。番号そのものか、
+     * U+XXXX の表記(4桁に満たなければ0で埋める)が打った桁で始まるか。
+     * 文字列を作らずに桁をずらして比べる。core/engine.ts の codeHit と同じ式
+     */
+    private fun codeHit(cp: Int, value: Int, digits: Int): Boolean {
+        if (cp == value) return true
+        val len = if (cp < 0x10000) 4 else if (cp < 0x100000) 5 else 6
+        return len > digits && (cp shr (4 * (len - digits))) == value
+    }
+
+    /**
      * 打った読みがその字のどの読みに当たったか。小さいほど先に出す。0 = 当たらない。
      *   1 … 正式(KANJIDIC2 の音訓)
      *   2 … 人名(nanori)。正式ではないが実際に使われる
-     *   3 … 参考(資料にある読み)
-     *   4 … 推定(異体字・声符から。当たるのは6割ほど)
+     *   3 … 参考(資料にある日本語の読み)
+     *   4 … 外国語の読み(IRG で提案国が書き添えた読みのカナ書き写し)
      */
     private fun readingRank(i: Int, kana: String): Int {
         fun hit(s: String): Boolean {
@@ -416,7 +479,12 @@ class Engine(private val dict: Dict) {
         val kun = dict.kunAt(i)
         if ((on.isNotEmpty() || kun.isNotEmpty()) && hit("$on $kun")) return 1
         if (hit(dict.nanoriAt(i))) return 2
-        if (hit(dict.refAt(i))) return if (dict.refKindAt(i).startsWith("u")) 3 else 4
+        // 参考の読みは、日本語の読み(u w j z m e)が先の段、IRG の外国語の読みの
+        // 書き写し(i)が後ろの段。core/data/types.ts の isJapaneseRef と同じ分け方
+        if (hit(dict.refAt(i))) {
+            val k = dict.refKindAt(i)
+            return if (k.startsWith("i")) 4 else 3
+        }
         return 0
     }
 

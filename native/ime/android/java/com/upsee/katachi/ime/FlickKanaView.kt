@@ -51,6 +51,12 @@ class FlickKanaView(
     private val colCard: Int,
     private val colBorder: Int,
     private val colAccentBg: Int,
+    /**
+     * 読みを打つ入力方法。"flick"(12キー) / "godan"(左に母音のローマ字フリック) /
+     * "romaji"(QWERTY)。設定はアプリの設定画面が書き、Store から読む。
+     * ローマ字と Godan は**打った字がローマ字**なので、かなに直してから host へ渡す。
+     */
+    private val layout: String,
     private val host: Host,
 ) : LinearLayout(context) {
 
@@ -78,6 +84,21 @@ class FlickKanaView(
 
         /** 同じキーの叩き直しをトグルとして扱う間合い(ms) */
         const val TOGGLE_WINDOW_MS = 900L
+
+        /** ローマ字面の並び。パソコンと同じ QWERTY */
+        val ROMAJI_ROWS = listOf("qwertyuiop", "asdfghjkl-", "zxcvbnm")
+    }
+
+    /**
+     * ローマ字を1字足して、かなに直せたぶんだけ読みへ送る。
+     * 直せない打ちかけは romaji に残し、読みの欄に色を変えて出す
+     */
+    private fun appendLetter(c: String) {
+        romaji += c
+        val (kana, rest) = Kana.romajiToKana(romaji)
+        for (ch in kana) host.appendKana(ch.toString())
+        romaji = rest
+        host.previewKana(rest.ifEmpty { null })
     }
 
     /** 直前に叩いたキーと、そのとき何番目の字を出したか(トグル用) */
@@ -85,11 +106,32 @@ class FlickKanaView(
     private var lastStep = 0
     private var lastTapAt = 0L
 
+    /**
+     * ローマ字の打ちかけ("k" や "ky")。かなに直せた時点で host へ送る。
+     * 途中は previewKana で読みの欄に色付きで出す(専用の欄を足さずに済む)
+     */
+    private var romaji = ""
+
+    /** この面はローマ字を打つ面か(Godan も中身はローマ字) */
+    private val isRomaji = layout == "romaji" || layout == "godan"
+
+    /** 打つ面の並び。Godan は Kana.Key に移して、以降の扱いを1本にする */
+    private val rows: List<List<Kana.Key>> =
+        when (layout) {
+            "godan" -> Godan.ROWS.map { row -> row.map { Kana.Key(it.label, it.chars) } } +
+                listOf(listOf(Kana.Key(Kana.BACKSPACE, emptyList())))
+            "romaji" -> ROMAJI_ROWS.mapIndexed { i, r ->
+                r.map { Kana.Key(it.toString(), listOf(it.toString())) } +
+                    if (i == ROMAJI_ROWS.size - 1) listOf(Kana.Key(Kana.BACKSPACE, emptyList())) else emptyList()
+            }
+            else -> Kana.ROWS
+        }
+
     init {
         orientation = VERTICAL
         // 段は面の高さを等分する。固定の高さにすると、画面の小さい端末で
         // 下の段がはみ出して打てなくなる
-        for (row in Kana.ROWS) {
+        for (row in rows) {
             val line = LinearLayout(context).apply { orientation = HORIZONTAL }
             for (key in row) {
                 line.addView(
@@ -116,7 +158,17 @@ class FlickKanaView(
             // 「小゛゜」と「⌫」は向きを持たない。押した回数だけ効く
             v.isClickable = true
             v.setOnClickListener {
-                if (key.label == Kana.BACKSPACE) host.backspaceKana() else host.cycleLastKana()
+                if (key.label == Kana.BACKSPACE) {
+                    // 打ちかけがあるうちは、まずそちらを1字消す
+                    if (romaji.isNotEmpty()) {
+                        romaji = romaji.dropLast(1)
+                        host.previewKana(romaji.ifEmpty { null })
+                    } else {
+                        host.backspaceKana()
+                    }
+                } else {
+                    host.cycleLastKana()
+                }
             }
             v.setOnTouchListener { view, e ->
                 when (e.action) {
@@ -215,6 +267,13 @@ class FlickKanaView(
         key.chars.getOrNull(dir)?.takeIf { it.isNotEmpty() } ?: key.chars[0]
 
     private fun commit(key: Kana.Key, dir: Int) {
+        // ローマ字の面は「押した向きの字を1つ足す」だけ。叩き直しの巡りは
+        // かなの面だけのもの(ローマ字は同じキーを続けて打つのが普通なので、
+        // 巡らせると tt が打てなくなる)
+        if (isRomaji) {
+            appendLetter(charAt(key, dir))
+            return
+        }
         val now = SystemClock.uptimeMillis()
         if (dir == 0 && key === lastKey && now - lastTapAt < TOGGLE_WINDOW_MS) {
             // 叩き直し。割り当てのある向きだけを あ→い→う→え→お の順に巡る

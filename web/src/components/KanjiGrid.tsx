@@ -29,8 +29,8 @@ export function KanjiGrid({
 }) {
   /**
    * ホバーで出す1行。**読みの出所も添える**。
-   * 正式(音訓)があればそれだけ、無ければ人名・参考・推定を見出しつきで出す
-   * (辞書にある読みと、こちらで推した読みを混ぜないため)
+   * 正式(音訓)があればそれだけ、無ければ人名・参考・外国語の読みを見出しつきで出す
+   * (辞書にある読みと、そうでない読みを混ぜないため)
    */
   const hoverText = (ch: string, meta: CharMeta): string => {
     const head = codePointLabel(ch);

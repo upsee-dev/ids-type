@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  CURVE_KANJI,
   DIFFICULT_COMPONENTS,
   OPERATORS,
   PRIMARY_CODES,
@@ -19,7 +20,7 @@ import { HandwritingPad } from "./HandwritingPad";
 type Tab = "radical" | "search" | "draw";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "radical", label: "部首・偏旁" },
+  { id: "radical", label: "部分・偏旁" },
   { id: "search", label: "読みでさがす" },
   { id: "draw", label: "手書き" },
 ];
@@ -38,12 +39,13 @@ export function KatachiKeyboard({
   onPick?: (ch: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("radical");
-  const [showAllOps, setShowAllOps] = useState(false);
 
+  // かたちは**最初から全部**並べる(よく使う順が先頭・残りは横スクロール)。
+  // 「その他」で畳むと、使いたいかたちが畳まれた側にあるたびに1手増える
   const ops = useMemo(() => {
     const primary = PRIMARY_CODES.map(c => OPERATORS.find(o => o.code === c)!).filter(Boolean);
-    return showAllOps ? [...primary, ...OPERATORS.filter(o => !PRIMARY_CODES.includes(o.code))] : primary;
-  }, [showAllOps]);
+    return [...primary, ...OPERATORS.filter(o => !PRIMARY_CODES.includes(o.code))];
+  }, []);
 
   return (
     <div className="border-t border-stone-200 bg-stone-100/95 backdrop-blur dark:border-stone-800 dark:bg-stone-900/95">
@@ -83,13 +85,6 @@ export function KatachiKeyboard({
               </span>
             </button>
           ))}
-          <button
-            onPointerDown={keepFocus}
-            onClick={() => setShowAllOps(s => !s)}
-            className="min-h-11 shrink-0 rounded-lg border border-dashed border-stone-300 px-3 text-[11px] text-stone-500 active:bg-stone-100 dark:border-stone-600 dark:text-stone-400"
-          >
-            {showAllOps ? "少なく" : "その他"}
-          </button>
         </div>
 
         <div className="rounded-b-lg bg-white p-1.5 shadow-sm dark:bg-stone-800">
@@ -112,14 +107,16 @@ export function KatachiKeyboard({
 }
 
 /**
- * 部首・偏旁タブ。既定は日本語向けに絞った RADICAL_PALETTE、
+ * 部分・偏旁タブ。既定は日本語向けに絞った RADICAL_PALETTE、
  * 画数チップを選ぶと zi.tools の「難輸入部件」全541件をその画数ぶんだけ出す。
  * 541件を一度に並べると探せないので、zi.tools と同じく画数で区切っている。
+ * 「曲線を含む」は丸・渦・かなのような漢字らしくない丸みを持つ字の一覧(CURVE_KANJI)。
  */
 function RadicalTab({ onInsert }: { onInsert: (s: string) => void }) {
   const [group, setGroup] = useState<string>("common");
   const parts = useMemo(() => {
     if (group === "common") return RADICAL_PALETTE;
+    if (group === "curve") return [...CURVE_KANJI];
     return [...(DIFFICULT_COMPONENTS.find((g) => g.strokes === group)?.parts ?? "")];
   }, [group]);
 
@@ -130,6 +127,11 @@ function RadicalTab({ onInsert }: { onInsert: (s: string) => void }) {
           active={group === "common"}
           onClick={() => setGroup("common")}
           label="よく使う"
+        />
+        <StrokeChip
+          active={group === "curve"}
+          onClick={() => setGroup("curve")}
+          label="曲線を含む"
         />
         {DIFFICULT_COMPONENTS.map((g) => (
           <StrokeChip
@@ -161,8 +163,8 @@ function SearchTab({
   const hits = useMemo(() => {
     const q = reading.trim();
     if (!engine || !q || composing) return [];
-    // **日本の字に絞らない**。10万字ぜんぶが読みを持つようになったので
-    // (正式→人名→参考→推定の順に並ぶ)、絞ると拡張漢字が読みで引けなくなる
+    // **日本の字に絞らない**。拡張漢字にも資料の読み(参考)や外国語の読みがあり
+    // (正式→人名→参考→外国語の順に並ぶ)、絞ると拡張漢字が読みで引けなくなる
     return engine.list({ query: q, limit: 60 }).items.map((i) => i.ch);
   }, [engine, reading, composing]);
 

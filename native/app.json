@@ -13,7 +13,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.upsee.idskanjitype",
       "appleTeamId": "W8P3V5NG4R",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.upsee.idskanjitype",
-      "versionCode": 18,
+      "versionCode": 19,
       "adaptiveIcon": {
         "backgroundColor": "#FBFBF9",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -57,7 +57,8 @@
           "//": "拡張B〜Jの字を描く同梱フォント(scripts/build-font-app.py が生成)。静的バンドルにすると Android は app/src/main/assets/fonts/ に置かれ、システムIME(Kotlin)も同じ1部を読める",
           "fonts": [
             "./assets/fonts/KatachiExt1.ttf",
-            "./assets/fonts/KatachiExt2.ttf"
+            "./assets/fonts/KatachiExt2.ttf",
+            "./assets/fonts/KatachiPUA.ttf"
           ]
         }
       ],

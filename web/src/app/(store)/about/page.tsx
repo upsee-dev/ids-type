@@ -4,7 +4,7 @@ import { StorePage, Section } from "@/components/StorePage";
 export const metadata: Metadata = {
   title: "漢字カタチ入力について",
   description:
-    "読めない漢字を、見たまま打てる。Unicodeの全CJK漢字102,998字を、形から引ける日本語キーボード。",
+    "読めない漢字を、見たまま打てる。Unicodeの全CJK漢字102,999字を、形から引ける日本語キーボード。",
 };
 
 export default function About() {
@@ -20,7 +20,7 @@ export default function About() {
         </p>
       </Section>
 
-      <Section title="Unicodeの全CJK漢字 102,998字">
+      <Section title="Unicodeの全CJK漢字 102,999字">
         <p>
           基本（URO）から拡張A〜J、互換漢字まで、Unicodeが定義するCJK漢字を
           <b>全ブロック100%</b>収録しています。人名・地名・古典・学術で出てくる
@@ -55,6 +55,7 @@ export default function About() {
           分解データ: BabelStone IDS / CHISE IDS Database / CJKVI IDS Database。
           漢字情報: KANJIDIC2（EDRDG、CC BY-SA 4.0）。
           部品パレットのフォント: Plangothic（SIL OFL 1.1）。
+          Unicode に無い部品のフォント: BabelStone Han PUA（Andrew West、Arphic Public License）。
           手書き認識の筆順パターン: KanjiVG（Ulrich Apel、CC BY-SA 3.0）。
         </p>
       </Section>

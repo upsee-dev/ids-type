@@ -49,9 +49,10 @@ object Ids {
 
     /**
      * 未符号化部品のプレースホルダ。
-     * ①②③… = cjkvi-ids 由来 / ？ = BabelStone・CHISE 由来。どちらも打てない。
+     * ①②③… = cjkvi-ids 由来 / ？ = BabelStone・CHISE 由来 /
+     * 私用領域 = BabelStone Han PUA の部品。どれも打てない。
      */
-    fun isPlaceholder(c: Char) = c == '？' || (c in '①'..'⓿')
+    fun isPlaceholder(c: Char) = c == '？' || (c in '①'..'⓿') || (c in '\uE000'..'\uF8FF')
 
     /** 同じ形で符号位置が違う部品を寄せる(強い同一視)。core/ids/normalize.ts の NORM */
     private val NORM: Map<Char, Char> = mapOf(

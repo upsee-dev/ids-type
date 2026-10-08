@@ -30,6 +30,8 @@ struct SharedStore {
 
     /// キーボードの縦幅。同じくアプリの設定画面が書く
     private static let heightKey = "katachi.height"
+    /// 読みを打つ入力方法(flick / romaji / godan)。アプリの設定画面が書く
+    private static let kanaKey = "katachi.kana"
     private static let probeKey = "katachi.sharedProbe"
 
     /// 履歴の上限。アプリ側(HISTORY_LIMIT)と同じ
@@ -86,6 +88,12 @@ struct SharedStore {
     /// キーボードの縦幅("small" / "medium" / "large")。
     /// 値は core/data/keyboard.ts の KEY_HEIGHTS と同じ
     var heightMode: String { defaults.string(forKey: Self.heightKey) ?? "small" }
+
+    /// 読みを打つ入力方法。知らない値は既定(フリック)に落とす
+    var kanaLayout: String {
+        let v = defaults.string(forKey: Self.kanaKey)
+        return v == "romaji" || v == "godan" ? v! : "flick"
+    }
 
     var history: [String] { read(Self.historyKey) }
     var favorites: [String] { read(Self.favoritesKey) }

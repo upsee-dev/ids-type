@@ -29,13 +29,13 @@ final class Dict {
     private var nanoriStart: [Int32] = []
     private var nanoriEnd: [Int32] = []
 
-    /// 参考・推定の読みの範囲。**拡張漢字も含めた全字ぶん**持つ
+    /// 参考の読みの範囲。**拡張漢字も含めた全字ぶん**持つ
     /// (KANJIDIC2 が読みを持つのは13,108字だけなので、これが無いと
     ///  残り9万字は読みでは一生引けない。作り方は build-data/readings.mts)
     private var refStart: [Int32] = []
     private var refEnd: [Int32] = []
 
-    /// 参考の読みの出所。0=なし 1=資料(Unihan) 2=異体字から 3=部品(声符)から推定。
+    /// 参考の読みの出所。0=なし 1=資料(Unihan) 2=互換漢字の元の字 3=手で足した読み。
     /// どの字から借りたかまでは要らない(キーボードは並べ替えにしか使わない)ので
     /// 1バイトに畳む
     private var refKind: [UInt8] = []
@@ -65,6 +65,23 @@ final class Dict {
     // MARK: - 参照
 
     func char(at i: Int) -> String { string(charStart[i], charEnd[i]) }
+
+    /// その字の符号位置。String を作らずに blob の UTF-8 から直に読む
+    /// (符号位置で引くときは10万字ぶん見るので、1字ずつ String にすると重い)
+    func codePoint(at i: Int) -> Int {
+        let from = Int(charStart[i]), n = Int(charEnd[i]) - from
+        guard n > 0 else { return 0 }
+        return blob.withUnsafeBytes { raw -> Int in
+            let p = raw.bindMemory(to: UInt8.self).baseAddress! + from
+            let b0 = Int(p[0])
+            func tail(_ k: Int) -> Int { Int(p[k] & 0x3F) }
+            if b0 < 0x80 { return b0 }
+            if b0 < 0xE0, n >= 2 { return (b0 & 0x1F) << 6 | tail(1) }
+            if b0 < 0xF0, n >= 3 { return (b0 & 0x0F) << 12 | tail(1) << 6 | tail(2) }
+            if n >= 4 { return (b0 & 0x07) << 18 | tail(1) << 12 | tail(2) << 6 | tail(3) }
+            return 0
+        }
+    }
     func ids(at i: Int) -> String { string(idsStart[i], idsEnd[i]) }
     func isExt(_ i: Int) -> Bool { i >= jaCount }
     func grade(at i: Int) -> Int { i < jaCount ? Int(grade[i]) : 0 }
@@ -81,12 +98,13 @@ final class Dict {
         i < jaCount ? string(nanoriStart[i], nanoriEnd[i]) : ""
     }
 
-    /// 参考・推定の読み。正式な読みが無い字の手がかり
+    /// 参考の読み(資料にしか無い日本語の読み・外国語の読みの書き写し)
     func ref(at i: Int) -> String {
         i < refStart.count ? string(refStart[i], refEnd[i]) : ""
     }
 
-    /// ref の出所。0=なし 1=資料 2=異体字 3=推定(声符)
+    /// ref の出所。0=なし 1=資料(Unihan) 2=互換漢字の元の字 3=手で足した読み 4=和製漢字の辞典
+    /// 5=IRG の外国語の読み 6=JK 7=zi.tools の音読み
     func refKind(at i: Int) -> Int { i < refKind.count ? Int(refKind[i]) : 0 }
 
     /// 総画数。0=データなし
@@ -250,13 +268,19 @@ final class Dict {
         if index[key] == nil { index[key] = idx }
     }
 
-    /// 参考の読みの出所を1バイトに畳む。"u"=1(資料) "v"=2(異体字) "p"=3(推定)
+    /// 参考の読みの出所を1バイトに畳む。先頭の1字だけ見る
+    /// ("u"=1 資料 "e"=2 互換漢字の元の字 "m"=3 手で足した読み "w"=4 和製漢字の辞典
+    ///  "i"=5 IRG の外国語の読み "j"=6 JK "z"=7 zi.tools の音読み)
     private func kindCode(_ p: UnsafeBufferPointer<UInt8>, _ from: Int, _ to: Int) -> UInt8 {
         guard from < to else { return 0 }
         switch p[from] {
         case UInt8(ascii: "u"): return 1
-        case UInt8(ascii: "v"): return 2
-        case UInt8(ascii: "p"): return 3
+        case UInt8(ascii: "e"): return 2
+        case UInt8(ascii: "m"): return 3
+        case UInt8(ascii: "w"): return 4
+        case UInt8(ascii: "i"): return 5
+        case UInt8(ascii: "j"): return 6
+        case UInt8(ascii: "z"): return 7
         default: return 0
         }
     }

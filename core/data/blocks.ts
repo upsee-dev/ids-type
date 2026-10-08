@@ -10,6 +10,9 @@
 // 拡張C/E の末尾は Unicode 17.0 で伸びた(DerivedAge: "2B73A..2B73F ; 17.0" /
 // "2CEA2..2CEAD ; 17.0")。python の unicodedata は 16.0 なのでこの18字を
 // 知らないが、それは未割り当てという意味ではない(拡張Jの全字も同様に知らない)。
+// 拡張D の末尾も Unicode 18.0 で1字伸びた(DerivedAge: "2B81E ; 18.0")。
+// 18.0 で増えた統合漢字はこの 1字だけ。上流のIDS表はまだ持っていないので、
+// 分解と画数は web/scripts/build-data/supplement.mts で補っている。
 export interface Block {
   key: string;
   label: string;
@@ -23,7 +26,7 @@ export const BLOCKS: Block[] = [
   { key: "a", label: "拡張A", lo: 0x3400, hi: 0x4dbf },
   { key: "b", label: "拡張B", lo: 0x20000, hi: 0x2a6df },
   { key: "c", label: "拡張C", lo: 0x2a700, hi: 0x2b73f },
-  { key: "d", label: "拡張D", lo: 0x2b740, hi: 0x2b81d },
+  { key: "d", label: "拡張D", lo: 0x2b740, hi: 0x2b81e },
   { key: "e", label: "拡張E", lo: 0x2b820, hi: 0x2cead },
   { key: "f", label: "拡張F", lo: 0x2ceb0, hi: 0x2ebe0 },
   { key: "i", label: "拡張I", lo: 0x2ebf0, hi: 0x2ee5d },

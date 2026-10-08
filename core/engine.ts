@@ -6,6 +6,7 @@ import { CODE2IDC, isIDC, readableIds } from "./ids/operators.ts";
 import { norm, SOFT } from "./ids/normalize.ts";
 import { parseNodes, toTokens, WILD, type Node } from "./ids/parse.ts";
 import { ALL_BLOCKS, blockOf, type Block } from "./data/blocks.ts";
+import { ageKey, AGE_STEP } from "./data/age.ts";
 import { CURVE_STROKES } from "./data/palettes.ts";
 import type {
   CharMeta,
@@ -14,6 +15,7 @@ import type {
   RawData,
   Result,
 } from "./data/types.ts";
+import { isJapaneseRef } from "./data/types.ts";
 
 /**
  * 候補の並び順。設定で選べる。
@@ -73,8 +75,7 @@ const CP_STEP = 2000000;
 /** 「近い順」で余分な部品1つぶんの重み。素点の最大(5,327,000)より大きくする */
 const NEAR_STEP = 10000000;
 
-/** 読みで引いたときの「段」(正式→人名→参考→推定)1つぶんの重み */
-const READING_STEP = 10000000;
+/** 読みで引いたときの「段」(正式→人名→参考→外国語)1つぶんの重み */
 
 /** 余分の数え上げの頭打ち。Kotlin/Swift 側の Int32 を溢れさせないため */
 const NEAR_MAX = 99;
@@ -321,6 +322,19 @@ export class Engine {
     offset = 0,
     curvesOnly = false,
   ): { results: Result[]; mode: string; total: number } {
+    // 符号位置(U+4E00 / u+4e00 / 4E00)は**その1字**を返す。コード表や文献で
+    // 見かけた番号をそのまま打てば引ける(アプリは ⌨ で英数も打てる)。
+    // 「U+4E」のような打ちかけも符号位置として扱う。かたちコードに回すと
+    // + や 4 を部品として探して、見当違いの「部品を含む字: 0件」になる
+    const code = parseCodeQuery(input);
+    if (code) {
+      const ch = safeFromCodePoint(code.value);
+      const meta = ch ? this.chars.get(ch) : undefined;
+      const all: Result[] =
+        meta && (!curvesOnly || this.hasCurve(ch)) ? [{ ch, exact: true, meta }] : [];
+      const from = Math.max(0, offset);
+      return { results: all.slice(from, from + limit), mode: "code", total: all.length };
+    }
     const compiled = Engine.compile(input);
     if (!compiled) return { results: [], mode: "empty", total: 0 };
     // 絞り込みは total にも効く(ページ送りが合わなくなるので、切り出す前に落とす)
@@ -543,13 +557,32 @@ export class Engine {
   }
 
   /**
+   * 収録字を**読みで引いたときと同じ並び**(段 → Unicodeに追加された版の順)にした
+   * 配列。読みを打たずに画数のチップだけで引いたときの土台(初回だけ作る)。
+   * 段は list の読みの枝と同じ 0 学年のある字 / 1 KANJIDIC2 の残り / 2 拡張漢字。
+   * Kotlin/Swift の Engine#byStrokes と同じ並びになること。
+   */
+  private ageOrderCache: string[] | null = null;
+  private ageOrder(): string[] {
+    if (!this.ageOrderCache) {
+      const keyed = [...this.chars].map(([ch, m]) => ({
+        ch,
+        key: (m.grade ? 0 : m.ext ? 2 : 1) * AGE_STEP + ageKey(ch),
+      }));
+      keyed.sort((a, b) => a.key - b.key);
+      this.ageOrderCache = keyed.map((x) => x.ch);
+    }
+    return this.ageOrderCache;
+  }
+
+  /**
    * 打った読みがその字のどの読みに当たったか。小さいほど先に出す。
    * 0 = 当たらなかった。
    *
    *   1 … 正式(KANJIDIC2 の音訓)
    *   2 … 人名(nanori)。正式ではないが実際に使われる
-   *   3 … 参考(資料にある読み)
-   *   4 … 推定(異体字・声符から。当たるのは6割ほど)
+   *   3 … 参考(資料にある日本語の読み)
+   *   4 … 外国語の読み(IRG で提案国が書き添えた読みのカナ書き写し)
    *
    * 送り仮名・接辞の目印(あか.るい / -がわ)は落としてから見る。
    */
@@ -568,7 +601,7 @@ export class Engine {
     };
     if (has(`${m.on} ${m.kun}`)) return 1;
     if (has(m.nanori)) return 2;
-    if (has(m.ref)) return m.refKind.startsWith("u") ? 3 : 4;
+    if (has(m.ref)) return isJapaneseRef(m.refKind) ? 3 : 4;
     return 0;
   }
 
@@ -591,7 +624,8 @@ export class Engine {
 
   /**
    * 一覧の絞り込み。query は入力欄と同じ書き方(LR木木 / 木 / ?)に加えて、
-   * かな(読み)と U+XXXX・16進(コードポイント)も受け付ける。
+   * かな(読み)と U+XXXX・16進(コードポイント。U+2B81 のような打ちかけは前方一致)も
+   * 受け付ける。query なしで strokes だけ渡すと、その画数の字を読みと同じ並びで返す。
    */
   list(q: ListQuery = {}): ListPage {
     const { block, jaOnly = false, offset = 0, limit = 200, strokes = 0 } = q;
@@ -603,28 +637,32 @@ export class Engine {
       const kind = queryKind(query);
       mode = kind;
       if (kind === "code") {
-        const cp = parseInt(query.replace(/^u\+/i, ""), 16);
-        const ch = Number.isFinite(cp) ? safeFromCodePoint(cp) : "";
-        pool = ch && this.chars.has(ch) ? [ch] : [];
+        // 符号位置で引く。打った番号そのものの字に加えて、**その16進で始まる字**も
+        // 並べる(2B81 → U+2B810〜U+2B81F)。キーボードの16進面で1桁ずつ打ちながら
+        // 絞っていけるように。並びは符号位置順(＝打った番号そのものの字が先頭)。
+        // Kotlin/Swift の Engine#byCode と同じ当たり方・並びになること
+        const c = parseCodeQuery(query)!;
+        pool = this.order().filter((ch) =>
+          codeHit(ch.codePointAt(0)!, c.value, c.digits),
+        );
       } else if (kind === "reading") {
-        // 読みで引く。正式(音訓)→人名→参考→推定 の順に並べる。
-        // 10万字ぜんぶが何かしらの読みを持つので、**どの読みに当たったか**で
-        // 並べないと、正式な読みの字が推定の字に埋もれてしまう
+        // 読みで引く。並びは**Unicodeに追加された版の順**
+        // (基本1.1 → 拡張A 3.0 → 拡張B 3.1 → … → 拡張J 17.0 → 拡張D末尾 18.0)、
+        // 同じ版の中は符号位置順(core/data/age.ts)。
+        //
+        // ただし版順だけで並べると使えない。URO(1.1)だけで20,992字あり、
+        // **符号位置と「よく使う字か」は無関係**なので、つち→凷、ぎょう→丩 が
+        // 先頭に来て常用漢字が埋もれる。そこで先に3つの段に分ける:
+        //   0 学年のある字(常用漢字・人名用漢字) 1 KANJIDIC2 の残り 2 拡張漢字
+        // 段の中が版順。構造検索の「符号位置順」が
+        // 完全一致→日本の漢字→拡張漢字 の段を作っているのと同じ理由。
         const kana = toHiragana(query);
         const kata = toKatakana(kana);
         const hit: { ch: string; key: number }[] = [];
-        // 走査は**辞書の並び順**(KANJIDIC2収録字→拡張漢字)。符号位置順で回すと
-        // 同点の字の前後が Kotlin/Swift 版とずれる(あちらは辞書順に走査する)
         for (const [ch, meta] of this.chars) {
-          const rank = this.readingRank(meta, kana, kata);
-          // 同じ段のなかは素点(学年・頻度)順。つち→土 が先で、同じ読みを持つ
-          // 珍しい字は後ろになる(Kotlin/Swift の byReading と同じ並び)
-          if (rank) {
-            hit.push({
-              ch,
-              key: rank * READING_STEP + this.score({ ch, exact: false, meta }),
-            });
-          }
+          if (!this.readingRank(meta, kana, kata)) continue;
+          const tier = meta.grade ? 0 : meta.ext ? 2 : 1;
+          hit.push({ ch, key: tier * AGE_STEP + ageKey(ch) });
         }
         hit.sort((a, b) => a.key - b.key);
         pool = hit.map((h) => h.ch);
@@ -634,6 +672,11 @@ export class Engine {
           (r) => r.ch,
         );
       }
+    } else if (strokes > 0) {
+      // 画数だけで引く(読みを打たずに画数のチップだけ選んだとき)。並びは読みで
+      // 引いたときと同じ「段 → 追加された版の順」。符号位置順のままだと
+      // 拡張A(U+3400〜)が統合漢字より前に来て、常用漢字が数百字うしろに沈む
+      pool = this.ageOrder();
     } else {
       pool = this.order();
     }
@@ -672,10 +715,40 @@ export class Engine {
 export const STROKE_MAX = 30;
 
 const KANA = /^[ぁ-ゖァ-ヺーｰ゙-゜\s]+$/;
-const CODE = /^(?:u\+)?[0-9a-f]{4,6}$/i;
+/**
+ * 符号位置の書き方。U+ を付ければ0〜6桁(打ちかけの前方一致に使う)、
+ * 付けないときは4〜6桁だけ(「4」や「E」1字を部品の入力と取り違えないため)。
+ * かたちコード(LR・UD…)は A〜F だけでできたものが無いので、16進とはぶつからない
+ */
+const CODE = /^(?:u\+[0-9a-f]{0,6}|[0-9a-f]{4,6})$/i;
+
+/**
+ * 符号位置の問いを { 値, 打った桁数 } に直す。符号位置でなければ null。
+ * 全角(日本語IMEのまま打つと Ｕ＋４Ｅ００ になる)も半角に寄せて読む。
+ */
+function parseCodeQuery(q: string): { value: number; digits: number } | null {
+  const s = q
+    .trim()
+    .replace(/[！-～]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  if (!CODE.test(s)) return null;
+  const hex = s.replace(/^u\+/i, "");
+  return { value: hex ? parseInt(hex, 16) : 0, digits: hex.length };
+}
+
+/**
+ * 符号位置 cp が、打った16進(value・digits 桁)に当たるか。
+ * 番号そのものか、U+XXXX の表記(4桁に満たなければ0で埋める)が打った桁で始まるか。
+ * 文字列を作らずに桁をずらして比べる(10万字を打鍵のたびに見るため)。
+ * Kotlin/Swift の Engine#codeHit と同じ式にすること
+ */
+function codeHit(cp: number, value: number, digits: number): boolean {
+  if (cp === value) return true;
+  const len = cp < 0x10000 ? 4 : cp < 0x100000 ? 5 : 6;
+  return len > digits && cp >> (4 * (len - digits)) === value;
+}
 
 function queryKind(q: string): string {
-  if (CODE.test(q)) return "code";
+  if (parseCodeQuery(q)) return "code";
   if (KANA.test(q)) return "reading";
   return Engine.compile(q).length && [...Engine.compile(q)].some(isIDC)
     ? "structure"

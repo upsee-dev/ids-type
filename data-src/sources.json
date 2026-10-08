@@ -68,14 +68,15 @@
     {
       "id": "unihan",
       "file": "unihan/Unihan.zip",
-      "url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+      "url": "https://www.unicode.org/Public/18.0.0/ucd/Unihan.zip",
       "title": "Unihan Database (Unicode Character Database)",
       "author": "Unicode, Inc.",
       "unicodeVersion": "17.0.0",
       "license": "Unicode License v3",
       "licenseUrl": "https://www.unicode.org/license.txt",
       "role": "KANJIDIC2 に無い字の読み。kJapanese(かなの日本語読み)が51,583字ぶんあり、拡張漢字38,574字がこれで読めるようになる。異体字(kSemanticVariant ほか)と康熙部首番号(kRSUnicode)も、読みの補完に使う",
-      "note": "上流は zip。中の Unihan_Readings.txt / Unihan_Variants.txt / Unihan_IRGSources.txt を展開後 25MB ぶん使うので、zip のまま置いてビルド時に読む(build-data/unzip.mts)"
+      "note": "上流は zip。中の Unihan_Readings.txt / Unihan_Variants.txt / Unihan_IRGSources.txt を展開後 25MB ぶん使うので、zip のまま置いてビルド時に読む(build-data/unzip.mts)",
+      "version": "18.0.0"
     },
     {
       "id": "kanjidic2",
@@ -87,6 +88,92 @@
       "licenseUrl": "https://www.edrdg.org/edrdg/licence.html",
       "role": "読み・学年・頻度順位。ここに載っている13,108字が「日本の漢字」の定義",
       "note": "展開後の kanjidic2.xml は15MBあるので .gitignore 済み。ビルド時に .gz から読む"
+    },
+    {
+      "id": "waseikanji",
+      "file": "readings/waseikanji.html",
+      "index": {
+        "url": "https://ksbookshelf.com/nozomu-oohara/WaseikanjiJiten/index.html",
+        "link": "WaseikanjiJiten_([0-9a-z]+)\\.html",
+        "page": "https://ksbookshelf.com/nozomu-oohara/WaseikanjiJiten2/WaseikanjiJiten2_$1.html"
+      },
+      "markPages": true,
+      "delayMs": 2000,
+      "title": "和製漢字の辞典2014 (HTML版)",
+      "author": "大原望",
+      "version": "2014",
+      "license": "著作権表示あり・再配布条件の明示なし。**このファイルはリポジトリに置くが、配布物への同梱は要確認**",
+      "licenseUrl": "https://ksbookshelf.com/nozomu-oohara/WaseikanjiJiten/",
+      "role": "国字(和製漢字)・和製異体字の読み。3,316項目のうち読みのある1,631字。国字は中国の字音を持たないので、Unihan にも KANJIDIC2 にも読みが無い字が多い",
+      "note": "上流は部ごとに172ページ。目次からリンクを拾って連結し1ファイルにする(2秒間隔)。読みは各項目の [読み] 行から取る(build-data/wasei.mts)"
+    },
+    {
+      "id": "jk",
+      "file": "readings/jk.tsv",
+      "url": "https://zi.tools/api/zi/",
+      "title": "JK(IRG国字コレクション)の読み",
+      "author": "zi.tools 字統网(一次資料は IRG への日本提案)",
+      "license": "zi.tools はデータの再配布条件を明示していない。**配布物への同梱は要確認**",
+      "licenseUrl": "https://zi.tools/",
+      "role": "国字782字(Unihan の kIRG_JSource が JK-*)の読み。字典面の説明文(「トモ」的合字・このころ。近来)から かな を取り出す。他のどの表にも読みが無い字が多い",
+      "note": "1字ずつ /api/zi/<字> を叩いて取る(2秒間隔)。読みが取れるのは説明文が日本語のものだけ。取り出しは build-data/extra-readings.mts"
+    },
+    {
+      "id": "taiwan-min",
+      "file": "readings/taiwan-min.tsv",
+      "url": "https://zi.tools/api/yin/search/",
+      "title": "台湾(新北・板橋)の閩南語音",
+      "author": "zi.tools 字統网",
+      "license": "zi.tools はデータの再配布条件を明示していない。**配布物への同梱は要確認**",
+      "licenseUrl": "https://zi.tools/",
+      "role": "閩南語の音(IPA)966字。日本語の読みではないので、ローマ字として読んだ推定にしか使わない",
+      "note": "**2026-09-29 に推定をやめたのでビルドでは使っていない**(取り直しに時間がかかるのでファイルだけ残してある)。音節ごとに cvt:newtaipei;<子音>;<母音>;* を499回叩いて取る(4秒間隔)。**KANJIDIC2 の音読みで検算すると10.8%しか当たらず、実際に使われた字は0字**。他のどの手がかりも無い字だけが拾う置き方にしてある",
+      "unused": true
+    },
+    {
+      "id": "zi-onyomi",
+      "file": "readings/zi-onyomi.tsv",
+      "url": "https://zi.tools/api/yin/search/",
+      "title": "zi.tools の日本語音読み",
+      "author": "zi.tools 字統网",
+      "license": "zi.tools はデータの再配布条件を明示していない。**配布物への同梱は要確認**",
+      "licenseUrl": "https://zi.tools/",
+      "role": "音読み50,144字・89,491件。Unihan の kJapanese と大きく重なるが、1,230字ぶん Unihan に無い読みを持つ。呉音(G)・漢音(K)・唐音(T)の区別つき(Unihan には無い情報で、24,542字ぶんある)",
+      "note": "1字ずつではなく**音節ごと**に取る。cvt:jp;<子音>;<母音>;*/jp を447回で全件(1回あたり最大2,000字ぶん返る)。10万回叩かずに済む取り方"
+    },
+    {
+      "id": "manual-readings",
+      "file": "readings/manual.tsv",
+      "title": "手で足した読み",
+      "author": "このリポジトリ",
+      "license": "—",
+      "role": "どの資料にも無いが、使う人から足してほしいと言われた読み。字・読み・メモのタブ区切り",
+      "note": "fetch.mjs の対象外(手で編集する)",
+      "skipFetch": true
+    },
+    {
+      "id": "irg-worksets",
+      "file": "irg/",
+      "url": "https://hc.jsecs.org/irg/",
+      "title": "IRG Working Set 2015 / 2017 / 2021 / 2024 審査ツール",
+      "author": "IRG (ISO/IEC JTC 1/SC 2/WG 2/IRG)・Henry Chan(審査ツール)",
+      "license": "IRG の審査資料(公開)。サイトは IRG #50 以降は更新を止めた資料庫",
+      "licenseUrl": "https://hc.jsecs.org/irg/ws2024/app/",
+      "role": "拡張G以降の字に、提案した国・地域が書き添えた読み(中国語の拼音・壮語・韓国語・ベトナム語)。日本語の読みが1つも無い字にだけ、カタカナへ書き写して入れる(build-data/irg.mts・transcribe.mts)",
+      "note": "fetch.mjs の対象外。cd web && npm run fetch:irg で字ごとのページ(?id=NNNNN)を1枚ずつ取る(約2万ページ・2本並行・400ms 間隔)",
+      "skipFetch": true
+    },
+    {
+      "id": "zi-variant",
+      "file": "readings/zi-variant.tsv",
+      "url": "https://zi.tools/api/zi/",
+      "title": "異体字グループに付く読み(zi.tools)",
+      "author": "zi.tools 字統网",
+      "license": "zi.tools はデータの再配布条件を明示していない。**配布物への同梱は要確認**",
+      "licenseUrl": "https://zi.tools/",
+      "role": "読みが1つも無かった字を1字ずつ引いて拾った読み。zi.tools は読みを異体字グループ(ies)単位で持つので、Unihan の異体字では繋がらない組が拾える。24字ぶん(うち8字が実際に埋まった)",
+      "note": "**2026-09-29 に推定をやめたのでビルドでは使っていない**(取り直しに時間がかかるのでファイルだけ残してある)。**2,158字のうち1,338字(62%)まで取得して打ち切った**。1件あたり数十秒かかるうえ、終盤は相手側が捌けず失敗が4.2%出て毎分1字を割ったため。収穫率は1.7%ほどなので、残り820字を足しても増えるのは10字前後の見込み。fetch は取得済みを飛ばすので、続きから再開できる",
+      "unused": true
     }
   ]
 }

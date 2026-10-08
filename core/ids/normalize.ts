@@ -91,5 +91,6 @@ export function norm(c: string): string {
 }
 
 // 未符号化部品のプレースホルダは検索キーにできない
-// ①②③… = cjkvi-ids(CDP外字) / ？ = BabelStone・CHISE の「表現できない部品」
-export const PLACEHOLDER = /[①-⓿？]/;
+// ①②③… = cjkvi-ids が字ごとに振った仮番号 / ？ = BabelStone・CHISE の「表現できない部品」/
+// 私用領域 = BabelStone Han PUA の部品(打てないが、同梱フォント KatachiPUA で形を描ける)
+export const PLACEHOLDER = /[①-⓿？\uE000-\uF8FF]/;

@@ -1,0 +1,968 @@
+# 台湾(新北・板橋)の閩南語音。zi.tools /api/yin/search/cvt:newtaipei;… から音節ごとに取得
+# 形式: 字 <TAB> 読み(IPA。空白区切り)
+一	it
+七	tsʰit
+三	sam sã
+上	tsiũ
+下	e ha
+世	se si
+中	tiɔŋ
+主	tsu
+九	kau kiu
+亂	luan
+争	tsiŋ tsĩ
+事	su
+二	li
+五	ŋɔ̃ ɡɔ
+井	tsĩ
+交	kau
+亮	liaŋ
+人	lin
+付	hu
+件	kiã
+任	lim
+休	hiu
+位	ui
+低	te
+住	tsu
+余	u
+佛	hut put
+作	tso tsɔk
+使	sai su
+侄	tit
+來	lai
+便	pen
+俊	tsun
+修	siu
+倉	tsʰŋ
+個	ko
+借	tsio
+假	ke
+做	tso
+停	tʰiŋ
+健	ken kiã
+側	tsʰik
+偷	tʰau
+傑	ket
+傘	suã
+傳	tuan tʰuan
+傷	siɔŋ
+像	tsʰiũ
+僧	tsiŋ
+優	iu
+兄	hiã hiŋ
+充	tsʰiɔŋ
+兇	hiɔŋ
+先	sen siŋ
+光	kŋ kɔŋ
+兒	li
+入	lip
+全	tsuan
+兩	liũ
+八	pat pue
+公	kaŋ kɔŋ
+六	lak liɔk
+共	kaŋ kiɔŋ
+兵	piŋ
+典	ten
+冤	uan
+冬	taŋ tɔŋ
+冰	piŋ
+冷	liŋ
+准	tsun
+凍	taŋ tɔŋ
+出	tsʰut
+刀	to
+分	hun pun
+切	tsʰet
+列	let
+初	tsʰue tsʰɔ
+判	pʰuã
+别	pat
+刮	kui
+制	tse
+刷	suat
+刺	tsʰi
+刻	kʰik
+剃	tʰi
+削	sia
+前	tsen tsiŋ
+剥	pak
+剩	siŋ
+剪	tsen
+副	hu
+割	kua
+劃	ik
+劇	kiɔk
+劈	pʰik
+劍	kiam
+力	lat lik
+動	taŋ tɔŋ
+勤	kʰun
+勸	kʰuan kʰŋ
+匀	un
+包	pau
+化	hua
+北	pak
+匠	tsʰiũ
+匹	pʰit
+區	kʰu
+十	sip tsap
+升	siŋ
+半	puã
+卒	tsut
+協	hiap
+南	nam
+占	tsiam
+印	in
+危	ui
+卷	kŋ
+厚	kau
+原	ɡuan
+厭	iam
+去	kʰi
+參	sim
+及	kip
+反	huan paĩ
+叔	tsik
+取	tsʰu
+口	kʰau kʰeu
+古	kɔ
+句	ku
+叫	kio
+可	kʰo
+右	iu
+各	ko kɔk
+吉	ket
+名	biŋ miã
+向	hiɔŋ ŋ
+吕	lu
+吞	tʰun
+含	ham kam
+吴	ŋɔ̃
+吸	kʰip
+吹	tsʰe tsʰui
+味	bi
+命	biŋ miã
+品	pʰin
+哭	kʰau
+唇	tun
+唱	tsʰiũ
+問	mun mŋ
+啞	e
+善	sen
+喊	hiam
+喜	hi
+單	tan tuã
+嘗	siɔŋ
+嘴	tsʰui
+器	kʰi
+嚴	ɡiam
+四	si su
+回	hue
+困	kʰun
+圈	kʰuan
+國	kɔk
+圍	ui
+園	hŋ
+圓	ĩ uan
+圖	tɔ
+土	tʰɔ
+地	te
+均	kun
+坐	tse
+坑	kʰĩ
+垂	tsʰui
+埋	mai
+城	siã siŋ
+塊	kʰuai
+塔	tʰa
+塞	tʰat
+墊	tiam
+墨	bak
+墩	tun
+墳	hun
+壁	pia
+壞	huai
+壯	tsɔŋ
+壺	ɔ
+壽	siu
+夏	ha he
+外	ɡua ɡue
+多	to
+夜	ia
+夠	kau
+夢	baŋ bɔŋ
+大	tai tua
+天	tʰen tʰĩ
+失	sit
+夾	ɡiap
+契	kʰue
+奪	tuat
+女	lu
+奴	lɔ
+奸	kan
+好	ho
+如	lu
+妹	be
+姐	tsia
+姓	siŋ sĩ
+姨	i
+娘	liũ
+婆	po
+婚	hun
+婦	hu pu
+嫁	ke
+嫂	so
+嫌	hiam
+嫩	lun
+子	tsi tsu
+孔	kʰaŋ kʰɔŋ
+字	li
+孝	ha hau
+季	kui
+孫	sun
+學	hak o
+孽	ɡet
+安	an uã
+宋	sɔŋ
+完	uan
+官	kuan kuã
+定	tiã tiŋ
+客	kʰe
+宫	kiŋ kiɔŋ
+害	hai
+容	iɔŋ
+宿	sɔk
+寄	kia
+密	bat bit
+富	hu
+實	sit tsat
+寫	sia
+寬	kʰuan kʰuã
+寶	po
+寸	tsʰun
+寺	si
+封	hɔŋ
+射	sia
+尋	siam
+對	tui
+小	siau sio
+尖	tsiam
+尺	tsʰio
+尾	be
+局	kiɔk
+屁	pʰui
+屋	ɔk
+層	tsan
+屬	siɔk
+山	san suã
+岩	ɡam
+岸	huã
+州	tsiu
+左	tso
+市	tsʰi
+布	pɔ
+希	hi
+師	sai su
+席	sik tsʰio
+帶	tai tua
+帽	bo
+幣	pe
+幫	paŋ
+平	piŋ pĩ
+年	len nĩ
+幼	iu
+幾	ki kui
+床	sŋ tsʰŋ
+店	tiam
+府	hu
+廟	bio
+廠	tsʰiaŋ tsʰiũ
+廳	tʰiã
+延	en
+建	ken
+弄	laŋ lɔŋ
+式	sik
+引	in
+弟	te ti
+弱	liɔk
+張	tiũ
+彈	tuã
+彎	uan
+形	hiŋ
+影	iã iŋ
+律	lut
+後	au
+徐	tsʰi
+得	tik tit
+心	sim
+忙	maŋ
+快	kʰuai
+念	liam
+急	kip
+怪	kuai
+恨	hun
+恩	un
+恭	kiɔŋ
+息	sik
+惜	sio
+惡	ɔk
+想	siũ siɔŋ
+愁	tsʰiu
+意	i
+愛	ai
+感	kam
+慌	hɔŋ
+慢	man
+慣	kuan
+慶	kʰiŋ
+懂	tɔŋ
+懶	lan
+懷	huai
+戒	kai
+或	hik
+截	tset
+戰	tsen
+戲	hi
+户	hɔ
+房	paŋ
+所	sɔ
+扁	pĩ
+扇	sĩ
+手	tsʰiu
+打	ta
+托	tʰɔk
+扮	pan
+找	tsau
+抄	tsʰau
+把	pe
+折	tsi
+抱	pʰo
+抽	tʰiu
+拆	tʰia
+拍	pʰa
+拐	kuai
+拖	tʰua
+拜	pai
+指	ki tsaĩ tsi
+挖	ue
+挺	tʰã
+捏	liap
+换	uã
+排	pai
+掛	kua
+接	tsi tsiap
+插	tsʰa tsʰap
+握	ak
+搬	puã
+搭	ta
+搶	tsʰiũ
+摇	io
+摘	tia
+摸	bɔŋ
+撞	tŋ tɔŋ
+撤	tʰet
+撥	pua
+擁	iɔŋ
+擇	tik
+擊	kik
+擦	tsʰat
+擺	pai
+改	kai kue
+放	hɔŋ paŋ
+敗	pai
+敢	kam kã
+敲	kʰau
+整	tsiŋ
+數	siau sɔ
+料	liau
+斜	sia tsʰia
+新	sin
+斷	tuan tŋ
+方	hɔŋ paŋ pŋ
+族	tsɔk
+日	lit
+早	tsa
+旺	ɔŋ
+明	biŋ miã
+星	siŋ tsʰĩ
+春	tsʰun
+時	si
+晚	buan
+暖	luan
+暗	am
+曆	la lik
+曲	kʰik kʰiɔk
+更	kĩ
+書	su tsu
+會	hue
+月	ɡe ɡuat
+有	iu u
+朋	piŋ
+服	hɔk
+朝	tiau
+木	bak bɔk
+末	bua buat
+本	pun
+杉	sam
+李	li
+村	tsʰuan
+杜	tɔ
+杯	pue
+東	taŋ tɔŋ
+松	saŋ siɔŋ tsiŋ
+板	pan
+林	lim nã
+果	ke ko
+柄	pĩ
+染	liam nĩ
+柱	tsu tʰiau
+柴	tsʰa tsʰai
+柿	kʰi
+栗	lat let
+校	hau
+根	kun
+格	ke kik
+桂	kui
+桃	tʰo
+桌	to
+桶	tʰaŋ
+條	tiau
+梨	lai le
+梯	tʰe tʰui
+棉	mĩ
+棋	ki
+棒	paŋ
+棚	pĩ
+業	ɡiap
+極	kik
+榮	iŋ
+樁	tsŋ
+樓	lau
+樣	iũ
+横	hiŋ huĩ
+樹	tsʰiu
+橋	kio
+橘	ket
+櫃	kui
+權	kuan
+欠	kʰiam
+歇	hio
+歌	kua
+歡	huan huã
+正	tsiã tsiŋ
+步	pɔ
+武	bu
+歪	uai
+歲	he sue
+死	si
+殺	sat
+殼	kʰak
+母	bo bu
+毒	tɔk tʰau
+比	pi
+毛	mõ mŋ
+毯	tʰan
+民	bin
+氣	kʰi kʰui
+水	sui tsui
+永	iŋ
+汁	tsiap
+汗	kuã
+江	kaŋ
+池	ti
+決	kuat
+沉	tim
+沖	tsʰiɔŋ
+沙	se sua
+河	ho
+油	iu
+治	ti
+法	huat
+泥	nĩ
+洗	sue
+洞	tɔŋ
+活	ua
+派	pʰai
+流	lau liu
+浪	lɔŋ
+浮	pʰu
+浴	ik
+海	hai
+浸	tsim
+淡	tam
+深	tsʰim
+淺	tsʰen
+添	tʰiam tʰĩ
+清	tsʰiŋ tsʰĩ
+減	kiam
+渠	ku
+温	un
+測	tsʰik
+渴	kʰua
+湊	tau
+湯	tʰŋ
+溪	kʰue
+滅	bet
+滑	kut
+滚	kun
+滿	buan muã
+漢	han
+漿	tsiũ
+潑	pʰua pʰuat
+潭	tʰam
+濃	lɔŋ
+火	he
+灰	hue hui
+灶	tsau
+炎	iam
+炭	tʰuã
+炮	pʰau
+烏	ɔ
+烘	haŋ
+焦	ta tsiau
+煙	en
+煤	muĩ
+照	tsiau tsio
+熊	him
+熏	hun
+熟	sik
+熬	ŋaũ
+熱	let lua
+燈	tiŋ
+燒	sio
+營	iã iŋ
+燭	tsik
+爛	nuã
+爬	pe
+父	hu
+爺	ia
+片	pʰĩ
+牌	pai
+牙	ɡa ɡe
+牛	ɡu
+物	but mŋ
+特	tik
+牽	kʰan
+犁	le
+犯	huan
+狂	kɔŋ
+狗	kau
+猛	biŋ
+玉	ɡik ɡiɔk
+王	ɔŋ
+班	pan
+現	hen
+球	kiu
+琴	kʰim
+瓜	kue
+瓦	hia ua
+甘	kam
+甜	tĩ
+生	siŋ sĩ tsʰĩ
+産	san
+用	iŋ iɔŋ
+田	ten
+甲	ka
+畜	tʰiɔk
+畫	ue
+病	pĩ
+痛	tʰaŋ tʰɔŋ
+瘡	tsʰŋ
+癢	tsiũ
+發	huat
+白	pe pik
+百	pa pik
+皮	pʰe pʰi
+盆	pʰun
+益	ik
+盒	a ap
+監	kã
+盤	puã
+目	bak bɔk
+直	tit
+省	siŋ
+眉	bai
+看	kʰuã
+眼	ɡan ɡiŋ
+知	ti tsai
+短	te
+矮	ue
+石	sia sik tsio
+破	pʰo pʰua
+硬	ŋĩ
+碎	tsʰui
+碑	pi
+碗	uã
+碟	ti
+磚	tsŋ
+磨	bo bua
+神	sin
+祠	su
+票	pʰio
+禍	e ho
+福	hɔk
+租	tsɔ
+秤	tsʰin
+秧	ŋ
+移	i
+程	tʰiã tʰiŋ
+種	tsiŋ
+穀	kɔk
+積	tsik
+窗	tsʰɔŋ tʰaŋ
+窮	kiɔŋ
+立	lip
+章	tsiũ tsiɔŋ
+端	tuan
+竹	tik
+笑	tsʰio
+笛	tik
+筆	pit
+等	taŋ tiŋ
+筋	kun
+筍	sun
+策	tsʰik
+箍	kʰɔ
+算	suan sŋ
+節	tset tsue
+篾	bi
+簫	siau
+簽	tsʰiam
+簿	pʰɔ
+米	bi
+粉	hun
+粽	tsaŋ
+糖	tʰŋ
+糙	tsʰo
+糞	pun
+糠	kʰŋ
+系	he
+約	io iɔk
+紅	aŋ hɔŋ
+純	sun
+紙	tsua
+紡	pʰaŋ
+索	so
+紫	tsi
+終	tsiɔŋ
+結	kat ket
+統	tʰɔŋ
+絲	si
+絶	tsuat
+綁	paŋ
+經	kiŋ kĩ
+綢	tiu
+網	baŋ bɔŋ
+緊	kin
+緑	lik
+線	suã
+縛	hɔk pak
+縣	kuan
+縫	pʰaŋ
+縮	sɔk
+織	tsit
+繞	liau
+繩	tsin
+纏	tĩ
+缺	kʰi kʰuat kʰue
+罩	ta
+罪	tse tsue
+罰	huat
+罵	ma
+義	ɡi
+翁	aŋ ɔŋ
+習	sip
+翻	huan
+老	lau nõ
+耕	kiŋ
+耳	hĩ nĩ
+聲	siã siŋ
+聽	tʰiã
+聾	laŋ
+肉	ba liɔk
+肝	kuã
+肥	pui
+肩	kiŋ
+肯	kʰiŋ
+育	iɔk
+肺	hi
+胃	ui
+背	pue
+胎	tʰai tʰe
+能	liŋ
+脚	kio
+脱	tʰuat
+腦	lo nau
+腫	tsiŋ
+腰	io
+膽	tã
+膿	laŋ
+臭	tsʰau
+臺	tai
+舅	ku
+興	hiŋ
+舉	ku
+舊	ku
+舌	tsi
+船	tsun
+色	sik
+芋	ɔ
+花	hue
+苦	kʰɔ
+茄	kio
+茶	te
+草	tsʰau tsʰo
+菊	kiɔk
+菜	tsʰai
+華	hua
+萬	ban
+落	lak lo
+葉	iap
+著	tɔ
+蓋	kua
+蓬	pʰɔŋ
+蓮	len
+蔥	tsʰaŋ
+薄	po
+薑	kiũ
+藍	nã
+藕	ŋaũ
+藝	ɡe
+藤	tin
+藥	io
+蘭	nan
+虎	hɔ
+號	ho
+虧	kʰui
+虱	sat
+蛇	tsua
+蜂	pʰaŋ
+蝦	he
+螺	le
+蟲	tʰaŋ
+蟹	he
+蟻	hia
+蠅	sin
+蠟	la
+蠶	tsʰan
+血	het hui
+行	hiŋ kiã
+街	kue
+衛	ue
+衣	i ui
+表	piau pio
+衫	sã
+袋	te
+袖	siu
+被	pʰe
+裕	lu
+裙	hun
+裝	tsŋ tsɔŋ
+褲	kʰɔ
+襪	be
+西	sai se si
+要	iau
+見	ken kĩ
+規	kui
+親	tsʰin
+角	kak
+解	kai kue
+言	ɡen
+討	tʰo
+記	ki
+設	set
+許	hi kʰɔ
+試	tsʰi
+話	ue
+該	kai
+認	lin
+課	kʰo
+講	kaŋ kɔŋ
+謝	sia
+證	tsiŋ
+譜	pʰɔ
+讀	tʰak tʰɔk
+變	pen pĩ
+讓	liɔŋ niũ
+豆	tau
+豐	hɔŋ
+豬	ti
+貓	niaũ
+貝	pue
+貞	tsiŋ
+財	tsai
+貧	pin
+貨	he
+貪	tʰam
+貴	kui
+買	bue
+費	hui
+貼	tʰiap
+資	tsu
+賊	tsʰat
+賠	pe pue
+賣	bue
+賭	tɔ
+贏	iã
+贖	siɔk
+走	tsau
+越	uat
+足	tsiɔk
+跪	kui
+路	lɔ
+踏	ta
+踢	tʰat
+身	sin
+車	tsʰia
+軍	kun
+軟	nŋ
+輕	kʰin kʰiŋ
+輪	lun
+輸	su
+轉	tsuan tŋ
+轎	kiau kio
+辣	lua
+辦	pan
+辰	sin
+迎	ŋiã ɡiŋ
+近	kun
+追	tui
+送	saŋ sɔŋ
+通	tʰaŋ tʰɔŋ
+造	tso
+連	len
+進	tsin
+逼	pik
+遇	bu
+運	un
+過	ke
+道	to
+達	tat
+遞	te
+遠	hŋ uan
+遲	ti
+選	suan
+還	haĩ
+郭	kue
+鄰	lin
+配	pʰue
+酒	tsiu
+酸	sŋ
+醉	tsui
+重	taŋ tiɔŋ
+野	ia
+金	kim
+釘	tiŋ
+針	tsiam
+釣	tio
+鉛	en
+鉤	kau
+銀	ɡun
+銅	taŋ
+鋤	tu
+鋪	pʰɔ
+鋸	ku
+鋼	kŋ
+錘	tʰui
+錢	tsĩ
+錫	sia sik
+錯	tsʰo
+鎖	so
+鎮	tin
+鏟	tʰuã
+鏡	kiã
+鐲	so
+鐵	tʰi
+鑼	lo
+長	tŋ
+門	mun mŋ
+閂	tsʰuã
+開	kʰai kʰui
+閏	lun
+間	kan kiŋ
+閘	tsa
+闊	kʰua
+關	kuan kuĩ
+防	hɔŋ
+降	haŋ
+限	an han
+院	ĩ
+除	tu
+陳	tan tin
+隔	ke
+隨	sui
+險	hiam
+隱	un
+雀	tsʰiɔk
+雄	hiɔŋ
+集	tsip
+雙	siaŋ
+雜	tsap
+雞	kue
+難	nan
+雨	hɔ u
+雪	se suat
+雲	hun
+零	lan liŋ
+雷	lui
+震	tsin
+霍	hɔk
+霜	sŋ sɔŋ
+霧	bu
+青	tsʰiŋ tsʰĩ
+静	tsiŋ
+靠	kʰo
+面	bin mĩ
+靴	hia
+鞋	ue
+音	im
+響	hiaŋ hiɔŋ
+頂	tiŋ
+項	haŋ
+順	sun
+頑	uan
+領	liŋ niã
+頭	tʰau
+額	ɡia
+顔	ɡan
+類	lui
+顯	hen
+風	hɔŋ
+飛	hui pe
+食	sit tsia
+飯	pŋ
+飽	pa
+餅	piã
+餓	ɡo
+饑	ki
+馬	be
+騎	kʰia
+騙	pʰen
+驗	ɡiam
+骨	kut
+高	ko
+鬧	lau
+鬼	kui
+魂	hun
+魚	hi
+鮮	sen tsʰĩ
+鳥	niaũ tsiau
+鳳	hɔŋ
+鴨	a
+鴿	ka
+鵝	ɡo
+鶴	ho
+鹹	kiam
+鹽	iam
+鹿	lɔk
+麥	be
+黄	hɔŋ ŋ
+黏	liam
+點	tiam
+黨	tɔŋ
+鼠	tsʰu
+鼻	pʰĩ
+龍	liŋ liɔŋ
+龜	ku kui

@@ -77,4 +77,51 @@ enum Kana {
         }
         return out
     }
+
+    /// ローマ字をかなに直す。表は Romaji.table(core/data/romaji.ts から生成)。
+    /// 打ちかけ(k・ky)は rest に残し、次の字と合わせて見る。
+    /// TypeScript 版 romajiToKana と同じ結果になること。
+    static func romajiToKana(_ input: String) -> (kana: String, rest: String) {
+        var kana = ""
+        var buf = Array(input.lowercased())
+        var rest = ""
+        let vowels: Set<Character> = ["a", "i", "u", "e", "o"]
+        while !buf.isEmpty {
+            // 促音: 同じ子音が2つ続いたら「っ」
+            if buf.count >= 2, buf[0] == buf[1], !vowels.contains(buf[0]), buf[0] != "n" {
+                kana += "っ"
+                buf.removeFirst()
+                continue
+            }
+            var hit = ""
+            for n in stride(from: min(3, buf.count), through: 1, by: -1) {
+                let k = String(buf[0..<n])
+                if Romaji.table[k] != nil {
+                    hit = k
+                    break
+                }
+            }
+            if !hit.isEmpty {
+                if hit == "n", buf.count == 1 {
+                    rest = String(buf)
+                    break
+                }
+                kana += Romaji.table[hit]!
+                buf.removeFirst(hit.count)
+                continue
+            }
+            if buf[0] == "n", buf.count >= 2, !"aiueoy'".contains(buf[1]) {
+                kana += "ん"
+                buf.removeFirst()
+                continue
+            }
+            let head = String(buf)
+            if Romaji.table.keys.contains(where: { $0.hasPrefix(head) }) {
+                rest = head
+                break
+            }
+            buf.removeFirst()
+        }
+        return (kana, rest)
+    }
 }

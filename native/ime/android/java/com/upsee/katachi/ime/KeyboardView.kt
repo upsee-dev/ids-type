@@ -12,12 +12,14 @@ import android.os.Handler
 import android.os.Looper
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -176,6 +178,18 @@ class KeyboardView(context: Context, private val host: Host) :
     private var readingHits: LinearLayout? = null
     private var flick: FlickKanaView? = null
 
+    /**
+     * 符号位置(U+XXXX)で引く面を出しているか。出しているあいだはかなの面の代わりに
+     * 16進のキー(0〜F)が並ぶ。打った16進は codeHex に持ち、読み(reading)とは混ぜない
+     * (フリックの叩き直し・ローマ字の打ちかけの仕組みに A〜F を通すと、かなに化ける)
+     */
+    private var codeMode = false
+    private val codeHex = StringBuilder()
+    private var codeToggle: TextView? = null
+
+    /** 読みの面のいちばん下の打鍵面(かなの面か16進の面)。切り替えで差し替える */
+    private var readingPad: View? = null
+
     /** かなの面を出しているか。出しているあいだ部品パレットは隠れる */
     var kanaOpen = false
         private set
@@ -250,6 +264,8 @@ class KeyboardView(context: Context, private val host: Host) :
      * (init より前に置くこと＝組み立て中に読めるようにしておく)
      */
     private var builtHeightMode = host.store.heightMode()
+    /** 作ったときの読みの入力方法。設定が変わっていたら作り直す */
+    private var builtKanaLayout = host.store.kanaLayout()
 
     /**
      * アイコンのフォント。RNアプリが入れている Ionicons を**同じAPKの assets から
@@ -371,9 +387,9 @@ class KeyboardView(context: Context, private val host: Host) :
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), dp(2), dp(6), dp(2))
         }
-        // 部品パレットは「部首」の1つだけ。読み・手書きの面から戻る口を
+        // 部品パレットは「部分」の1つだけ。読み・手書きの面から戻る口を
         // 兼ねているので、タブと同じ見た目のまま置いてある
-        val radicalTab = tabButton("部首") {
+        val radicalTab = tabButton("部分") {
             kanaOpen = false
             hwOpen = false
             rebuildKeys()
@@ -468,9 +484,44 @@ class KeyboardView(context: Context, private val host: Host) :
      */
     fun refreshHeight() {
         val now = host.store.heightMode()
-        if (now == builtHeightMode) return
+        val kana = host.store.kanaLayout()
+        if (now == builtHeightMode && kana == builtKanaLayout) return
         builtHeightMode = now
+        builtKanaLayout = kana
         host.recreateKeyboard()
+    }
+
+    /**
+     * 画面いちばん下の**ナビゲーションバー(◀ ● ■ の3ボタン)とジェスチャの帯**を避ける。
+     *
+     * Android 15 からは、入力方式の窓も画面の下端まで広がる(edge-to-edge が既定になった)。
+     * 何もしないとキーボードの最下段がナビゲーションバーの下に潜り、ボタンと部品が
+     * 重なって押せない(押したつもりが「ホーム」「戻る」に取られる)。
+     * バーの高さぶん下に余白を入れて、キーを上へ押し上げる。余白はキーボードの地の色で
+     * 塗られるので、バーの後ろにも同じ色が続いて見える。
+     *
+     * 3ボタンのときは navigationBars(48dp前後)、ジェスチャ操作のときは
+     * systemGestures の下端(ホームへ戻る払いの帯)が大きいので、大きいほうを取る。
+     */
+    override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
+        val bottom =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                maxOf(
+                    insets.getInsets(WindowInsets.Type.navigationBars()).bottom,
+                    insets.getInsets(WindowInsets.Type.systemGestures()).bottom,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                insets.systemWindowInsetBottom
+            }
+        if (paddingBottom != bottom) setPadding(paddingLeft, paddingTop, paddingRight, bottom)
+        return super.onApplyWindowInsets(insets)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // 着せ替えでビューを作り直したときも、窓の余白をもう一度受け取る
+        requestApplyInsets()
     }
 
     fun onDictReady() {
@@ -517,6 +568,9 @@ class KeyboardView(context: Context, private val host: Host) :
         reading.setLength(0)
         reading.append(p.reading)
         readingPreview = null
+        // 覚えているのは読みだけ。戻ってきたらかなの面から始める
+        codeMode = false
+        codeHex.setLength(0)
         kanaOpen = p.kana
         // 書いた画までは覚えていない。読みの面に戻すときは手書きの面を閉じる
         if (p.kana) hwOpen = false
@@ -829,7 +883,7 @@ class KeyboardView(context: Context, private val host: Host) :
 
     private fun buildStrokeChips() {
         strokeInner.removeAllViews()
-        val groups = listOf("favorites" to "お気に入り") +
+        val groups = listOf("favorites" to "お気に入り", "curve" to "曲線を含む") +
             Palettes.DIFFICULT.map { it.strokes to "${it.strokes}画" }
         for ((key, label) in groups) {
             val active = strokeGroup == key
@@ -928,6 +982,8 @@ class KeyboardView(context: Context, private val host: Host) :
         readingNext = null
         readingChips = null
         flick = null
+        codeToggle = null
+        readingPad = null
         hwHits = null
         hwPad = null
         hwCount = null
@@ -961,6 +1017,20 @@ class KeyboardView(context: Context, private val host: Host) :
                 keyButton(favs[i], 20f) { host.insert(favs[i]) }.apply {
                     setOnLongClickListener {
                         host.select(favs[i])
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        true
+                    }
+                }
+            }
+            return
+        }
+        if (strokeGroup == "curve") {
+            // 丸みのある字の一覧。お気に入りと同じく、タップで部品・長押しでそのまま送る
+            val chars = Ids.tokens(Palettes.CURVE)
+            grid(chars.size, 8) { i ->
+                keyButton(chars[i], 20f) { host.insert(chars[i]) }.apply {
+                    setOnLongClickListener {
+                        host.select(chars[i])
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         true
                     }
@@ -1029,7 +1099,7 @@ class KeyboardView(context: Context, private val host: Host) :
         // 1行ぶんの高さより大事
         keyArea.addView(
             TextView(context).apply {
-                text = "字の読みを打つと候補に出ます。文章は普段のキーボードで"
+                text = "読みか画数で字を引けます。文章は普段のキーボードで"
                 setTextColor(colSub)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
                 setPadding(dp(2), dp(2), dp(2), 0)
@@ -1044,10 +1114,17 @@ class KeyboardView(context: Context, private val host: Host) :
         val label = TextView(context).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setPadding(dp(2), dp(6), dp(2), dp(6))
+            // 1行に固定する。案内文が折り返すとこの行が高くなり、打ち始めて
+            // 1行に戻った瞬間に下の打鍵面が伸びてキーの位置がずれる
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
             layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
         }
         readingLabel = label
         head.addView(label)
+        // 符号位置(U+XXXX)で引く面との切り替え。かなの面と入れ替わる
+        codeToggle = smallButton("U+") { toggleCodeMode() }.also { head.addView(it) }
+        paintCodeToggle()
         head.addView(smallButton("消") { clearReading() })
         keyArea.addView(head, LayoutParams(matchParent, wrap))
 
@@ -1094,12 +1171,110 @@ class KeyboardView(context: Context, private val host: Host) :
 
         // フリック面は**残りの高さを全部もらう**。固定にすると画面の小さい端末で
         // 下の段がはみ出して打てなくなる
-        val pad = FlickKanaView(context, colText, colSub, colCard, colBorder, colAccentBg, this)
-        flick = pad
-        keyArea.addView(pad, LayoutParams(matchParent, 0, 1f))
+        keyArea.addView(buildReadingPad(), LayoutParams(matchParent, 0, 1f))
 
         refreshReadingLabel()
         runReadingSearch()
+    }
+
+    /**
+     * 読みの面のいちばん下の打鍵面。ふだんはかなの面、「U+」を押しているあいだは16進の面。
+     * 読みを打つ面は設定で選べる(フリック / ローマ字 / Godan)。
+     * アプリの設定画面が書いた値を共有領域から読むだけ
+     */
+    private fun buildReadingPad(): View {
+        val pad: View = if (codeMode) {
+            flick = null
+            buildHexPad()
+        } else {
+            FlickKanaView(
+                context, colText, colSub, colCard, colBorder, colAccentBg,
+                host.store.kanaLayout(), this,
+            ).also { flick = it }
+        }
+        readingPad = pad
+        return pad
+    }
+
+    /**
+     * 16進の面(0〜F と ⌫)。符号位置で引くときにかなの面と入れ替えて出す。
+     * かなの面と同じく4段で残りの高さを等分するので、切り替えても面の高さは変わらない。
+     * 並びは電話の数字キーと同じ 1 2 3 を上に置き、右の2列に A〜F を足した形。
+     * 最後の段は 0 を3列ぶん・⌫ を2列ぶん。アプリ(KatachiKeyboard.tsx)・iOS も同じ並び
+     */
+    private fun buildHexPad(): View {
+        val pad = LinearLayout(context).apply { orientation = VERTICAL }
+        val rows = listOf(
+            listOf("1", "2", "3", "A", "B"),
+            listOf("4", "5", "6", "C", "D"),
+            listOf("7", "8", "9", "E", "F"),
+            listOf("0", "⌫"),
+        )
+        for (row in rows) {
+            val line = LinearLayout(context).apply { orientation = HORIZONTAL }
+            for (d in row) {
+                val back = d == "⌫"
+                // 余白は各キーの内側に取るので、3列ぶんの 0 も上の3キーと端がそろう
+                val span = if (row.size == 2) (if (back) 2f else 3f) else 1f
+                line.addView(
+                    TextView(context).apply {
+                        text = d
+                        setTextColor(if (back) colSub else colText)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (back) 13f else 20f)
+                        gravity = Gravity.CENTER
+                        background = keyBg(colCard, colBorder)
+                        isClickable = true
+                        setOnClickListener { if (back) backspaceHex() else appendHex(d) }
+                        feedbackOnPress()
+                    },
+                    LinearLayout.LayoutParams(0, matchParent, span)
+                        .apply { setMargins(dp(2), dp(2), dp(2), dp(2)) },
+                )
+            }
+            pad.addView(line, LinearLayout.LayoutParams(matchParent, 0, 1f))
+        }
+        return pad
+    }
+
+    /**
+     * かなの面と16進の面を入れ替える。読みも16進も空にする(混ざると何で引いたか
+     * 分からない)。**面そのものだけを差し替える**——打鍵面は残りの高さを全部もらう
+     * 同じ LayoutParams で入れるので、上の行も面の高さも変わらない
+     */
+    private fun toggleCodeMode() {
+        codeMode = !codeMode
+        codeHex.setLength(0)
+        reading.setLength(0)
+        val old = readingPad
+        val at = if (old != null) keyArea.indexOfChild(old) else -1
+        if (old != null && at >= 0) {
+            keyArea.removeViewAt(at)
+            keyArea.addView(buildReadingPad(), at, LayoutParams(matchParent, 0, 1f))
+        }
+        paintCodeToggle()
+        afterReadingChanged()
+    }
+
+    /** 「U+」の見た目。かな面・手書き面の出し入れキーと同じく、押している間は塗る */
+    private fun paintCodeToggle() {
+        val t = codeToggle ?: return
+        t.setTextColor(if (codeMode) colOnAccent else colSub)
+        t.background = keyBg(
+            if (codeMode) colAccent else colCard,
+            if (codeMode) colAccent else colBorder,
+        )
+    }
+
+    private fun appendHex(d: String) {
+        if (codeHex.length >= 6) return // 符号位置は最大6桁(U+10FFFF)
+        codeHex.append(d)
+        afterReadingChanged()
+    }
+
+    private fun backspaceHex() {
+        if (codeHex.isEmpty()) return
+        codeHex.setLength(codeHex.length - 1)
+        afterReadingChanged()
     }
 
     /**
@@ -1172,10 +1347,23 @@ class KeyboardView(context: Context, private val host: Host) :
     /** 打った読みと、指を置いているあいだの仮の1字(色を変えて後ろに付ける) */
     private fun refreshReadingLabel() {
         val label = readingLabel ?: return
+        if (codeMode) {
+            if (codeHex.isEmpty()) {
+                label.text = "符号位置を16進で（例: 4E00）"
+                label.setTextColor(colSub)
+                return
+            }
+            // 「U+」は打った桁ではないので色を落とす
+            val s = SpannableString("U+$codeHex")
+            s.setSpan(ForegroundColorSpan(colSub), 0, 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            label.setTextColor(colText)
+            label.text = s
+            return
+        }
         val typed = reading.toString()
         val preview = readingPreview
         if (typed.isEmpty() && preview == null) {
-            label.text = "読みを打つと部品が出ます（例: つち）"
+            label.text = "読みを打つ（例: つち）"
             label.setTextColor(colSub)
             return
         }
@@ -1196,7 +1384,9 @@ class KeyboardView(context: Context, private val host: Host) :
 
     private fun clearReading() {
         reading.setLength(0)
+        codeHex.setLength(0)
         readingPreview = null
+        readingPage = 0
         flick?.resetToggle()
         refreshReadingLabel()
         runReadingSearch()
@@ -1205,10 +1395,12 @@ class KeyboardView(context: Context, private val host: Host) :
 
     /**
      * 読みが変わった。**面は組み直さない**。組み直すとフリックのキーが動いて、
-     * 続けて打っている指が隣のキーに乗る
+     * 続けて打っている指が隣のキーに乗る。
+     * ページは1ページめに戻す(前のページ位置に残ると「打ったのに何も出ない」に見える)
      */
     private fun afterReadingChanged() {
         readingPreview = null
+        readingPage = 0
         clearResumedNote()
         host.persist() // 読みも組みかけのうち。切り替えて戻ったら続きから打てる
         refreshReadingLabel()
@@ -1216,18 +1408,29 @@ class KeyboardView(context: Context, private val host: Host) :
     }
 
     private fun runReadingSearch() {
-        val hits = readingHits ?: return
-        val q = reading.toString()
+        readingHits ?: return
+        val code = codeMode
+        val q = if (code) codeHex.toString() else reading.toString()
+        val strokes = readingStrokes
         val seq = ++readingSeq
-        if (q.isEmpty()) {
-            hits.removeAllViews()
+        // 何も打っていなければ案内だけ出す。ただし読みの面で画数を選んでいれば、
+        // 読みが空でも**その画数の字を全部出す**(読めない字でも画数は数えられる)。
+        // 16進の面では何か打つまで出さない(画数だけの一覧は読みの面の役目)
+        if (q.isEmpty() && (code || strokes == 0)) {
+            readingTotal = 0
+            showReadingHint()
+            refreshReadingFilter()
             return
         }
-        // 10万字ぶんの読みを走査するので UI スレッドではやらない
-        val strokes = readingStrokes
+        // 10万字ぶんを走査するので UI スレッドではやらない
         val offset = readingPage * READING_PAGE
         thread(name = "katachi-reading") {
-            val r = host.engine.byReading(q, strokes, offset, READING_PAGE)
+            val e = host.engine
+            val r = when {
+                code -> e.byCode(q, strokes, offset, READING_PAGE)
+                q.isEmpty() -> e.byStrokes(strokes, offset, READING_PAGE)
+                else -> e.byReading(q, strokes, offset, READING_PAGE)
+            }
             main.post {
                 if (seq == readingSeq) { // 古い結果は捨てる
                     readingTotal = r.total
@@ -1257,13 +1460,38 @@ class KeyboardView(context: Context, private val host: Host) :
         }
     }
 
+    /**
+     * 何も打っていないときの案内。引けた字の行に出す(行の高さは候補があるときと同じ)。
+     * **画数だけでも引ける**ことはここで知らせる(読みの欄の案内は1行に収まらない)
+     */
+    private fun showReadingHint() {
+        val hits = readingHits ?: return
+        hits.removeAllViews()
+        hits.addView(
+            TextView(context).apply {
+                text = if (codeMode) {
+                    "打った16進で始まる字が出ます（2B81 → U+2B810〜）"
+                } else {
+                    "読みを打つか、画数だけ選んでも出ます"
+                }
+                setTextColor(colSub)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setPadding(dp(4), dp(12), dp(4), 0)
+            },
+        )
+    }
+
     private fun showReadingHits(chars: List<String>) {
         val hits = readingHits ?: return
         hits.removeAllViews()
         if (chars.isEmpty()) {
             hits.addView(
                 TextView(context).apply {
-                    text = if (host.dict.jaCount == 0) "辞書を読み込み中…" else "該当なし"
+                    text = when {
+                        host.dict.jaCount == 0 -> "辞書を読み込み中…"
+                        readingStrokes > 0 -> "該当なし（画数の絞り込みを外すと出るかも）"
+                        else -> "該当なし"
+                    }
                     setTextColor(colSub)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                     setPadding(dp(4), dp(12), dp(4), 0)
@@ -1448,6 +1676,8 @@ class KeyboardView(context: Context, private val host: Host) :
     private fun commitReading(ch: String) {
         host.insert(ch)
         reading.setLength(0)
+        // 符号位置で引いた字も同じ。16進の面のまま、打った番号だけ空にする
+        codeHex.setLength(0)
         flick?.resetToggle()
         afterReadingChanged()
     }

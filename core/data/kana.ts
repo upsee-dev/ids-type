@@ -19,6 +19,21 @@ export interface KanaKey {
   chars: string[];
 }
 
+/**
+ * 読みを打つ入力方法。設定で選ぶ。どれも同じ読み欄に入る。
+ *   flick  … 12キーフリック(日本のスマホの標準)
+ *   romaji … ローマ字(QWERTY)。パソコンに慣れた人向け
+ *   godan  … Godan(左に母音・右に子音のローマ字フリック)
+ */
+export const KANA_LAYOUTS = [
+  { id: "flick", label: "フリック" },
+  { id: "romaji", label: "ローマ字" },
+  { id: "godan", label: "Godan" },
+] as const;
+
+export type KanaLayout = (typeof KANA_LAYOUTS)[number]["id"];
+export const DEFAULT_KANA_LAYOUT: KanaLayout = "flick";
+
 /** 濁点キー・⌫キーの目印(label で見分ける) */
 export const KANA_DAKUTEN = "小゛゜";
 export const KANA_BACKSPACE = "⌫";

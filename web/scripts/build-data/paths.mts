@@ -24,4 +24,12 @@ export const SRC = {
   chise: join(DATA_SRC, "ids", "chise.txt"),
   /** Unihan(読み・異体字・部首番号)。展開すると25MBあるので zip のまま読む */
   unihanZip: join(DATA_SRC, "unihan", "Unihan.zip"),
+  /** 和製漢字の辞典2014(HTML版)。172ページを1本に連結したもの */
+  wasei: join(DATA_SRC, "readings", "waseikanji.html"),
+  /** JK(IRG国字コレクション)782字の読み。zi.tools の字典面から取った */
+  jk: join(DATA_SRC, "readings", "jk.tsv"),
+  /** zi.tools の日本語音読み(50,144字)。呉音・漢音・唐音の区別つき */
+  ziOnyomi: join(DATA_SRC, "readings", "zi-onyomi.tsv"),
+  /** 手で足した読み。どの資料にも無いが、足してほしいと言われた読み */
+  manual: join(DATA_SRC, "readings", "manual.tsv"),
 };

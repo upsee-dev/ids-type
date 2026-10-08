@@ -24,40 +24,75 @@ export interface CharMeta {
    */
   nanori: string;
   /**
-   * 正式な読みが**1つも無い字**の、参考・推定の読み。on/kun がある字では常に空。
-   * 出所は refKind で分かる
+   * 参考の読み。資料にしか無い日本語の読み(正式な音訓がある字にも付く)と、
+   * 日本語の読みが1つも無い字の外国語の読みの書き写し。出所は refKind で分かる
    */
   ref: string;
   /**
-   * ref の出所。""=なし / "u"=資料(Unihan kJapanese) /
-   * "v:X"=異体字 X から借りた / "p:X"=部品(声符)X からの推定。
-   * 推定が当たるのは6割ほどなので、UI では必ず「推定」と断って出すこと
+   * ref の出所。""=なし / "u"=資料(Unihan kJapanese) / "w"=和製漢字の辞典 /
+   * "j"=JK / "z"=zi.tools の音読み / "m"=手で足した読み /
+   * "e:X"=互換漢字の元の字 X(同じ字) / "i:zh:yǐn"=IRG の外国語の読みの書き写し。
+   * 外国語の読みは日本語の読みではないので、UI では必ず言語名と原語を添えて出すこと
    */
   refKind: string;
   /** KANJIDIC2 に無い字(拡張A〜J ほか)。読み・学年を持たず、候補の並びでは最後に回す */
   ext: boolean;
 }
 
+/** IRG の外国語の読みの言語 → 名前(web/scripts/build-data/transcribe.mts と同じ) */
+const FOREIGN_LANG: Record<string, string> = {
+  zh: "中国語",
+  za: "壮語",
+  ko: "韓国語",
+  vi: "ベトナム語",
+};
+
 /**
- * 参考・推定の読みの見出し。**4実装ともこの1か所の言い方に揃える**
- * (辞書にある読みと、こちらで推した読みを、UI で必ず区別するため)。
+ * 参考の読みの見出し。**4実装ともこの1か所の言い方に揃える**
+ * (辞書にある日本語の読みと、外国語の読みの書き写しを、UI で必ず区別するため)。
  *
- *   "u"    → 参考          … 資料(Unihan)にある読み。KANJIDIC2 の音訓ではない
- *   "v:專" → 推定(異体字 專) … 同じ字の別の書き方から借りた
- *   "p:青" → 推定(声符 青)   … 部品から推した。当たるのは6割ほど
+ *   "u"         → 参考             … 資料(Unihan)にある読み。KANJIDIC2 の音訓ではない
+ *   "w"         → 参考(和製漢字)     … 『和製漢字の辞典2014』にある読み。国字はここにしか無い
+ *   "j"         → 参考(国字)         … JK(IRG国字コレクション)にある読み
+ *   "z"         → 参考(音読み)       … zi.tools の音読み(呉音・漢音・唐音の区別つき)
+ *   "m"         → 参考(追加)         … どの資料にも無く、手で足した読み
+ *   "e:塚"      → 参考(同じ字 塚)    … 互換漢字。統合漢字 塚 と同じ字なのでその読み
+ *   "i:zh:yǐn"  → 中国語音 yǐn       … IRG で提案国が書き添えた読みをカナに書き写したもの
+ *
+ * 推定(異体字・声符・韓国語音・台湾音から推した読み)は 2026-09-29 にやめた。
  */
 export function refReadingLabel(refKind: string): string {
   const from = refKind.length > 2 ? refKind.slice(2) : "";
   switch (refKind[0]) {
     case "u":
       return "参考";
-    case "v":
-      return from ? `推定(異体字 ${from})` : "推定(異体字)";
-    case "p":
-      return from ? `推定(声符 ${from})` : "推定(声符)";
+    case "w":
+      return "参考(和製漢字)";
+    case "j":
+      return "参考(国字)";
+    case "z":
+      return "参考(音読み)";
+    case "m":
+      return "参考(追加)";
+    case "e":
+      return from ? `参考(同じ字 ${from})` : "参考(同じ字)";
+    case "i": {
+      const colon = from.indexOf(":");
+      const lang = FOREIGN_LANG[colon > 0 ? from.slice(0, colon) : from] ?? "外国語";
+      const orig = colon > 0 ? from.slice(colon + 1).split("/").join("・") : "";
+      return orig ? `${lang}音 ${orig}` : `${lang}音`;
+    }
     default:
       return "";
   }
+}
+
+/**
+ * 参考の読みが**日本語の読み**か(外国語の読みの書き写しでないか)。
+ * 読みで引いたときの段を分けるのに使う(日本語の読み → 外国語の読みの順)
+ */
+export function isJapaneseRef(refKind: string): boolean {
+  return refKind !== "" && refKind[0] !== "i";
 }
 
 /** 康熙部首番号(1〜214) → 部首の字(Kangxi Radicals ブロック U+2F00〜) */

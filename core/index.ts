@@ -45,7 +45,16 @@ export {
   type Block,
 } from "./data/blocks.ts";
 
-export { RADICAL_PALETTE, DIFFICULT_COMPONENTS } from "./data/palettes.ts";
+export {
+  AGE_RANGES,
+  AGE_VERSIONS,
+  AGE_STEP,
+  ageKey,
+  ageOf,
+  type AgeVersion,
+} from "./data/age.ts";
+
+export { RADICAL_PALETTE, DIFFICULT_COMPONENTS, CURVE_KANJI } from "./data/palettes.ts";
 
 export {
   KEY_HEIGHTS,
@@ -54,6 +63,22 @@ export {
 } from "./data/keyboard.ts";
 
 export {
+  GODAN_ROWS,
+  GODAN_BACKSPACE,
+  godanFlick,
+  type GodanKey,
+} from "./data/godan.ts";
+
+export {
+  romajiToKana,
+  romajiDisplay,
+  type RomajiResult,
+} from "./data/romaji.ts";
+
+export {
+  KANA_LAYOUTS,
+  DEFAULT_KANA_LAYOUT,
+  type KanaLayout,
   KANA_BACKSPACE,
   KANA_DAKUTEN,
   KANA_ROWS,

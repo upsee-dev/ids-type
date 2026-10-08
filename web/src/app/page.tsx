@@ -346,6 +346,7 @@ export default function Home() {
                   `構造マッチ: ${total.toLocaleString()}件(枠付き=完全一致)`}
                 {mode === "parts" &&
                   `部品を含む字: ${total.toLocaleString()}件(枠付き=完全一致)`}
+                {mode === "code" && `符号位置: ${total.toLocaleString()}件`}
                 {mode === "empty" && "かたちか部品を入力してください"}
                 {total > CAND_PAGE &&
                   `　${(page * CAND_PAGE + 1).toLocaleString()}〜${Math.min(
@@ -394,9 +395,11 @@ export default function Home() {
 
           {engine && query && mode !== "empty" && results.length === 0 && (
             <p className="py-6 text-center text-sm text-stone-500">
-              {curvesOnly
-                ? "該当なし。「曲線を含む」を外すと出るかもしれません。"
-                : "該当なし。部品を減らすか、別の分解で試してみてください。"}
+              {mode === "code"
+                ? "該当なし。符号位置は U+ のあとに4〜6桁の16進で打ちます（例: U+4E00）。"
+                : curvesOnly
+                  ? "該当なし。「曲線を含む」を外すと出るかもしれません。"
+                  : "該当なし。部品を減らすか、別の分解で試してみてください。"}
             </p>
           )}
 

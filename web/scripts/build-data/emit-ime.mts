@@ -25,10 +25,14 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RawData } from "../../../core/data/types.ts";
 import {
+  CURVE_KANJI,
   DIFFICULT_COMPONENTS,
   RADICAL_PALETTE,
 } from "../../../core/data/palettes.ts";
 import { AUTO_DARK, AUTO_LIGHT, THEMES } from "../../../core/data/themes.ts";
+import { AGE_RANGES, AGE_STEP, AGE_VERSIONS } from "../../../core/data/age.ts";
+import { GODAN_ROWS } from "../../../core/data/godan.ts";
+import { ROMAJI_TABLE } from "../../../core/data/romaji.ts";
 import { OPERATOR_ICON } from "../../../core/ids/operators.ts";
 
 /**
@@ -52,6 +56,9 @@ object Palettes {
     val DIFFICULT = listOf(
 ${groups}
     )
+
+    /** 「曲線を含む」に並べる字(丸・渦・かなのような漢字らしくない丸みを持つ字・手で選んだ一覧) */
+    val CURVE = "${CURVE_KANJI}"
 }
 `;
   mkdirSync(join(outPath, ".."), { recursive: true });
@@ -80,6 +87,9 @@ enum Palettes {
     static let difficult: [Group] = [
 ${groups}
     ]
+
+    /// 「曲線を含む」に並べる字(丸・渦・かなのような漢字らしくない丸みを持つ字・手で選んだ一覧)
+    static let curve = "${CURVE_KANJI}"
 }
 `;
   mkdirSync(join(outPath, ".."), { recursive: true });
@@ -285,4 +295,201 @@ export function emitImeDict(data: RawData, outDir: string): string[] {
     written.push(`${name} (${lines.length} 行)`);
   }
   return written;
+}
+
+/**
+ * 「どの版で追加された字か」の表を Kotlin へ。読みで引いたときの並び順に使う。
+ * core/data/age.ts と1字でもずれると Web とキーボードで並びが変わるので生成する。
+ */
+export function emitAgeKotlin(outPath: string): string {
+  const rows = AGE_RANGES.map(
+    ([lo, hi, v]) =>
+      `        intArrayOf(0x${lo.toString(16)}, 0x${hi.toString(16)}, ${AGE_VERSIONS.indexOf(v)}), // ${v}`,
+  ).join("\n");
+  const src = `package com.upsee.katachi.ime
+
+// 自動生成: core/data/age.ts から web の build:data が書き出す。直接編集しないこと。
+//
+// CJK漢字が Unicode のどの版で追加されたか。読みで引いた候補は
+// **段(常用・人名用 → KANJIDIC2の残り → 拡張漢字) → 段内は追加された版の順**に
+// 並べる(同じ版の中は符号位置順)。TypeScript 版と同じ並びになること。
+object Age {
+    /** [先頭cp, 末尾cp, 版の番号] を符号位置順に */
+    private val RANGES = arrayOf(
+${rows}
+    )
+
+    /** 段を作るときの掛け数。TypeScript の AGE_STEP と同じ値 */
+    const val STEP = ${AGE_STEP}L
+
+    /** 並べ替え用の数値。版の番号を上位に、符号位置を下位に置く */
+    fun key(ch: String): Long {
+        val cp = ch.codePointAt(0)
+        var lo = 0
+        var hi = RANGES.size - 1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            val r = RANGES[mid]
+            if (cp < r[0]) hi = mid - 1
+            else if (cp > r[1]) lo = mid + 1
+            else return r[2].toLong() * 0x200000L + cp
+        }
+        return ${AGE_VERSIONS.length}L * 0x200000L + cp
+    }
+}
+`;
+  mkdirSync(join(outPath, ".."), { recursive: true });
+  writeFileSync(outPath, src);
+  return `Age.kt (${AGE_RANGES.length}範囲 / ${AGE_VERSIONS.length}版)`;
+}
+
+/** 同じものを iOS(Swift)へ */
+export function emitAgeSwift(outPath: string): string {
+  const rows = AGE_RANGES.map(
+    ([lo, hi, v]) =>
+      `        (0x${lo.toString(16)}, 0x${hi.toString(16)}, ${AGE_VERSIONS.indexOf(v)}), // ${v}`,
+  ).join("\n");
+  const src = `import Foundation
+
+// 自動生成: core/data/age.ts から web の build:data が書き出す。直接編集しないこと。
+//
+// CJK漢字が Unicode のどの版で追加されたか。読みで引いた候補は
+// **段(常用・人名用 → KANJIDIC2の残り → 拡張漢字) → 段内は追加された版の順**に
+// 並べる(同じ版の中は符号位置順)。TypeScript 版と同じ並びになること。
+enum Age {
+    /// (先頭cp, 末尾cp, 版の番号) を符号位置順に
+    private static let ranges: [(Int, Int, Int)] = [
+${rows}
+    ]
+
+    /// 段を作るときの掛け数。TypeScript の AGE_STEP と同じ値
+    static let step: Int = ${AGE_STEP}
+
+    /// 並べ替え用の数値。版の番号を上位に、符号位置を下位に置く
+    static func key(_ ch: String) -> Int {
+        guard let cp = ch.unicodeScalars.first.map({ Int($0.value) }) else { return 0 }
+        var lo = 0
+        var hi = ranges.count - 1
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            let r = ranges[mid]
+            if cp < r.0 { hi = mid - 1 }
+            else if cp > r.1 { lo = mid + 1 }
+            else { return r.2 * 0x200000 + cp }
+        }
+        return ${AGE_VERSIONS.length} * 0x200000 + cp
+    }
+}
+`;
+  mkdirSync(join(outPath, ".."), { recursive: true });
+  writeFileSync(outPath, src);
+  return `Age.swift (${AGE_RANGES.length}範囲)`;
+}
+
+/**
+ * ローマ字→かなの表と Godan の配列を Kotlin へ。
+ * 読みを打つ面はアプリ・Android・iOS の3つにあり、**表がずれると
+ * 同じローマ字で違うかなが出る**ので core/data から生成する。
+ */
+export function emitRomajiKotlin(outPath: string): string {
+  const rows = Object.entries(ROMAJI_TABLE)
+    .map(([k, v]) => `        "${k}" to "${v}",`)
+    .join("\n");
+  const godan = GODAN_ROWS.map(
+    (row) =>
+      "        listOf(" +
+      row
+        .map((k) =>
+          k.chars.length
+            ? `key(${k.chars.map((c) => `"${c}"`).join(", ")})`
+            : `Key("${k.label}", emptyList())`,
+        )
+        .join(", ") +
+      "),",
+  ).join("\n");
+  const src = `package com.upsee.katachi.ime
+
+// 自動生成: core/data/romaji.ts と core/data/godan.ts から web の build:data が
+// 書き出す。直接編集しないこと。
+object Romaji {
+    /** ローマ字 -> かな。最長一致で引く */
+    val TABLE: Map<String, String> = mapOf(
+${rows}
+    )
+}
+
+object Godan {
+    /** chars は [中央, 左, 上, 右, 下]。中身はローマ字 */
+    data class Key(val label: String, val chars: List<String>)
+
+    private fun key(
+        center: String,
+        left: String = "",
+        up: String = "",
+        right: String = "",
+        down: String = "",
+    ) = Key(center.uppercase(), listOf(center, left, up, right, down))
+
+    /** 左列に母音・中央と右に子音の3列5段 */
+    val ROWS: List<List<Key>> = listOf(
+${godan}
+    )
+}
+`;
+  mkdirSync(join(outPath, ".."), { recursive: true });
+  writeFileSync(outPath, src);
+  return `Romaji.kt (${Object.keys(ROMAJI_TABLE).length}件) + Godan.kt`;
+}
+
+/** 同じものを iOS(Swift)へ */
+export function emitRomajiSwift(outPath: string): string {
+  const rows = Object.entries(ROMAJI_TABLE)
+    .map(([k, v]) => `        "${k}": "${v}",`)
+    .join("\n");
+  const godan = GODAN_ROWS.map(
+    (row) =>
+      "        [" +
+      row
+        .map((k) =>
+          k.chars.length
+            ? `key(${k.chars.map((c) => `"${c}"`).join(", ")})`
+            : `Key(label: "${k.label}", chars: [])`,
+        )
+        .join(", ") +
+      "],",
+  ).join("\n");
+  const src = `import Foundation
+
+// 自動生成: core/data/romaji.ts と core/data/godan.ts から web の build:data が
+// 書き出す。直接編集しないこと。
+enum Romaji {
+    /// ローマ字 -> かな。最長一致で引く
+    static let table: [String: String] = [
+${rows}
+    ]
+}
+
+enum Godan {
+    /// chars は [中央, 左, 上, 右, 下]。中身はローマ字
+    struct Key {
+        let label: String
+        let chars: [String]
+    }
+
+    private static func key(
+        _ center: String, _ left: String = "", _ up: String = "",
+        _ right: String = "", _ down: String = "",
+    ) -> Key {
+        Key(label: center.uppercased(), chars: [center, left, up, right, down])
+    }
+
+    /// 左列に母音・中央と右に子音の3列5段
+    static let rows: [[Key]] = [
+${godan}
+    ]
+}
+`;
+  mkdirSync(join(outPath, ".."), { recursive: true });
+  writeFileSync(outPath, src);
+  return `Romaji.swift + Godan.swift`;
 }

@@ -54,11 +54,12 @@ enum Ids {
     /// ワイルドカード。入力の "?" はここへ寄せる
     static let wild: Character = "＊"
 
-    /// 未符号化部品のプレースホルダ。①②③… = cjkvi 由来 / ？ = BabelStone・CHISE 由来
+    /// 未符号化部品のプレースホルダ。①②③… = cjkvi 由来 / ？ = BabelStone・CHISE 由来 /
+    /// 私用領域 = BabelStone Han PUA の部品
     static func isPlaceholder(_ c: Character) -> Bool {
         if c == "？" { return true }
         guard let v = c.unicodeScalars.first?.value else { return false }
-        return v >= 0x2460 && v <= 0x24FF
+        return (v >= 0x2460 && v <= 0x24FF) || (v >= 0xE000 && v <= 0xF8FF)
     }
 
     /// 同じ形で符号位置が違う部品を寄せる(強い同一視)

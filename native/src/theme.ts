@@ -45,11 +45,19 @@ export const KANJI_FONT = Platform.select({
 export const EXT_FONTS = ["KatachiExt1", "KatachiExt2"] as const;
 
 /**
+ * 分解に出てくる「Unicode に字が無い部品」(即の左・鳥の外側など)のフォント
+ * (assets/fonts/KatachiPUA.ttf・Arphic Public License)。分解データはこの部品を
+ * 私用領域(U+E000〜F8FF)の字で持っている。作り直し: scripts/build-font-pua.py
+ */
+export const PUA_FONT = "KatachiPUA";
+
+/**
  * 1字を描くのに使うフォント。同梱フォントに入っている字だけそちらへ回す。
  * 範囲表は符号位置順なので二分探索で引く(候補は最大200件・毎描画で通る)。
  */
 export function fontFor(ch: string): string | undefined {
   const cp = ch.codePointAt(0) ?? 0;
+  if (cp >= 0xe000 && cp <= 0xf8ff) return PUA_FONT;
   let lo = 0;
   let hi = EXT_FONT_RANGES.length - 1;
   while (lo <= hi) {

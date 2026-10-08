@@ -95,6 +95,15 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private weak var readingHits: UIStackView?
     private weak var flick: FlickKanaView?
 
+    /// 符号位置(U+XXXX)で引く面を出しているか。出しているあいだはかなの面の代わりに
+    /// 16進のキー(0〜F)が並ぶ。打った16進は codeHex に持ち、読み(reading)とは混ぜない
+    /// (フリックの叩き直し・ローマ字の打ちかけの仕組みに A〜F を通すと、かなに化ける)
+    private var codeMode = false
+    private var codeHex = ""
+    private weak var codeToggle: UIButton?
+    /// 読みの面のいちばん下の打鍵面(かなの面か16進の面)。切り替えで差し替える
+    private weak var readingPad: UIView?
+
     /// 手書きの面の部品
     private weak var hwHits: UIStackView?
     private weak var hwPad: HandwritingView?
@@ -357,7 +366,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         // ── タブ(部品パレットの出し分け)＋かなの面の出し入れ ──
         // 部品パレットは「部首」の1つだけ。読み・手書きの面から戻る口を
         // 兼ねているので、タブと同じ見た目のまま置いてある
-        radicalTab = smallButton("部首", #selector(onTab(_:)))
+        radicalTab = smallButton("部分", #selector(onTab(_:)))
         // パレットに無い部品を読みから出すための面。タブではなく出し入れなので、
         // 出しても消してもかたちの行・候補・組み立て中の表示はそのまま残る。
         // 手書きも同じ扱い(読みも部品の見当もつかない字は、書いて引く)
@@ -649,6 +658,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         guard let p = store.loadPending() else { return }
         reading = p.reading
         readingPreview = nil
+        // 覚えているのは読みだけ。戻ってきたらかなの面から始める
+        codeMode = false
+        codeHex = ""
         kanaOpen = p.kana
         // 書いた画までは覚えていない。読みの面に戻すときは手書きの面を閉じる
         if p.kana { hwOpen = false }
@@ -792,7 +804,8 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     private func buildStrokeChips() {
         strokeRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let groups = [("favorites", "お気に入り")] + Palettes.difficult.map { ($0.strokes, "\($0.strokes)画") }
+        let groups = [("favorites", "お気に入り"), ("curve", "曲線を含む")]
+            + Palettes.difficult.map { ($0.strokes, "\($0.strokes)画") }
         for (key, label) in groups {
             let active = strokeGroup == key
             let b = UIButton(type: .system)
@@ -930,6 +943,8 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         readingLabel = nil
         readingHits = nil
         flick = nil
+        codeToggle = nil
+        readingPad = nil
         hwHits = nil
         hwPad = nil
         hwCount = nil
@@ -978,6 +993,20 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
                 return
             }
             rows(favs.map { ch in
+                let b = key(ch, size: 20) { [weak self] in self?.insert(ch) }
+                b.accessibilityValue = ch
+                b.addGestureRecognizer(
+                    UILongPressGestureRecognizer(
+                        target: self, action: #selector(onFavoritePartLongPress(_:)),
+                    ),
+                )
+                return b
+            }, cols: 8, into: grid)
+            return
+        }
+        if strokeGroup == "curve" {
+            // 丸みのある字の一覧。お気に入りと同じく、タップで部品・長押しでそのまま送る
+            rows(Palettes.curve.map(String.init).map { ch in
                 let b = key(ch, size: 20) { [weak self] in self?.insert(ch) }
                 b.accessibilityValue = ch
                 b.addGestureRecognizer(
@@ -1042,7 +1071,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         // 変わり、2字目が隣のキーに入る。打っている最中に面が動かないことのほうが、
         // 1行ぶんの高さより大事
         let note = UILabel()
-        note.text = "字の読みを打つと候補に出ます。文章は普段のキーボードで"
+        note.text = "読みか画数で字を引けます。文章は普段のキーボードで"
         note.font = .systemFont(ofSize: 10)
         note.textColor = colSub
         keyArea.addArrangedSubview(note)
@@ -1050,6 +1079,9 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         let label = UILabel()
         label.font = .systemFont(ofSize: 16)
         label.numberOfLines = 1
+        label.lineBreakMode = .byTruncatingTail
+        // 幅が足りないときは読みの欄のほうを縮める(U+・消 のキーは潰さない)
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         readingLabel = label
 
         let clear = UIButton(type: .system)
@@ -1061,7 +1093,21 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         clear.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
         clear.addTarget(self, action: #selector(onClearReading), for: .touchUpInside)
 
-        let head = UIStackView(arrangedSubviews: [label, clear])
+        // 符号位置(U+XXXX)で引く面との切り替え。かなの面と入れ替わる
+        let code = UIButton(type: .system)
+        code.setTitle("U+", for: .normal)
+        code.titleLabel?.font = .systemFont(ofSize: 13)
+        code.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        code.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+        code.addAction(UIAction { [weak self] _ in self?.toggleCodeMode() }, for: .touchUpInside)
+        codeToggle = code
+        paintCodeToggle()
+        // 伸びるのは読みの欄だけ。キーは字の幅のまま
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        code.setContentHuggingPriority(.required, for: .horizontal)
+        clear.setContentHuggingPriority(.required, for: .horizontal)
+
+        let head = UIStackView(arrangedSubviews: [label, code, clear])
         head.axis = .horizontal
         head.spacing = 6
         keyArea.addArrangedSubview(head)
@@ -1127,18 +1173,111 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
         // フリック面は**残りの高さを全部もらう**。固定の高さを与えると、
         // 画面の小さい端末で下の段がはみ出して打てなくなる
-        let pad = FlickKanaView(
-            text: colText, sub: colSub, card: colCard, border: colBorder, accentBg: colAccentBg,
-        )
-        pad.delegate = self
-        pad.setContentHuggingPriority(.defaultLow, for: .vertical)
-        pad.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        pad.heightAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
-        flick = pad
-        keyArea.addArrangedSubview(pad)
+        keyArea.addArrangedSubview(buildReadingPad())
 
         refreshReadingLabel()
         runReadingSearch()
+    }
+
+    /// 読みの面のいちばん下の打鍵面。ふだんはかなの面、「U+」を押しているあいだは16進の面。
+    /// 読みを打つ面は設定で選べる(フリック / ローマ字 / Godan)。
+    /// アプリの設定画面が書いた値を共有領域から読むだけ
+    private func buildReadingPad() -> UIView {
+        let pad: UIView
+        if codeMode {
+            flick = nil
+            pad = buildHexPad()
+        } else {
+            let f = FlickKanaView(
+                text: colText, sub: colSub, card: colCard, border: colBorder, accentBg: colAccentBg,
+                layout: store.kanaLayout,
+            )
+            f.delegate = self
+            flick = f
+            pad = f
+        }
+        // どちらの面も同じ条件で残りの高さをもらう＝切り替えても面の高さは変わらない
+        pad.setContentHuggingPriority(.defaultLow, for: .vertical)
+        pad.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        pad.heightAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
+        readingPad = pad
+        return pad
+    }
+
+    /// 16進の面(0〜F と ⌫)。符号位置で引くときにかなの面と入れ替えて出す。
+    /// かなの面と同じく4段で高さを等分する。並びは電話の数字キーと同じ 1 2 3 を上に置き、
+    /// 右の2列に A〜F を足した形。最後の段は 0 を3列ぶん・⌫ を2列ぶん。
+    /// アプリ(KatachiKeyboard.tsx)・Android(KeyboardView.kt)も同じ並び
+    private func buildHexPad() -> UIView {
+        let root = UIStackView()
+        root.axis = .vertical
+        root.spacing = 4
+        root.distribution = .fillEqually
+        for row in [["1", "2", "3", "A", "B"], ["4", "5", "6", "C", "D"], ["7", "8", "9", "E", "F"]] {
+            let line = UIStackView(arrangedSubviews: row.map { hexKey($0) })
+            line.axis = .horizontal
+            line.spacing = 4
+            line.distribution = .fillEqually
+            root.addArrangedSubview(line)
+        }
+        // 0 と ⌫ の幅は「0 = ⌫ × 1.5 + 2」。キー幅 w・間隔 4 なら 0 が 3w+8、⌫ が 2w+4 で、
+        // 上の段の3キーぶん・2キーぶんと端がそろう
+        let zero = hexKey("0")
+        let back = hexKey("⌫")
+        let last = UIStackView(arrangedSubviews: [zero, back])
+        last.axis = .horizontal
+        last.spacing = 4
+        zero.widthAnchor.constraint(equalTo: back.widthAnchor, multiplier: 1.5, constant: 2).isActive = true
+        root.addArrangedSubview(last)
+        return root
+    }
+
+    private func hexKey(_ label: String) -> UIButton {
+        let back = label == "⌫"
+        let b = UIButton(type: .system)
+        b.setTitle(label, for: .normal)
+        b.titleLabel?.font = .systemFont(ofSize: back ? 13 : 20)
+        b.setTitleColor(back ? colSub : colText, for: .normal)
+        style(b, fill: colCard, stroke: colBorder)
+        b.addAction(UIAction { [weak self] _ in self?.tapFeedback() }, for: .touchDown)
+        b.addAction(UIAction { [weak self] _ in
+            if back { self?.backspaceHex() } else { self?.appendHex(label) }
+        }, for: .touchUpInside)
+        return b
+    }
+
+    /// かなの面と16進の面を入れ替える。読みも16進も空にする(混ざると何で引いたか
+    /// 分からない)。**面そのものだけを差し替える**——同じ条件で残りの高さをもらうので、
+    /// 上の行も面の高さも変わらない
+    private func toggleCodeMode() {
+        codeMode.toggle()
+        codeHex = ""
+        reading = ""
+        if let old = readingPad, let at = keyArea.arrangedSubviews.firstIndex(of: old) {
+            old.removeFromSuperview()
+            keyArea.insertArrangedSubview(buildReadingPad(), at: at)
+        }
+        paintCodeToggle()
+        afterReadingChanged()
+    }
+
+    /// 「U+」の見た目。かな面・手書き面の出し入れキーと同じく、押している間は塗る
+    private func paintCodeToggle() {
+        guard let b = codeToggle else { return }
+        b.setTitleColor(codeMode ? themeColor { $0.onAccent } : colSub, for: .normal)
+        style(b, fill: codeMode ? colAccent : colCard, stroke: codeMode ? colAccent : colBorder)
+    }
+
+    private func appendHex(_ d: String) {
+        guard codeHex.count < 6 else { return } // 符号位置は最大6桁(U+10FFFF)
+        codeHex += d
+        afterReadingChanged()
+    }
+
+    private func backspaceHex() {
+        guard !codeHex.isEmpty else { return }
+        codeHex.removeLast()
+        afterReadingChanged()
     }
 
     /// 絞り込み行のページ送りキー。行の高さを増やさないよう画数チップと同じ大きさ
@@ -1215,8 +1354,20 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     /// 打った読みと、指を置いているあいだの仮の1字(色を変えて後ろに付ける)
     private func refreshReadingLabel() {
         guard let label = readingLabel else { return }
+        if codeMode {
+            if codeHex.isEmpty {
+                label.text = "符号位置を16進で（例: 4E00）"
+                label.textColor = colSub
+                return
+            }
+            // 「U+」は打った桁ではないので色を落とす
+            let s = NSMutableAttributedString(string: "U+", attributes: [.foregroundColor: colSub])
+            s.append(NSAttributedString(string: codeHex, attributes: [.foregroundColor: colText]))
+            label.attributedText = s
+            return
+        }
         if reading.isEmpty, readingPreview == nil {
-            label.text = "読みを打つと部品が出ます（例: つち）"
+            label.text = "読みを打つ（例: つち）"
             label.textColor = colSub
             return
         }
@@ -1232,14 +1383,17 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     @objc private func onClearReading() {
         reading = ""
+        codeHex = ""
         flick?.resetToggle()
         afterReadingChanged()
     }
 
     /// 読みが変わった。**面は組み直さない**。組み直すとフリックのキーが動いて、
-    /// 続けて打っている指が隣のキーに乗る
+    /// 続けて打っている指が隣のキーに乗る。
+    /// ページは1ページめに戻す(前のページ位置に残ると「打ったのに何も出ない」に見える)
     private func afterReadingChanged() {
         readingPreview = nil
+        readingPage = 0
         dismissResumedNote()
         persist() // 読みも組みかけのうち。切り替えて戻ったら続きから打てる
         refreshReadingLabel()
@@ -1247,22 +1401,34 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     }
 
     private func runReadingSearch() {
-        guard let hits = readingHits else { return }
-        let q = reading
+        guard readingHits != nil else { return }
+        let code = codeMode
+        let q = code ? codeHex : reading
+        let strokes = readingStrokes
         readingSeq += 1
         let seq = readingSeq
-        guard !q.isEmpty else {
-            hits.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // 何も打っていなければ案内だけ出す。ただし読みの面で画数を選んでいれば、
+        // 読みが空でも**その画数の字を全部出す**(読めない字でも画数は数えられる)。
+        // 16進の面では何か打つまで出さない(画数だけの一覧は読みの面の役目)
+        if q.isEmpty, code || strokes == 0 {
+            readingTotal = 0
+            showReadingHint()
+            refreshReadingFilter()
             return
         }
-        // 10万字ぶんの読みを走査するので UI スレッドではやらない
-        let strokes = readingStrokes
+        // 10万字ぶんを走査するので UI スレッドではやらない
         let offset = readingPage * Self.readingPageSize
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let r = self.engine.byReading(
-                q, strokes: strokes, offset: offset, limit: Self.readingPageSize,
-            )
+            let limit = Self.readingPageSize
+            let r: (items: [String], total: Int)
+            if code {
+                r = self.engine.byCode(q, strokes: strokes, offset: offset, limit: limit)
+            } else if q.isEmpty {
+                r = self.engine.byStrokes(strokes, offset: offset, limit: limit)
+            } else {
+                r = self.engine.byReading(q, strokes: strokes, offset: offset, limit: limit)
+            }
             DispatchQueue.main.async {
                 guard seq == self.readingSeq else { return } // 古い結果は捨てる
                 self.readingTotal = r.total
@@ -1270,6 +1436,20 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
                 self.refreshReadingFilter()
             }
         }
+    }
+
+    /// 何も打っていないときの案内。引けた字の行に出す(行の高さは候補があるときと同じ)。
+    /// **画数だけでも引ける**ことはここで知らせる(読みの欄の案内は1行に収まらない)
+    private func showReadingHint() {
+        guard let hits = readingHits else { return }
+        hits.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let l = UILabel()
+        l.text = codeMode
+            ? "打った16進で始まる字が出ます（2B81 → U+2B810〜）"
+            : "読みを打つか、画数だけ選んでも出ます"
+        l.textColor = colSub
+        l.font = .systemFont(ofSize: 12)
+        hits.addArrangedSubview(l)
     }
 
     private func showReadingHits(_ chars: [String]) {
@@ -1312,6 +1492,8 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private func commitReading(_ ch: String) {
         insert(ch)
         reading = ""
+        // 符号位置で引いた字も同じ。16進の面のまま、打った番号だけ空にする
+        codeHex = ""
         flick?.resetToggle()
         afterReadingChanged()
     }

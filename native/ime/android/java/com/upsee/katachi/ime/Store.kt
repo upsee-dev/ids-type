@@ -28,6 +28,9 @@ class Store(context: Context) {
         /** キーボードの縦幅。同じくアプリの設定画面が書く */
         const val HEIGHT = "katachi.height"
 
+        /** 読みを打つ入力方法(flick / romaji / godan)。同じくアプリが書く */
+        const val KANA = "katachi.kana"
+
         /** 履歴の上限。アプリ側(HISTORY_LIMIT)と同じ */
         const val LIMIT = 60
 
@@ -85,6 +88,15 @@ class Store(context: Context) {
      * 値は core/data/keyboard.ts の KEY_HEIGHTS と同じ。
      */
     fun heightMode(): String = prefs.getString(HEIGHT, null) ?: "small"
+
+    /**
+     * 読みを打つ入力方法。アプリの設定画面(src/prefs.ts)が書き、ここは読むだけ。
+     * 知らない値は既定(フリック)に落とす
+     */
+    fun kanaLayout(): String {
+        val v = prefs.getString(KANA, null)
+        return if (v == "romaji" || v == "godan") v else "flick"
+    }
 
     fun history(): List<String> = read(HISTORY)
 

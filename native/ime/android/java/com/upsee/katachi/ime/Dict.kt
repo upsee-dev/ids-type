@@ -30,7 +30,7 @@ class Dict {
     private val nanori = ArrayList<String>(13_200)
 
     /**
-     * 参考・推定の読みと、その出所。**拡張漢字も含めた全字ぶん**持つ。
+     * 参考の読みと、その出所。**拡張漢字も含めた全字ぶん**持つ。
      * KANJIDIC2 が読みを持つのは13,108字だけなので、これが無いと
      * 残り9万字は読みでは一生引けない(作り方は web/scripts/build-data/readings.mts)
      */
@@ -76,10 +76,10 @@ class Dict {
     /** 人名でだけ使う読み。正式な音訓ではない */
     fun nanoriAt(i: Int) = if (i < jaCount) nanori[i] else ""
 
-    /** 参考・推定の読み。正式な読みが無い字の手がかり */
+    /** 参考の読み(資料にしか無い日本語の読み・外国語の読みの書き写し) */
     fun refAt(i: Int) = if (i < ref.size) ref[i] else ""
 
-    /** ref の出所。"u"=資料 / "v:X"=異体字 / "p:X"=部品(声符)からの推定 */
+    /** ref の出所。"u"=資料(Unihan) / "w"=和製漢字の辞典 / "j"=JK / "z"=zi.tools / "m"=手で足した読み / "e:X"=互換漢字の元の字 / "i:zh:yǐn"=IRG の外国語の読み */
     fun refKindAt(i: Int) = if (i < refKind.size) refKind[i] else ""
 
     /** 総画数。0=データなし */

@@ -25,6 +25,8 @@ data-src/kanjidic2/kanjidic2.xml
 # そちらは34MBあるが、EAS Build も Vercel も Python を回さない（元フォントも
 # 持たない）ので、リポジトリに入れておかないとビルドが ☒ だらけになる。
 assets-archive/fonts/Plangothic*.ttf
+# 未符号化部品のフォント(5MB)の元。切り出しは scripts/build-font-pua.py
+assets-archive/fonts/BabelStoneHanPUA.ttf
 
 # iOSキーボード拡張へ複製されるフォント。実体は native/assets/fonts/ にあり、
 # prebuild のたびに withKatachiIme.js が置き直す。追跡すると同じ21.7MBが

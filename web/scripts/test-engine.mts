@@ -1,7 +1,16 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { DEFAULT_SORT, Engine, type Result, type SortMode } from "../../core/index.ts";
+import {
+  AGE_STEP,
+  ageKey,
+  ageOf,
+  DEFAULT_SORT,
+  Engine,
+  STROKE_MAX,
+  type Result,
+  type SortMode,
+} from "../../core/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const raw = JSON.parse(readFileSync(join(here, "..", "..", "core", "kanji-data.json"), "utf8"));
@@ -103,24 +112,32 @@ checkPages("日月", 50, "common");
 checkPages("宀女", 50, "near");
 /**
  * 読み。10万字ぜんぶが読みを持つようになったので(build-data/readings.mts)、
- *   1. 打った読みが**どの段に当たったか**の順に並ぶこと
- *      (正式 → 人名 → 参考 → 推定。同じ段のなかはよく使う字が先)
+ *   1. 並びが **段(常用・人名用 → KANJIDIC2の残り → 拡張漢字) → 段内はUnicodeの
+ *      追加版順** になっていること
  *   2. KANJIDIC2 に無い字も読みで引けること
- * を見る。段が効いていないと、声符から推しただけの字が 土 や 生 を押しのける。
+ * を見る。段が無いと URO だけで20,992字あるせいで つち→凷、ぎょう→丩 が先頭に
+ * 来て常用漢字が埋もれる(符号位置と「よく使う字か」は無関係なので)。
  */
-const checkReading = (q: string, expectFirst: string, note: string) => {
+const readingTier = (m: { grade: number; ext: boolean }) =>
+  m.grade ? 0 : m.ext ? 2 : 1;
+const checkReading = (q: string, expect: string, note: string) => {
   const { items, total } = e.list({ query: q, limit: 12 });
-  const ok = items[0]?.ch === expectFirst;
+  const all = e.list({ query: q, limit: Number.MAX_SAFE_INTEGER }).items;
+  const key = (i: (typeof all)[number]) =>
+    readingTier(i.meta) * AGE_STEP + ageKey(i.ch);
+  const sorted = all.every((x, i) => i === 0 || key(all[i - 1]) <= key(x));
+  const ok = sorted && all.some(i => i.ch === expect);
   if (!ok) fail++;
   console.log(
     `${ok ? "OK " : "NG "} [reading] "${q}" -> ${items.map(i => i.ch).join(" ")}` +
-      `  (${total}件・${note})  期待の先頭:${expectFirst}`,
+      `  (${total}件・${note})  ${expect}(${ageOf(expect)})を含む:${all.some(i => i.ch === expect)}` +
+      (sorted ? "" : " / 段と版順が崩れている"),
   );
 };
-checkReading("つち", "土", "正式(音訓)が先頭");
+checkReading("つち", "土", "常用漢字が先・段内は版順");
 checkReading("あきら", "朗", "人名読みでも引ける");
 checkReading("いずくんぞ", "烏", "資料にしか無い読みでも引ける");
-checkReading("ぎょう", "行", "よく使う字が先");
+checkReading("ぎょう", "行", "拡張漢字は後ろの段");
 
 /**
  * 画数での絞り込み。画数は Unihan の kTotalStrokes で**10万字ぜんぶ**にあるので、
@@ -142,6 +159,84 @@ checkStrokes("こう", 6);
 checkStrokes("つち", 11);
 
 /**
+ * 画数だけで引く(読みを打たずに画数のチップだけ選んだとき)。
+ *   1. その画数の字が**漏れなく**出る(STROKE_MAX は「それ以上」)
+ *   2. 並びは読みで引いたときと同じ「段 → 追加された版の順」
+ * 画数を選ばないとき(query も strokes も無し)は今までどおり符号位置順の全件。
+ * 先頭12字は Swift のテスト(native/ime/test/main.swift)が同じものを期待している
+ */
+const everything = e.list({ limit: Number.MAX_SAFE_INTEGER }).items;
+const checkStrokesOnly = (n: number, expectHead: string) => {
+  const want = (s: number) => (n >= STROKE_MAX ? s >= STROKE_MAX : s === n);
+  const { items, total } = e.list({ strokes: n, limit: Number.MAX_SAFE_INTEGER });
+  const key = (i: (typeof items)[number]) => readingTier(i.meta) * AGE_STEP + ageKey(i.ch);
+  const sorted = items.every((x, i) => i === 0 || key(items[i - 1]) < key(x));
+  const counted = everything.filter(i => want(i.meta.strokes)).length;
+  const bad = items.filter(i => !want(i.meta.strokes));
+  const head = items.slice(0, 12).map(i => i.ch).join(" ");
+  const ok = sorted && total === counted && !bad.length && head === expectHead;
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [strokes-only] ${n}画 -> ${head}  (${total}件 / 数え直し ${counted}件)` +
+      (sorted ? "" : " / 段と版順が崩れている") +
+      (head === expectHead ? "" : `  期待:${expectHead}`),
+  );
+};
+checkStrokesOnly(1, "一 乙 丨 丶 丿 乀 乁 乚 亅 乛 𠃉 𠃊");
+checkStrokesOnly(5, "且 世 丘 丙 主 丼 乎 仔 仕 他 付 仙");
+checkStrokesOnly(STROKE_MAX, "厵 灩 癴 籲 韊 驫 鱺 鱻 鸝 鸞 麤 龖");
+{
+  // 画数も query も無いときは従来どおり(符号位置順の全件)
+  const cps = everything.slice(0, 50).map(i => i.ch.codePointAt(0)!);
+  const ok = everything.length === e.size && cps.every((c, i) => i === 0 || cps[i - 1] < c);
+  if (!ok) fail++;
+  console.log(`${ok ? "OK " : "NG "} [strokes-only] 画数なし・query なし -> 符号位置順の全${everything.length}件`);
+}
+
+/**
+ * 符号位置で引く。
+ *   search … 候補欄。「U+4E00」「u+4e00」「4E00」(全角でも)で**その1字**が完全一致で出る。
+ *            打ちかけ(U+4E0)は符号位置として 0件(部品検索に回さない)
+ *   list   … 一覧・キーボードの16進面。打った番号の字＋**その16進で始まる字**を符号位置順
+ */
+const checkCodeSearch = (q: string, want: string) => {
+  const { results, mode, total } = e.search(q, 10);
+  const ok =
+    mode === "code" &&
+    total === (want ? 1 : 0) &&
+    (results[0]?.ch ?? "") === want &&
+    (!want || results[0].exact);
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [code] search "${q}" -> ${results.map(r => r.ch).join("") || "なし"}` +
+      `  (${mode}/${total}件)  期待:${want || "なし"}`,
+  );
+};
+checkCodeSearch("U+4E00", "一");
+checkCodeSearch("u+4e00", "一");
+checkCodeSearch("4E00", "一");
+checkCodeSearch("Ｕ＋４Ｅ００", "一");
+checkCodeSearch("U+3134A", String.fromCodePoint(0x3134a));
+checkCodeSearch("U+4E0", "");
+const checkCodeList = (q: string, lo: number, hi: number, count: number) => {
+  const { items, total, mode } = e.list({ query: q, limit: Number.MAX_SAFE_INTEGER });
+  const cps = items.map(i => i.ch.codePointAt(0)!);
+  const ok =
+    mode === "code" &&
+    total === count &&
+    cps.every((c, i) => c >= lo && c <= hi && (i === 0 || cps[i - 1] < c));
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [code] list "${q}" -> ${items.slice(0, 16).map(i => i.ch).join("")}` +
+      `  (${total}件・U+${lo.toString(16).toUpperCase()}〜U+${hi.toString(16).toUpperCase()} を符号位置順)`,
+  );
+};
+checkCodeList("U+4E00", 0x4e00, 0x4e00, 1); // 4E00x(5桁)は未割り当てなので1字だけ
+checkCodeList("U+4E0", 0x4e00, 0x4e0f, 16);
+checkCodeList("2B81", 0x2b810, 0x2b81f, 15); // 2B81F は未割り当て。𫠞(2B81E)まで
+checkCodeList("U+2B81", 0x2b810, 0x2b81f, 15);
+
+/**
  * 別の分解でも引けること。表によって字の切り方が違うので(丟 = ⿱王厶 / ⿱一去)、
  * **どちらの組み合わせで打っても**同じ字が出ないと「その人には引けない字」になる。
  * 部品だけで打ったときと、かたち(操作子)つきで打ったときの両方を見る。
@@ -160,6 +255,29 @@ checkAlt("一去", "丟"); // BabelStone の分解
 checkAlt("UD王厶", "丟");
 checkAlt("UD一去", "丟");
 
+/**
+ * いちばん新しい字。Unicode 18.0 で拡張Dの末尾に増えた 𫠞(U+2B81E) は、
+ * 上流のIDS表(BabelStone 16.0 / CHISE 17.0)に無く、分解を
+ * build-data/supplement.mts で足している(画数は Unihan 18.0 に入った)。
+ * データを取り直したときにここが落ちると、収録はされているのに構造検索にも
+ * 画数の絞り込みにも出てこない字に戻る(一覧には並ぶので気づきにくい)。
+ * 読みはどの資料にも無い(以前は声符 欠 から「けつ」と推していたが、推定はやめた)。
+ */
+{
+  const ch = String.fromCodePoint(0x2b81e);
+  const m = e.meta(ch);
+  const byShape = e.search("LR日欠", 50).results.some(r => r.ch === ch);
+  const byStrokes = e
+    .list({ strokes: 8, limit: Number.MAX_SAFE_INTEGER })
+    .items.some(i => i.ch === ch);
+  const ok = m?.ids === "⿰日欠" && m?.strokes === 8 && byShape && byStrokes;
+  if (!ok) fail++;
+  console.log(
+    `${ok ? "OK " : "NG "} [new] ${ch} U+2B81E ${m?.ids || "分解なし"} ${m?.strokes ?? 0}画` +
+      `  LR日欠で引ける:${byShape} / 8画で引ける:${byStrokes}`,
+  );
+}
+
 /** 読みの持ち方。正式・人名・参考が混ざらずに入っていること */
 const checkMeta = (ch: string, want: Record<string, string>) => {
   const m = e.meta(ch)!;
@@ -174,11 +292,18 @@ const checkMeta = (ch: string, want: Record<string, string>) => {
 checkMeta("悪", { on: "アク オ", refKind: "u" });
 // 人名でだけ使う読み
 checkMeta("亜", { on: "ア", nanori: "や つぎ つぐ" });
-// KANJIDIC2 に無い字。異体字から借りた読みと、声符から推した読み
-checkMeta("专", { on: "", ref: "セン もっぱ.ら", refKind: "v:專" });
-checkMeta("丆", { on: "", ref: "ヘツ", refKind: "p:丿" });
+// 推定はしない。以前は異体字から借りていた 专 や、声符から推していた 丆 は読みなし
+checkMeta("专", { on: "", ref: "", refKind: "" });
+checkMeta("丆", { on: "", ref: "", refKind: "" });
+// 互換漢字は統合漢字と同じ字なので、その読み(正式＋参考)を使う
+checkMeta("車", { ref: "シャ くるま キョ コ", refKind: "e:車" });
+// 和製漢字の辞典。[読み] が「解説参照」で、見出しに「「はなをかむ」は、国訓」とある字
+checkMeta("挗", { ref: "ケツ はなをかむ", refKind: "u" });
+// 手で足した読み(data-src/readings/manual.tsv)
+checkMeta(String.fromCodePoint(0x33379), { ref: "いっさき", refKind: "m" });
 
-// 読みを持つ字の割合(落ちたら補完の作り方を疑う)
+// 読みを持つ字の割合(落ちたら補完の作り方を疑う)。
+// 推定をやめたので半分ほど(以前は推定込みで97.9%)。資料にある読みだけの数字
 {
   const all = e.list({ limit: 0 }).total;
   let none = 0;
@@ -187,7 +312,7 @@ checkMeta("丆", { on: "", ref: "ヘツ", refKind: "p:丿" });
     if (!m.on && !m.kun && !m.nanori && !m.ref) none++;
   }
   const covered = ((all - none) / all) * 100;
-  const ok = covered > 97;
+  const ok = covered > 51;
   if (!ok) fail++;
   console.log(
     `${ok ? "OK " : "NG "} [reading] 読みのある字 ${covered.toFixed(1)}% (${all - none}/${all})`,
