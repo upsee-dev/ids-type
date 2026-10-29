@@ -18,12 +18,20 @@
 import { existsSync, readFileSync } from "node:fs";
 import { SRC } from "./paths.mts";
 
+export interface WaseiReadingNote {
+  entry: string;
+  ch: string;
+  readings: string[];
+  /** その項目の解説で確認した引用。別字の読みや著者が否定した読みは採らない。 */
+  evidence: string;
+}
+
 /**
  * 読みだけを取り出したもの。字 -> 読み(音はカタカナ・訓はひらがな)。
  *
  * 採らないもの:
  *   「炻器」二字で、「せっき」 … 熟字訓。その字1字の読みではない
- *   解説参照・音義未詳       … 読みが書かれていない
+ *   解説参照・音義未詳       … 通常の読み欄としては採らず、解説は確認済み補完だけ採る
  */
 export function loadWasei(
   /**
@@ -32,15 +40,28 @@ export function loadWasei(
    */
   strokes: Map<string, number> = new Map(),
 ): Map<string, string[]> {
-  const out = new Map<string, string[]>();
   if (!existsSync(SRC.wasei)) {
     console.warn(`!! ${SRC.wasei} が無いので和製漢字の辞典をスキップ`);
-    return out;
+    return new Map();
   }
   const html = readFileSync(SRC.wasei, "utf8");
-  for (const m of html.matchAll(/<p id='\d+'>(.*?)<\/p>/gs)) {
-    const body = m[1];
-    const head = body.split("[読み]")[0].replace(/<[^>]+>/g, "");
+  const notes: WaseiReadingNote[] = existsSync(SRC.waseiNotes)
+    ? JSON.parse(readFileSync(SRC.waseiNotes, "utf8"))
+    : [];
+  return parseWasei(html, strokes, notes);
+}
+
+/** 通常の読み欄に加え、目視確認した解説内の読みを取り込む。 */
+export function parseWasei(
+  html: string,
+  strokes: Map<string, number> = new Map(),
+  notes: WaseiReadingNote[] = [],
+): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const mapped = new Map<string, { ch: string; explanation: string }>();
+  for (const m of html.matchAll(/<p id='(\d+)'>(.*?)<\/p>/gs)) {
+    const body = m[2];
+    const head = body.split(/<br\s*\/?>|<div\b|\[読み\]|\[解説\]/i)[0].replace(/<[^>]+>/g, "");
     // 符号位置。見出しのかっこ内にある(未符号化だった字には無い)
     let ch = "";
     const cp = head.match(/U\+([0-9A-Fa-f]{4,6})/);
@@ -58,6 +79,10 @@ export function loadWasei(
       if (strokes.get(c) !== Number(total[1])) continue;
       ch = c;
     }
+    mapped.set(m[1], {
+      ch,
+      explanation: (body.split("[解説]")[1] ?? "").replace(/<[^>]+>/g, ""),
+    });
     const reads: string[] = [];
     const read = body.match(/\[読み\]\s*(.*?)(?:<br\s*\/?>|$)/s);
     if (read) {
@@ -79,6 +104,23 @@ export function loadWasei(
     const prev = out.get(ch) ?? [];
     for (const r of reads) if (!prev.includes(r)) prev.push(r);
     out.set(ch, prev);
+  }
+  // 解説は熟語・別字・誤記も引用するため、かなを一括抽出しない。
+  // 確認済みの項目・文字・原文が一致した場合だけ、資料由来の読みとして追加する。
+  for (const note of notes) {
+    const entry = mapped.get(note.entry);
+    if (!entry || entry.ch !== note.ch || !note.evidence || !entry.explanation.includes(note.evidence)) {
+      throw new Error(`和製漢字の補完根拠が原文と一致しません: W+${note.entry} ${note.ch}`);
+    }
+    const tokens = note.evidence.split(/[^ぁ-ゖァ-ヺー.\-]+/);
+    const prev = out.get(note.ch) ?? [];
+    for (const reading of note.readings) {
+      if (!/^[ぁ-ゖァ-ヺー.\-]+$/.test(reading) || !tokens.includes(reading)) {
+        throw new Error(`和製漢字の補完読みが引用中にありません: W+${note.entry} ${reading}`);
+      }
+      if (!prev.includes(reading)) prev.push(reading);
+    }
+    out.set(note.ch, prev);
   }
   return out;
 }

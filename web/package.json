@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "bench:handwriting": "node --experimental-strip-types scripts/bench-handwriting.mts",
     "build:handwriting-bench": "node --experimental-strip-types scripts/build-handwriting-bench.mts",
-    "fetch:irg": "node --experimental-strip-types scripts/fetch-irg.mts"
+    "fetch:irg": "node --experimental-strip-types scripts/fetch-irg.mts",
+    "test:wasei": "node --experimental-strip-types --test scripts/test-wasei.mts"
   },
   "dependencies": {
     "next": "16.2.11",

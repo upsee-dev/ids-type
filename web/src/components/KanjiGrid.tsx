@@ -38,7 +38,7 @@ export function KanjiGrid({
     if (official) return `${head} ${official}`;
     if (meta.nanori) return `${head} 人名 ${meta.nanori}`;
     if (meta.ref) return `${head} ${refReadingLabel(meta.refKind)} ${meta.ref}`;
-    return `${head} 読みデータなし`;
+    return `${head} 読み：不詳`;
   };
 
   return (

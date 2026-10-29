@@ -62,9 +62,9 @@ export function CharDetail({
               </p>
             )}
           </div>
-        ) : !meta.ref ? (
+        ) : !meta.ref && !meta.nanori ? (
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            読みデータなし
+            読み：不詳
           </p>
         ) : null}
 

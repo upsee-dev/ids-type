@@ -31,7 +31,9 @@
     "web": "expo start --web",
     "sync-core": "node scripts/sync-core.mjs",
     "typecheck": "npm run sync-core && tsc --noEmit",
-    "build:android": "bash scripts/build-android.sh"
+    "build:android": "bash scripts/build-android.sh",
+    "build:irg": "node --experimental-strip-types scripts/build-irg.mts",
+    "test:irg": "node --experimental-strip-types --test scripts/test-irg.mts"
   },
   "private": true
 }

@@ -26,6 +26,8 @@ export const SRC = {
   unihanZip: join(DATA_SRC, "unihan", "Unihan.zip"),
   /** 和製漢字の辞典2014(HTML版)。172ページを1本に連結したもの */
   wasei: join(DATA_SRC, "readings", "waseikanji.html"),
+  /** 解説内の読みを原文・項目番号と照合して補完する確認済みデータ */
+  waseiNotes: join(DATA_SRC, "readings", "waseikanji-notes.json"),
   /** JK(IRG国字コレクション)782字の読み。zi.tools の字典面から取った */
   jk: join(DATA_SRC, "readings", "jk.tsv"),
   /** zi.tools の日本語音読み(50,144字)。呉音・漢音・唐音の区別つき */

@@ -702,13 +702,18 @@ function Screen() {
         />
 
         {selected && selMeta && (
-          // 高さを固定するとスクロールが要る＝ひとめで読めないので、
-          // 中身の量に合わせて伸ばす（行数は下で numberOfLines に抑えてある）
+          // 読みは省略せず表示する。長い詳細は本文をスクロールできるようにし、
+          // 下の入力欄・キーボードを画面外へ押し出さない。
           <View style={[s.detail, { backgroundColor: t.card, borderColor: t.border }]}>
             <Text style={{ fontFamily: fontFor(selected), fontSize: 44, color: t.text }}>
               {selected}
             </Text>
-            <View style={{ flex: 1, gap: 2 }}>
+            <ScrollView
+              key={selected}
+              style={{ flex: 1, maxHeight: height * 0.25 }}
+              contentContainerStyle={{ gap: 2 }}
+              keyboardShouldPersistTaps="always"
+            >
               {/* 読みがいちばん知りたい情報なので先頭に大きく。
                   ただし**正式(KANJIDIC2の音訓)だけ**を大きい字で出し、
                   人名・参考・外国語の読みは下に小さく、出所を添えて置く
@@ -722,11 +727,11 @@ function Screen() {
                     .filter(Boolean)
                     .join("　")}
                 </Text>
-              ) : !selMeta.ref ? (
-                <Text style={{ color: t.sub, fontSize: 11 }}>読みデータなし</Text>
+              ) : !selMeta.ref && !selMeta.nanori ? (
+                <Text style={{ color: t.sub, fontSize: 11 }}>読み：不詳</Text>
               ) : null}
               {(!!selMeta.nanori || !!selMeta.ref) && (
-                <Text numberOfLines={2} style={{ color: t.sub, fontSize: 11 }}>
+                <Text style={{ color: t.sub, fontSize: 11 }}>
                   {[
                     selMeta.nanori && `人名 ${selMeta.nanori}`,
                     selMeta.ref &&
@@ -755,7 +760,7 @@ function Screen() {
               {selDecomp.length > 0 && (
                 <Kanji text={selDecomp.join("　")} size={11} color={t.sub} lines={2} />
               )}
-            </View>
+            </ScrollView>
             <View style={{ alignItems: "center", gap: 8 }}>
               <Pressable
                 onPress={() => toggleFav(selected)}

@@ -22,6 +22,7 @@ import { OperatorIcon } from "./OperatorIcon";
 import { CameraPad } from "./CameraPad";
 import { KanaPad } from "./FlickKanaPad";
 import { HandwritingPad } from "./HandwritingPad";
+import { IrgWorkingSetTab } from "./IrgWorkingSetTab";
 import { fontFor, type Theme } from "./theme";
 import { haptic } from "./feedback";
 
@@ -30,14 +31,15 @@ import { haptic } from "./feedback";
  * 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
  * かたちは常時表示の行に出し、タブは部品の出し分けだけに使う。
  */
-type Tab = "radical" | "search" | "draw" | "camera";
+type Tab = "radical" | "search" | "draw" | "camera" | "irg";
 
-/** 4つとも同じ幅にする(styles.tab の flex:1)。並びとしては対等な引き方なので */
+/** 同じ幅のタブ。IRG一覧はアプリ専用。 */
 const TABS: { id: Tab; label: string }[] = [
   { id: "radical", label: "部分" },
   { id: "search", label: "読み" },
   { id: "draw", label: "手書き" },
   { id: "camera", label: "カメラ" },
+  { id: "irg", label: "IRG一覧" },
 ];
 
 const PART_COLS = 8;
@@ -91,12 +93,12 @@ export function KatachiKeyboard({
   const { width, height: screenH } = useWindowDimensions();
 
   /**
-   * 面の高さ。**カメラだけは打鍵の面より大きく取る**。
+   * カメラとIRG一覧は打鍵の面より大きく取る。
    * フリックや手書きと違って指を置いて動かす場所ではなく、写した字が
    * 大きいほど読み取りが当たるので、枠の小ささがそのまま失敗になる。
    */
   const padHeight =
-    tab === "camera" ? Math.min(maxHeight * 1.7, screenH * 0.5) : maxHeight;
+    tab === "camera" || tab === "irg" ? Math.min(maxHeight * 1.7, screenH * 0.5) : maxHeight;
 
   // かたちは**最初から全部**並べる(よく使う順が先頭・残りは横スクロール)。
   // 「その他」で畳むと、使いたいかたちが畳まれた側にあるたびに1手増える
@@ -172,6 +174,8 @@ export function KatachiKeyboard({
         {TABS.map(t => (
           <Pressable
             key={t.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === t.id }}
             onPressIn={() => haptic("toggle")}
             onPress={() => setTab(t.id)}
             style={[
@@ -227,6 +231,9 @@ export function KatachiKeyboard({
           )}
           {tab === "camera" && (
             <CameraPad theme={theme} onInsert={onInsert} onCommit={onCommit} />
+          )}
+          {tab === "irg" && (
+            <IrgWorkingSetTab theme={theme} onInsert={onInsert} onCommit={onCommit} />
           )}
         </View>
       ) : (
