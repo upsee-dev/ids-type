@@ -35,8 +35,8 @@ import kotlin.math.max
  *     縦スクロールできる入れ物(keyScroll)の中にあるので、そうしないと
  *     **下フリック(お段)や上フリック(う段)がスクロールに取られて**
  *     ACTION_CANCEL で消える。Android だけで起きる取りこぼしはこれが原因
- *  2. 指の**いちばん遠かった位置**で向きを決める。指を放るように動かすと
- *     離す瞬間には戻ってきていることがあり、終点だけ見ると中央(あ段)になる
+ *  2. しきい値を越えた最新方向に追従し、中央に戻ったときだけ直前の方向を保つ。
+ *     長押し中に向きを変えても、以前の遠い位置に固定されない。
  *  3. しきい値は**距離**で見る(縦横の大きいほうではなく)。斜めに払ったとき、
  *     縦横それぞれでは届かないのに実際は十分動いている、が無くなる
  *
@@ -182,19 +182,17 @@ class FlickKanaView(
 
         var downX = 0f
         var downY = 0f
-        // いちばん遠かった位置(と、そのときの距離の2乗)。向きはここで決める
+        // 中央へ戻ったときは最後の方向を残すが、方向の変更には随時追従する。
         var farX = 0f
         var farY = 0f
-        var farD2 = 0f
+        var pressedAt = 0L
         // 押した指のID。2本目の指が同じキーに触れても取り違えないため
         var pointer = MotionEvent.INVALID_POINTER_ID
 
         fun track(x: Float, y: Float) {
             val dx = x - downX
             val dy = y - downY
-            val d2 = dx * dx + dy * dy
-            if (d2 > farD2) {
-                farD2 = d2
+            if (direction(dx, dy) != 0) {
                 farX = dx
                 farY = dy
             }
@@ -206,7 +204,8 @@ class FlickKanaView(
                     pointer = e.getPointerId(0)
                     downX = e.x
                     downY = e.y
-                    farX = 0f; farY = 0f; farD2 = 0f
+                    farX = 0f; farY = 0f
+                    pressedAt = SystemClock.uptimeMillis()
                     // **この面は縦スクロールの中にある**。断っておかないと、
                     // 上下のフリックがスクロールに取られて ACTION_CANCEL になる
                     view.parent?.requestDisallowInterceptTouchEvent(true)
@@ -223,7 +222,10 @@ class FlickKanaView(
                     }
                     true
                 }
-                MotionEvent.ACTION_UP -> {
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                    if (pointer == MotionEvent.INVALID_POINTER_ID || e.getPointerId(e.actionIndex) != pointer) {
+                        return@setOnTouchListener true
+                    }
                     val i = e.findPointerIndex(pointer)
                     if (i >= 0) track(e.getX(i), e.getY(i))
                     host.keyFeedback(view, false)
@@ -231,10 +233,12 @@ class FlickKanaView(
                     host.previewKana(null)
                     view.parent?.requestDisallowInterceptTouchEvent(false)
                     pointer = MotionEvent.INVALID_POINTER_ID
-                    commit(key, direction(farX, farY))
+                    val dir = direction(farX, farY)
+                    commit(key, dir, dir == 0 && SystemClock.uptimeMillis() - pressedAt < 500)
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
+                    resetToggle()
                     paint(view, colCard)
                     host.previewKana(null)
                     view.parent?.requestDisallowInterceptTouchEvent(false)
@@ -266,7 +270,7 @@ class FlickKanaView(
     private fun charAt(key: Kana.Key, dir: Int): String =
         key.chars.getOrNull(dir)?.takeIf { it.isNotEmpty() } ?: key.chars[0]
 
-    private fun commit(key: Kana.Key, dir: Int) {
+    private fun commit(key: Kana.Key, dir: Int, toggleTap: Boolean) {
         // ローマ字の面は「押した向きの字を1つ足す」だけ。叩き直しの巡りは
         // かなの面だけのもの(ローマ字は同じキーを続けて打つのが普通なので、
         // 巡らせると tt が打てなくなる)
@@ -275,7 +279,7 @@ class FlickKanaView(
             return
         }
         val now = SystemClock.uptimeMillis()
-        if (dir == 0 && key === lastKey && now - lastTapAt < TOGGLE_WINDOW_MS) {
+        if (toggleTap && key === lastKey && now - lastTapAt < TOGGLE_WINDOW_MS) {
             // 叩き直し。割り当てのある向きだけを あ→い→う→え→お の順に巡る
             val steps = key.chars.indices.filter { key.chars[it].isNotEmpty() }
             val next = steps[(steps.indexOf(lastStep) + 1).mod(steps.size)]
@@ -285,8 +289,8 @@ class FlickKanaView(
             return
         }
         val ch = charAt(key, dir)
-        lastKey = key
-        // フリックで入れた字は、その向きから続けて巡らせる
+        lastKey = if (toggleTap) key else null
+        // フリック・長押しの後はトグルを引き継がない。
         lastStep = key.chars.indexOf(ch).coerceAtLeast(0)
         lastTapAt = now
         host.appendKana(ch)

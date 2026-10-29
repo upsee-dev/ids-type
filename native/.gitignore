@@ -58,3 +58,16 @@ credentials.json
 targets/keyboard/*.tsv
 targets/keyboard/KatachiExt*.ttf
 targets/keyboard/KatachiParts.ttf
+
+# Second keyboard extension: shared sources/assets copied by withKatachiIme.
+targets/japanese/*.tsv
+targets/japanese/*.ttf
+targets/japanese/japanese-license.txt
+targets/japanese/Kana.swift
+targets/japanese/Romaji.swift
+targets/japanese/FlickKanaView.swift
+targets/japanese/ExtFonts.swift
+targets/japanese/SharedStore.swift
+targets/japanese/JapaneseLexicon.swift
+targets/japanese/UnicodeRadicalIndex.swift
+targets/japanese/RadicalIndexView.swift

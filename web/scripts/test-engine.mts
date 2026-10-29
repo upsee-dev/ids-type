@@ -1,3 +1,5 @@
+import { matchesLongKun } from "../../core/reading-priority.ts";
+import { isJapaneseRef } from "../../core/data/types.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -125,7 +127,8 @@ const checkReading = (q: string, expect: string, note: string) => {
   const all = e.list({ query: q, limit: Number.MAX_SAFE_INTEGER }).items;
   const key = (i: (typeof all)[number]) =>
     readingTier(i.meta) * AGE_STEP + ageKey(i.ch);
-  const sorted = all.every((x, i) => i === 0 || key(all[i - 1]) <= key(x));
+  const preferred = (i: (typeof all)[number]) => matchesLongKun(q,i.meta.kun,i.meta.ref,isJapaneseRef(i.meta.refKind));
+  const sorted = all.every((x, i) => i === 0 || Number(preferred(all[i-1])) > Number(preferred(x)) || (preferred(all[i-1]) === preferred(x) && key(all[i - 1]) <= key(x)));
   const ok = sorted && all.some(i => i.ch === expect);
   if (!ok) fail++;
   console.log(
@@ -161,7 +164,7 @@ checkStrokes("つち", 11);
 /**
  * 画数だけで引く(読みを打たずに画数のチップだけ選んだとき)。
  *   1. その画数の字が**漏れなく**出る(STROKE_MAX は「それ以上」)
- *   2. 並びは読みで引いたときと同じ「段 → 追加された版の順」
+ *   2. 30画以上は画数順、同画数では「段 → 追加された版の順」
  * 画数を選ばないとき(query も strokes も無し)は今までどおり符号位置順の全件。
  * 先頭12字は Swift のテスト(native/ime/test/main.swift)が同じものを期待している
  */
@@ -170,7 +173,14 @@ const checkStrokesOnly = (n: number, expectHead: string) => {
   const want = (s: number) => (n >= STROKE_MAX ? s >= STROKE_MAX : s === n);
   const { items, total } = e.list({ strokes: n, limit: Number.MAX_SAFE_INTEGER });
   const key = (i: (typeof items)[number]) => readingTier(i.meta) * AGE_STEP + ageKey(i.ch);
-  const sorted = items.every((x, i) => i === 0 || key(items[i - 1]) < key(x));
+  const sorted = items.every((x, i) => {
+    if (i === 0) return true;
+    const prev = items[i - 1];
+    if (n >= STROKE_MAX && prev.meta.strokes !== x.meta.strokes) {
+      return prev.meta.strokes < x.meta.strokes;
+    }
+    return key(prev) < key(x);
+  });
   const counted = everything.filter(i => want(i.meta.strokes)).length;
   const bad = items.filter(i => !want(i.meta.strokes));
   const head = items.slice(0, 12).map(i => i.ch).join(" ");
@@ -184,13 +194,33 @@ const checkStrokesOnly = (n: number, expectHead: string) => {
 };
 checkStrokesOnly(1, "一 乙 丨 丶 丿 乀 乁 乚 亅 乛 𠃉 𠃊");
 checkStrokesOnly(5, "且 世 丘 丙 主 丼 乎 仔 仕 他 付 仙");
-checkStrokesOnly(STROKE_MAX, "厵 灩 癴 籲 韊 驫 鱺 鱻 鸝 鸞 麤 龖");
+checkStrokesOnly(STROKE_MAX, "厵 癴 韊 驫 鱺 鸝 鸞 癵 籱 饢 麣 鸞");
 {
   // 画数も query も無いときは従来どおり(符号位置順の全件)
   const cps = everything.slice(0, 50).map(i => i.ch.codePointAt(0)!);
   const ok = everything.length === e.size && cps.every((c, i) => i === 0 || cps[i - 1] < c);
   if (!ok) fail++;
   console.log(`${ok ? "OK " : "NG "} [strokes-only] 画数なし・query なし -> 符号位置順の全${everything.length}件`);
+}
+
+// 30画以上は、読み・符号位置・部品・ブロックなどと併用しても画数順。
+// 同画数の相対順を元の検索結果と比べ、ページ境界の並べ替え漏れも検出する。
+for (const filters of [{}, { query: "こう" }, { query: "U+9" }, { query: "木" }, { jaOnly: true }, { block: "uro" }]) {
+  const original = e.list({ ...filters, limit: Number.MAX_SAFE_INTEGER }).items;
+  const expected = original.filter(x => x.meta.strokes >= STROKE_MAX);
+  // 画数だけの場合、従来の基準は段→版順(絞り込みなしの全件は符号位置順)。
+  if (!filters.query) expected.sort((a, b) =>
+    (readingTier(a.meta) * AGE_STEP + ageKey(a.ch)) - (readingTier(b.meta) * AGE_STEP + ageKey(b.ch)));
+  expected.sort((a, b) => a.meta.strokes - b.meta.strokes);
+  const actual = e.list({ ...filters, strokes: STROKE_MAX, limit: Number.MAX_SAFE_INTEGER });
+  const paged: string[] = [];
+  for (let offset = 0; offset < actual.total; offset += 7) {
+    paged.push(...e.list({ ...filters, strokes: STROKE_MAX, offset, limit: 7 }).items.map(x => x.ch));
+  }
+  const chars = actual.items.map(x => x.ch).join("");
+  const ok = actual.total > 0 && chars === expected.map(x => x.ch).join("") && chars === paged.join("");
+  if (!ok) fail++;
+  console.log(`${ok ? "OK " : "NG "} [30画+] ${JSON.stringify(filters)}: 画数順・同画数の順序・ページ送り (${actual.total}件)`);
 }
 
 /**

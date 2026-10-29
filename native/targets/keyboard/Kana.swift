@@ -78,6 +78,19 @@ enum Kana {
         return out
     }
 
+    /// Full kun reading (okurigana included), at least four kana. Never nanori/on/foreign.
+    static func matchesLongKun(_ query: String, _ kun: String, _ reference: String = "", allowReference: Bool = false) -> Bool {
+        let q = toHiragana(query.precomposedStringWithCanonicalMapping)
+        guard q.count >= 4, q.unicodeScalars.allSatisfy({ (0x3041...0x3096).contains($0.value) || $0.value == 0x30FC }) else { return false }
+        func has(_ value: String) -> Bool {
+            value.split(whereSeparator: { $0.isWhitespace }).contains { token in
+                token.unicodeScalars.allSatisfy { (0x3041...0x3096).contains($0.value) || [0x30FC, 0x2E, 0x2D].contains($0.value) }
+                    && token.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: "-", with: "").precomposedStringWithCanonicalMapping == q
+            }
+        }
+        return has(kun) || (allowReference && has(reference))
+    }
+
     /// ローマ字をかなに直す。表は Romaji.table(core/data/romaji.ts から生成)。
     /// 打ちかけ(k・ky)は rest に残し、次の字と合わせて見る。
     /// TypeScript 版 romajiToKana と同じ結果になること。

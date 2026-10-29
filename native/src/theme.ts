@@ -74,6 +74,7 @@ export function fontFor(ch: string): string | undefined {
  * 編集できるテキスト欄(入力中のかたちコード)に使うフォント。
  * TextInput は1字ずつフォントを変えられないので、部品パレットの字を
  * ほぼ網羅する KatachiExt1(第2面ぜんぶ+部首補助)を当てておく。
+ * IDC全17種も build-font-app.py でこのフォントにまとめている。
  * このフォントに無い字(常用漢字・かな)は OS が標準フォントで描く。
  */
 export const INPUT_FONT = EXT_FONTS[0];

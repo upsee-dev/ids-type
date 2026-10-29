@@ -18,6 +18,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SERVICE = "com.upsee.katachi.ime.KatachiImeService";
+const JAPANESE_SERVICE = "com.upsee.katachi.ime.JapaneseImeService";
 
 /** 拡張漢字用フォント(scripts/build-font-app.py が生成)。iOS拡張だけ自前の複製が要る */
 const EXT_FONTS = ["KatachiExt1.ttf", "KatachiExt2.ttf"];
@@ -55,7 +56,7 @@ const withImeSources = (config) =>
       const assets = path.join(main, "assets");
       fs.mkdirSync(assets, { recursive: true });
       for (const f of fs.readdirSync(dictDir)) {
-        if (f.endsWith(".tsv")) fs.copyFileSync(path.join(dictDir, f), path.join(assets, f));
+        if (f.endsWith(".tsv") || f === "japanese-license.txt") fs.copyFileSync(path.join(dictDir, f), path.join(assets, f));
       }
 
       // 拡張漢字用フォント(KatachiExt1/2)は app.json の expo-font プラグインが
@@ -79,7 +80,7 @@ const withImeService = (config) =>
   withAndroidManifest(config, (cfg) => {
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(cfg.modResults);
     app.service = (app.service ?? []).filter(
-      (s) => s.$?.["android:name"] !== SERVICE,
+      (s) => ![SERVICE, JAPANESE_SERVICE].includes(s.$?.["android:name"]),
     );
     app.service.push({
       $: {
@@ -100,6 +101,16 @@ const withImeService = (config) =>
         },
       ],
     });
+    app.service.push({
+      $: {
+        "android:name": JAPANESE_SERVICE,
+        "android:label": "@string/japanese_ime_label",
+        "android:permission": "android.permission.BIND_INPUT_METHOD",
+        "android:exported": "true",
+      },
+      "intent-filter": [{ action: [{ $: { "android:name": "android.view.InputMethod" } }] }],
+      "meta-data": [{ $: { "android:name": "android.view.im", "android:resource": "@xml/method_japanese" } }],
+    });
     return cfg;
   });
 
@@ -115,6 +126,7 @@ const withImeAssetsIos = (config) =>
     (cfg) => {
       const root = cfg.modRequest.projectRoot;
       const target = path.join(root, "targets", "keyboard");
+      const japanese = path.join(root, "targets", "japanese");
       const dictDir = path.join(root, "ime", "assets");
       if (!fs.existsSync(dictDir)) {
         throw new Error(
@@ -122,8 +134,17 @@ const withImeAssetsIos = (config) =>
         );
       }
       fs.mkdirSync(target, { recursive: true });
+      fs.mkdirSync(japanese, { recursive: true });
+      // Keep a single editable source for shared native code. The second extension compiles
+      // only the kana/lexicon/index pieces; no IDS dictionary or handwriting engine is loaded.
+      for (const name of ["Kana", "Romaji", "FlickKanaView", "ExtFonts", "SharedStore", "JapaneseLexicon", "UnicodeRadicalIndex", "RadicalIndexView"]) {
+        fs.copyFileSync(path.join(target, `${name}.swift`), path.join(japanese, `${name}.swift`));
+      }
       for (const f of fs.readdirSync(dictDir)) {
-        if (f.endsWith(".tsv")) fs.copyFileSync(path.join(dictDir, f), path.join(target, f));
+        if (f.startsWith("japanese-") || f === "radical-index.tsv") {
+          fs.copyFileSync(path.join(dictDir, f), path.join(japanese, f));
+        }
+        if (f.endsWith(".tsv") && !f.startsWith("japanese-")) fs.copyFileSync(path.join(dictDir, f), path.join(target, f));
       }
       // iOS の App Extension は自分のバンドルしか読めないので、Android と違って
       // 拡張漢字フォントの複製が要る(その分アプリの容量が増えるが、これが無いと
@@ -134,6 +155,7 @@ const withImeAssetsIos = (config) =>
         const src = path.join(fonts, name);
         if (fs.existsSync(src)) {
           fs.copyFileSync(src, path.join(target, name));
+          fs.copyFileSync(src, path.join(japanese, name));
         } else {
           console.warn(
             `!! ${name} が無いのでキーボードの拡張漢字が ☒ になります。` +

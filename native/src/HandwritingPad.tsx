@@ -22,7 +22,7 @@ import { haptic } from "./feedback";
  * 手書き検索の面。読めない字を枠に書くと、似ている字が上の候補行に出る。
  *
  * 認識は通信なし・端末内だけで行う(core/handwriting.ts)。パターンは
- * KanjiVG 由来の約6,400字(常用・人名用・JIS第1〜2水準を覆う)で、
+ * KanjiVG と AnimCJK 由来の10,851字で、
  * 描き終わった画までで毎回照合し直すので、途中でも形が近い字は出る。
  *
  * 候補は**タップで出力へ**(読みが分かる=詳細も出る)、**長押しで
@@ -92,15 +92,7 @@ export function HandwritingPad({
       return;
     }
     const hits = index.match(strokes, 30);
-    // 日本語で使わない字(KANJIDIC2外)は、形が同じでも日本の字の後ろへ
-    if (engine) {
-      hits.sort(
-        (a, b) =>
-          a.score +
-          (engine.meta(a.ch)?.ext !== false ? 0.02 : 0) -
-          (b.score + (engine.meta(b.ch)?.ext !== false ? 0.02 : 0)),
-      );
-    }
+    // 珍しい字も形のスコアだけで並べる。常用字かどうかで順位を下げない。
     setMatches(hits.slice(0, 24));
   }, [index, strokes, engine]);
 
@@ -180,7 +172,7 @@ export function HandwritingPad({
           <Text style={{ fontSize: 11, color: theme.faint }}>
             {index
               ? strokes.length
-                ? "似ている字が見つかりません。全部消してもう一度どうぞ"
+                ? "似ている字が見つかりません。「部分」や「読み」でも探せます"
                 : "枠に字を書くと候補が出ます。タップで出力へ・長押しで部品に"
               : "手書きの辞書を準備中…"}
           </Text>

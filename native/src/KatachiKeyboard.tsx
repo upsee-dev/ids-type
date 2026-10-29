@@ -17,11 +17,14 @@ import {
   type Engine,
   type KanaLayout,
 } from "./engine";
-import { loadKanaLayout } from "./prefs";
+import { loadKanaLayout, loadStartupMenu } from "./prefs";
+import { KEYBOARD_MENUS, type KeyboardMenu } from "./keyboardMenus";
 import { OperatorIcon } from "./OperatorIcon";
 import { CameraPad } from "./CameraPad";
 import { KanaPad } from "./FlickKanaPad";
 import { HandwritingPad } from "./HandwritingPad";
+import { UnicodeRadicalTab } from "./UnicodeRadicalTab";
+import { JapaneseInputTab } from "./JapaneseInputTab";
 import { IrgWorkingSetTab } from "./IrgWorkingSetTab";
 import { fontFor, type Theme } from "./theme";
 import { haptic } from "./feedback";
@@ -30,17 +33,9 @@ import { haptic } from "./feedback";
  * 部品パレットの種類。**かたち(操作子)はタブに含めない**。
  * 「かたち→部品→部品」と続けて打つので、別タブにあると1字ごとに往復させられる。
  * かたちは常時表示の行に出し、タブは部品の出し分けだけに使う。
+ * タブは同じ幅にする(styles.tab の flex:1)。IRG一覧はアプリ専用。
  */
-type Tab = "radical" | "search" | "draw" | "camera" | "irg";
-
-/** 同じ幅のタブ。IRG一覧はアプリ専用。 */
-const TABS: { id: Tab; label: string }[] = [
-  { id: "radical", label: "部分" },
-  { id: "search", label: "読み" },
-  { id: "draw", label: "手書き" },
-  { id: "camera", label: "カメラ" },
-  { id: "irg", label: "IRG一覧" },
-];
+const TABS = [...KEYBOARD_MENUS, { id: "irg", label: "IRG一覧" }, { id: "unicode", label: "部首索引" }, { id: "japanese", label: "日本語" }] as const;
 
 const PART_COLS = 8;
 const GAP = 4;
@@ -85,7 +80,8 @@ export function KatachiKeyboard({
   collapsed?: boolean;
   onExpand?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("radical");
+  // 保存値は初回だけ読む。設定を変えても操作中のメニューは切り替えない。
+  const [tab, setTab] = useState<KeyboardMenu | "irg" | "unicode" | "japanese">(loadStartupMenu);
   // システムキーボードの「カメラ」から飛んできたら、その面を開いて待つ
   useEffect(() => {
     if (cameraRequest) setTab("camera");
@@ -94,11 +90,10 @@ export function KatachiKeyboard({
 
   /**
    * カメラとIRG一覧は打鍵の面より大きく取る。
-   * フリックや手書きと違って指を置いて動かす場所ではなく、写した字が
-   * 大きいほど読み取りが当たるので、枠の小ささがそのまま失敗になる。
+   * カメラは読み取りやすい枠、一覧は提案を見渡せる高さを確保する。
    */
   const padHeight =
-    tab === "camera" || tab === "irg" ? Math.min(maxHeight * 1.7, screenH * 0.5) : maxHeight;
+    tab === "camera" || tab === "irg" || tab === "unicode" || tab === "japanese" ? Math.min(maxHeight * 1.7, screenH * 0.5) : maxHeight;
 
   // かたちは**最初から全部**並べる(よく使う順が先頭・残りは横スクロール)。
   // 「その他」で畳むと、使いたいかたちが畳まれた側にあるたびに1手増える
@@ -126,7 +121,7 @@ export function KatachiKeyboard({
           key={op.code}
           // 触覚は指が触れた瞬間に返す(離してからだと一拍遅れて感じる)
           onPressIn={() => haptic("key")}
-          onPress={() => onInsert(op.code)}
+          onPress={() => onInsert(op.idc)}
           style={({ pressed }) => [
             styles.opKey,
             {
@@ -170,7 +165,7 @@ export function KatachiKeyboard({
 
   return (
     <View style={{ backgroundColor: theme.bg, borderTopWidth: 1, borderTopColor: theme.border }}>
-      <View style={[styles.tabRow, { paddingHorizontal: SIDE_PADDING }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={[styles.tabRow, { paddingHorizontal: SIDE_PADDING }]}>
         {TABS.map(t => (
           <Pressable
             key={t.id}
@@ -194,12 +189,12 @@ export function KatachiKeyboard({
             </Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
 
       {/* ── かたち(常時表示) ──
           タブの外に出しておく。「かたち→部品→部品」と続けて打つのに
           タブ往復が要らなくなる */}
-      {opRow}
+      {tab !== "unicode" && tab !== "japanese" && opRow}
 
       {/* 読み・手書き・カメラの面はスクロールに入れない。フリックの下向き・手書きの
           縦画・カメラのプレビューがスクロールに取られると入力にならないので、
@@ -213,6 +208,8 @@ export function KatachiKeyboard({
             paddingTop: GAP,
           }}
         >
+          {tab === "unicode" && <UnicodeRadicalTab theme={theme} onCommit={onCommit} onInsert={onInsert} />}
+          {tab === "japanese" && <JapaneseInputTab theme={theme} onCommit={onCommit} />}
           {tab === "search" && (
             <SearchTab
               engine={engine}
@@ -370,6 +367,7 @@ function SearchTab({
   onCommit: (ch: string) => void;
 }) {
   const [reading, setReading] = useState("");
+  const [readingReset, setReadingReset] = useState(0);
   // 指を置いているあいだの仮の字。読みの欄に色を変えて出す(ポップアップは出さない)
   const [preview, setPreview] = useState<string | null>(null);
   /**
@@ -469,6 +467,7 @@ function SearchTab({
           onPress={() => {
             resetPage();
             setCodeMode(m => !m);
+            setReadingReset(v => v + 1);
             setHex("");
             setReading("");
             setRomajiPending("");
@@ -489,7 +488,12 @@ function SearchTab({
           onPress={() => {
             resetPage();
             if (codeMode) setHex("");
-            else setReading("");
+            else {
+              setReading("");
+              setRomajiPending("");
+              setPreview(null);
+              setReadingReset(v => v + 1);
+            }
           }}
           style={[styles.readingClear, { borderColor: theme.border }]}
         >
@@ -642,6 +646,7 @@ function SearchTab({
         />
       ) : (
         <KanaPad
+          key={readingReset}
           layout={kanaLayout}
           pending={romajiPending}
           onPending={setRomajiPending}
@@ -783,7 +788,8 @@ function PartGrid({
 const styles = StyleSheet.create({
   tabRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingTop: 6 },
   tab: {
-    flex: 1,
+    minWidth: 64,
+    paddingHorizontal: 10,
     alignItems: "center",
     paddingVertical: 7,
     borderTopLeftRadius: 8,

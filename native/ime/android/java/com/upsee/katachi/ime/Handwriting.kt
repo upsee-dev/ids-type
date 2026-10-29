@@ -57,7 +57,7 @@ class Handwriting {
         const val MERGE_PENALTY = 0.05
 
         /** 粗選別で残す数。重心だけの安い距離で足切りしてから本照合する */
-        const val PREFILTER = 400
+        const val PREFILTER = 800
 
         /** 量子化の段数(0〜63)。参照の1目盛りぶん */
         const val INV63 = 1.0 / 63.0

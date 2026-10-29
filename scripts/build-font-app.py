@@ -21,6 +21,7 @@ Hiragino も Noto Sans CJK も持っており、入れても二重で重くな�
 対象は75,292字あり、TrueType の上限65,535グリフに収まらない。そこで元の
 Plangothic P1/P2 の分担のまま2つに分け、どちらで描くかの範囲表も一緒に出す
 （アプリは 1字ごとに fontFamily を選ぶ。native/src/extFontRanges.ts）。
+単一フォントしか指定できない入力欄のため、IDC全17種だけは第1フォントにもそろえる。
 
 出力:
     native/assets/fonts/KatachiExt1.ttf  第2面のほとんど（拡張B〜F ほか）
@@ -30,6 +31,7 @@ Plangothic P1/P2 の分担のまま2つに分け、どちらで描くかの範�
 
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC_FONTS = [ROOT / "assets-archive/fonts/PlangothicP1-Regular.ttf",
@@ -51,6 +53,40 @@ GLYPH_LIMIT = 65_535  # TrueType の上限。超えるとフォントが壊れ�
 
 def in_ranges(cp: int) -> bool:
     return any(lo <= cp <= hi for lo, hi in RANGES)
+
+
+def complete_input_idc():
+    """単一フォントを使う TextInput 用に、Ext1 に全17種のIDCをそろえる。"""
+    from fontTools import merge, subset
+    from fontTools.ttLib import TTFont
+
+    target = OUT_DIR / f"{FAMILY}1.ttf"
+    with TTFont(target) as font:
+        missing = (set(range(0x2FF0, 0x3000)) | {0x31EF}) - set(font.getBestCmap())
+    if not missing:
+        return
+
+    # 通常の1字表示は元の範囲表で出し分ける。入力欄だけは Ext1 しか
+    # 指定できないので、Ext2 のIDCを少量重複させて標準フォントに頼らず描く。
+    options = subset.Options()
+    options.layout_features = []
+    with TemporaryDirectory() as tmp:
+        donor = subset.load_font(str(OUT_DIR / f"{FAMILY}2.ttf"), options)
+        if not missing <= set(donor.getBestCmap()):
+            sys.exit("入力欄用のIDCが同梱フォントにありません")
+        subsetter = subset.Subsetter(options)
+        subsetter.populate(unicodes=missing)
+        subsetter.subset(donor)
+        donor_path = Path(tmp) / "idc.ttf"
+        subset.save_font(donor, str(donor_path), options)
+        donor.close()
+
+        merged = merge.Merger().merge([str(target), str(donor_path)])
+        if merged["maxp"].numGlyphs > GLYPH_LIMIT:
+            sys.exit("入力欄用のフォントが TrueType のグリフ上限を超えました")
+        merged.save(target)
+        merged.close()
+    print(f"  入力欄用に {target.name} へ IDC {len(missing)} 字を補完")
 
 
 def main():
@@ -89,7 +125,6 @@ def main():
             )
 
     ranges: list[tuple[int, int, int]] = []  # (先頭cp, 末尾cp, フォント番号)
-    total_bytes = 0
     for n, (src, cps) in enumerate(plans, start=1):
         if not cps:
             continue
@@ -115,7 +150,6 @@ def main():
         out = OUT_DIR / f"{family}.ttf"
         subset.save_font(font, str(out), options)
         font.close()
-        total_bytes += out.stat().st_size
         print(f"  -> {out.relative_to(ROOT)}  {out.stat().st_size / 1024 / 1024:.1f} MB")
 
         # 連続する符号位置を畳んで範囲表にする
@@ -127,6 +161,10 @@ def main():
             ranges.append((start, prev, n))
             start = prev = cp
         ranges.append((start, prev, n))
+
+    complete_input_idc()
+    total_bytes = sum((OUT_DIR / f"{FAMILY}{n}.ttf").stat().st_size
+                      for n in range(1, len(plans) + 1))
 
     ranges.sort()
     rows = ",\n  ".join(f"[{a}, {b}, {n}]" for a, b, n in ranges)

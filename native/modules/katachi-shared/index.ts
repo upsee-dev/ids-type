@@ -18,3 +18,7 @@ export const getItem = (key: string): string | null => KatachiShared.getItem(key
 
 export const setItem = (key: string, value: string): void =>
   KatachiShared.setItem(key, value);
+
+/** Native TSV assets are read on demand, never embedded into the JavaScript bundle. */
+export const getJapaneseShard = (key: string): Promise<string> =>
+  KatachiShared.getJapaneseShard(key);

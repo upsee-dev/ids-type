@@ -441,7 +441,9 @@ export default function Home() {
             / CHISE IDS Database / CJKVI IDS Database (GPLv2) / 漢字情報:
             KANJIDIC2 (EDRDG, CC BY-SA 4.0) / 字形表示: Plangothic (SIL OFL
             1.1) / 手書き認識の筆順パターン: KanjiVG (Ulrich Apel, CC BY-SA
-            3.0)。本アプリはプロトタイプです。
+            3.0) / AnimCJK (FM&amp;SH, Arphic Public License)。
+            <a href="/data/handwriting-license.txt" className="underline">追加筆画データのライセンス</a>。
+            本アプリはプロトタイプです。
           </footer>
         </div>
       </main>
@@ -487,7 +489,7 @@ export default function Home() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !composing) e.currentTarget.blur();
               }}
-              placeholder="例: LR日月"
+              placeholder="例: ⿰日月"
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}

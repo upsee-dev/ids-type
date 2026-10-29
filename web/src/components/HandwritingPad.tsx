@@ -69,15 +69,7 @@ export function HandwritingPad({
       return;
     }
     const hits = index.match(strokes, 30);
-    // 日本語で使わない字(KANJIDIC2外)は、形が同じでも日本の字の後ろへ
-    if (engine) {
-      hits.sort(
-        (a, b) =>
-          a.score +
-          (engine.meta(a.ch)?.ext !== false ? 0.02 : 0) -
-          (b.score + (engine.meta(b.ch)?.ext !== false ? 0.02 : 0)),
-      );
-    }
+    // 珍しい字も形のスコアだけで並べる。常用字かどうかで順位を下げない。
     setMatches(hits.slice(0, 24));
   }, [index, strokes, engine]);
 

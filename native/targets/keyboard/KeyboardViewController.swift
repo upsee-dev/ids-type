@@ -804,7 +804,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     private func buildStrokeChips() {
         strokeRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let groups = [("favorites", "お気に入り"), ("curve", "曲線を含む")]
+        let groups = [("unicode", "Unicode部首索引"), ("favorites", "お気に入り"), ("curve", "曲線を含む")]
             + Palettes.difficult.map { ($0.strokes, "\($0.strokes)画") }
         for (key, label) in groups {
             let active = strokeGroup == key
@@ -949,6 +949,11 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         hwPad = nil
         hwCount = nil
         applyHeight()
+
+        if !faceOpen && strokeGroup == "unicode" {
+            keyArea.addArrangedSubview(RadicalIndexView(commit: { [weak self] ch in self?.select(ch) }, font: { [weak self] ch, size in self?.font(for: ch, size: size) ?? .systemFont(ofSize: size) }))
+            return
+        }
 
         if kanaOpen {
             buildReadingArea()

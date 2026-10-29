@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="katachi_ime_label">漢字カタチ入力</string>
+    <string name="japanese_ime_label">日本語拡張フリック</string>
 </resources>

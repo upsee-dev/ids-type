@@ -64,6 +64,12 @@ struct SharedStore {
 
     private var defaults: UserDefaults { Self.defaults }
 
+    var foreignReadings: [String] { JapaneseLexicon.languages(read(JapaneseLexicon.languageKey)) }
+    func saveForeignReadings(_ languages: [String]) { write(JapaneseLexicon.languageKey, JapaneseLexicon.languages(languages)) }
+
+    var japaneseOrder: [String] { JapaneseLexicon.order(read(JapaneseLexicon.orderKey)) }
+    func saveJapaneseOrder(_ order: [String]) { write(JapaneseLexicon.orderKey, JapaneseLexicon.order(order)) }
+
     private func read(_ key: String) -> [String] {
         guard let raw = defaults.string(forKey: key),
               let data = raw.data(using: .utf8),

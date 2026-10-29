@@ -16,6 +16,7 @@ import type {
   Result,
 } from "./data/types.ts";
 import { isJapaneseRef } from "./data/types.ts";
+import { matchesLongKun, normalizedReading } from "./reading-priority.ts";
 
 /**
  * 候補の並び順。設定で選べる。
@@ -626,11 +627,14 @@ export class Engine {
    * 一覧の絞り込み。query は入力欄と同じ書き方(LR木木 / 木 / ?)に加えて、
    * かな(読み)と U+XXXX・16進(コードポイント。U+2B81 のような打ちかけは前方一致)も
    * 受け付ける。query なしで strokes だけ渡すと、その画数の字を読みと同じ並びで返す。
+   * 4文字以上の訓読みの完全一致を先頭にし、その中と残りは従来の順を保つ。
+   * 30画以上の絞り込みでは、完全一致の段ごとに画数順になる。
    */
   list(q: ListQuery = {}): ListPage {
     const { block, jaOnly = false, offset = 0, limit = 200, strokes = 0 } = q;
     const query = (q.query ?? "").trim();
 
+    const preferredKun = new Set<string>();
     let pool: string[];
     let mode = "all";
     if (query) {
@@ -656,11 +660,12 @@ export class Engine {
         //   0 学年のある字(常用漢字・人名用漢字) 1 KANJIDIC2 の残り 2 拡張漢字
         // 段の中が版順。構造検索の「符号位置順」が
         // 完全一致→日本の漢字→拡張漢字 の段を作っているのと同じ理由。
-        const kana = toHiragana(query);
+        const kana = normalizedReading(query);
         const kata = toKatakana(kana);
         const hit: { ch: string; key: number }[] = [];
         for (const [ch, meta] of this.chars) {
           if (!this.readingRank(meta, kana, kata)) continue;
+          if (matchesLongKun(kana, meta.kun, meta.ref, isJapaneseRef(meta.refKind))) preferredKun.add(ch);
           const tier = meta.grade ? 0 : meta.ext ? 2 : 1;
           hit.push({ ch, key: tier * AGE_STEP + ageKey(ch) });
         }
@@ -696,6 +701,15 @@ export class Engine {
       }
       return true;
     });
+
+    // 「30画以上」は実際の画数を優先する。同画数では元の検索順を保ち、
+    // ページに分ける前に全件を並べることで、ページをまたいでも画数順になる。
+    if (strokes >= STROKE_MAX) {
+      filtered.sort((a, b) => this.chars.get(a)!.strokes - this.chars.get(b)!.strokes);
+    }
+
+    // Apply before pagination, above category/age and the 30+ stroke ordering.
+    if (preferredKun.size) filtered.sort((a, b) => Number(preferredKun.has(b)) - Number(preferredKun.has(a)));
 
     return {
       total: filtered.length,

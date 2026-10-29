@@ -20,6 +20,16 @@ class KatachiSharedModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("KatachiShared")
 
+    AsyncFunction("getJapaneseShard") { key: String ->
+      require(Regex("^[0-9a-f]{4,6}$").matches(key)) { "Invalid dictionary shard" }
+      val assets = requireNotNull(appContext.reactContext).assets
+      try {
+        assets.open("japanese-$key.tsv").bufferedReader(Charsets.UTF_8).use { it.readText() }
+      } catch (_: java.io.FileNotFoundException) {
+        ""
+      }
+    }
+
     Function("getItem") { key: String ->
       prefs?.getString(key, null)
     }

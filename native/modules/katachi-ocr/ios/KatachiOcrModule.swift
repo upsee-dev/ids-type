@@ -25,7 +25,7 @@ public class KatachiOcrModule: Module {
   public func definition() -> ModuleDefinition {
     Name("KatachiOcr")
 
-    AsyncFunction("recognizeText") { (uri: String, promise: Promise) in
+    AsyncFunction("recognizeText") { (uri: String, focus: Bool, previewAspect: Double, promise: Promise) in
       guard let url = URL(string: uri),
             let data = try? Data(contentsOf: url),
             let uiImage = UIImage(data: data),
@@ -44,13 +44,25 @@ public class KatachiOcrModule: Module {
           promise.reject("ocr_failed", error.localizedDescription)
           return
         }
-        let lines = (request.results as? [VNRecognizedTextObservation] ?? [])
-          .compactMap { $0.topCandidates(1).first?.string }
+        let candidates = (request.results as? [VNRecognizedTextObservation] ?? [])
+          .map { $0.topCandidates(3) }
+        // 第1候補を全領域ぶん先に出し、その後に第2・第3候補を足す。
+        // 認識結果の順序を維持し、Unicode順には並べ替えない。
+        let lines = (0..<3).flatMap { rank in
+          candidates.compactMap { rank < $0.count ? $0[rank].string : nil }
+        }
         promise.resolve(lines.joined(separator: "\n"))
       }
       request.recognitionLevel = .accurate
-      request.recognitionLanguages = ["ja-JP"]
+      let supported = (try? request.supportedRecognitionLanguages()) ?? ["ja-JP"]
+      request.recognitionLanguages = ["ja-JP", "zh-Hant", "zh-Hans", "en-US"].filter { supported.contains($0) }
       request.usesLanguageCorrection = false
+      if focus {
+        let sideways = [.left, .leftMirrored, .right, .rightMirrored].contains(uiImage.imageOrientation)
+        let width = Double(sideways ? image.height : image.width)
+        let height = Double(sideways ? image.width : image.height)
+        request.regionOfInterest = ocrFocusRegion(width: width, height: height, previewAspect: previewAspect)
+      }
 
       DispatchQueue.global(qos: .userInitiated).async {
         do {

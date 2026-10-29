@@ -76,7 +76,7 @@ export function KatachiKeyboard({
             <button
               key={op.code}
               onPointerDown={keepFocus}
-              onClick={() => onInsert(op.code)}
+              onClick={() => onInsert(op.idc)}
               className="flex min-h-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-stone-200 bg-stone-50 px-2 text-stone-700 active:bg-indigo-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:active:bg-stone-700"
             >
               <OperatorIcon code={op.code} size={18} />

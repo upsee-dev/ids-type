@@ -174,7 +174,7 @@ final class FlickKanaView: UIView {
         return c.isEmpty ? key.chars[0] : c
     }
 
-    fileprivate func commit(_ key: Kana.Key, _ dir: Int) {
+    fileprivate func commit(_ key: Kana.Key, _ dir: Int, toggleTap: Bool) {
         // ローマ字の面は「押した向きの字を1つ足す」だけ。叩き直しの巡りは
         // かなの面だけのもの(ローマ字は同じキーを続けて打つので、巡らせると tt が打てない)
         if isRomaji {
@@ -182,7 +182,7 @@ final class FlickKanaView: UIView {
             return
         }
         let now = Date.timeIntervalSinceReferenceDate
-        if dir == 0, key.label == lastLabel, now - lastTapAt < Self.toggleWindow {
+        if toggleTap, key.label == lastLabel, now - lastTapAt < Self.toggleWindow {
             // 叩き直し。割り当てのある向きだけを あ→い→う→え→お の順に巡る
             let steps = key.chars.indices.filter { !key.chars[$0].isEmpty }
             let at = steps.firstIndex(of: lastStep) ?? 0
@@ -193,8 +193,8 @@ final class FlickKanaView: UIView {
             return
         }
         let ch = char(key, dir)
-        lastLabel = key.label
-        // フリックで入れた字は、その向きから続けて巡らせる
+        lastLabel = toggleTap ? key.label : nil
+        // フリック・長押しの後はトグルを引き継がない。
         lastStep = key.chars.firstIndex(of: ch) ?? 0
         lastTapAt = now
         delegate?.flickAppend(ch)
@@ -208,19 +208,16 @@ private final class KanaKeyView: UIView {
     private unowned let pad: FlickKanaView
     private var down = CGPoint.zero
 
-    /// 指が**いちばん遠かった**ところ(と、そのときの距離の2乗)。向きはここで決める。
-    /// 放るように払うと離す瞬間には戻ってきていることがあり、終点だけ見ると
-    /// 中央(あ段)になってしまう
+    /// しきい値を越えた最新方向。中央に戻ったときだけ直前の方向を保つ。
     private var far = CGPoint.zero
-    private var farD2: CGFloat = 0
+    private var pressedAt: TimeInterval = 0
+    private weak var activeTouch: UITouch?
 
-    /// 指のいまの位置を控える。いちばん遠かったところだけ残す
+    /// 長押し中に向きが変わった場合も追従する。
     private func track(_ p: CGPoint) {
         let dx = p.x - down.x
         let dy = p.y - down.y
-        let d2 = dx * dx + dy * dy
-        if d2 > farD2 {
-            farD2 = d2
+        if pad.direction(dx: dx, dy: dy) != 0 {
             far = CGPoint(x: dx, y: dy)
         }
     }
@@ -253,21 +250,25 @@ private final class KanaKeyView: UIView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = touches.first else { return }
+        guard activeTouch == nil else { return }
+        activeTouch = t
+        pressedAt = ProcessInfo.processInfo.systemUptime
         down = t.location(in: self)
         far = .zero
-        farD2 = 0
         pad.style(self, pressed: true)
         pad.delegate?.flickTapFeedback()
         if !key.chars.isEmpty { pad.delegate?.flickPreview(key.chars[0]) }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let t = touches.first, !key.chars.isEmpty else { return }
+        guard let t = activeTouch, touches.contains(t), !key.chars.isEmpty else { return }
         track(t.location(in: self))
         pad.delegate?.flickPreview(pad.char(key, pad.direction(dx: far.x, dy: far.y)))
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let t = activeTouch, touches.contains(t) else { return }
+        activeTouch = nil
         pad.style(self, pressed: false)
         pad.delegate?.flickPreview(nil)
 
@@ -280,12 +281,14 @@ private final class KanaKeyView: UIView {
             }
             return
         }
-        guard let t = touches.first else { return }
         track(t.location(in: self))
-        pad.commit(key, pad.direction(dx: far.x, dy: far.y))
+        let dir = pad.direction(dx: far.x, dy: far.y)
+        pad.commit(key, dir, toggleTap: dir == 0 && ProcessInfo.processInfo.systemUptime - pressedAt < 0.5)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        activeTouch = nil
+        pad.resetToggle()
         pad.style(self, pressed: false)
         pad.delegate?.flickPreview(nil)
     }

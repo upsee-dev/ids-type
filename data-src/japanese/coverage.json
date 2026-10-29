@@ -1,0 +1,30 @@
+{
+  "entries": 1770673,
+  "foreignEntries": 76825,
+  "categories": {
+    "common": 803249,
+    "symbol": 4858,
+    "kanji": 368776,
+    "name": 530624,
+    "place": 240234,
+    "plant": 2464,
+    "jukujikun": 516,
+    "animal": 2503,
+    "fish": 1114,
+    "bird": 1199,
+    "mineral": 392,
+    "algae": 74,
+    "insect": 783,
+    "kokuji": 273,
+    "ketsuren": 1
+  },
+  "jmdictPairs": 516,
+  "jmdictLexicalPairs": 244439,
+  "jmdictNewPairs": 136564,
+  "fourKanjiSpellingPairs": 26223,
+  "fullKunCharacterPairsAdded": 7918,
+  "jmnedictPairs": 672571,
+  "manualReadings": 3,
+  "pendingManualReadings": 2,
+  "shards": 86
+}

@@ -1,4 +1,10 @@
 import { getItem, setItem } from "../modules/katachi-shared";
+import { JAPANESE_ORDER_KEY, FOREIGN_READING_KEY, normalizeForeignReadings, normalizeJapaneseOrder, type JapaneseCategory, type ForeignReadingLanguage } from "./core/japanese";
+import {
+  DEFAULT_KEYBOARD_MENU,
+  KEYBOARD_MENUS,
+  type KeyboardMenu,
+} from "./keyboardMenus";
 import {
   DEFAULT_KANA_LAYOUT,
   DEFAULT_KEY_HEIGHT,
@@ -12,7 +18,8 @@ import {
 } from "./engine";
 
 /**
- * 「キーボードにも効く」設定。
+ * アプリの設定。入力方法・並び順・縦幅はシステムキーボードとも共有する。
+ * 起動時のメニューはアプリだけで使う。
  *
  * 置き場は**アプリとキーボードで共有する領域**（modules/katachi-shared）。
  * 着せ替えや触覚と違って、候補の並び順もキーボードの縦幅も入力そのものの
@@ -25,6 +32,22 @@ import {
 const ORDER_KEY = "katachi.order";
 const HEIGHT_KEY = "katachi.height";
 const KANA_KEY = "katachi.kana";
+const STARTUP_MENU_KEY = "katachi.startupMenu";
+
+export function loadJapaneseOrder(): JapaneseCategory[] {
+  try { return normalizeJapaneseOrder(JSON.parse(getItem(JAPANESE_ORDER_KEY) ?? "null")); }
+  catch { return normalizeJapaneseOrder(null); }
+}
+export function saveJapaneseOrder(order: readonly JapaneseCategory[]): void {
+  write(JAPANESE_ORDER_KEY, JSON.stringify(normalizeJapaneseOrder(order)));
+}
+export function loadForeignReadings(): ForeignReadingLanguage[] {
+  try { return normalizeForeignReadings(JSON.parse(getItem(FOREIGN_READING_KEY) ?? "null")); }
+  catch { return []; }
+}
+export function saveForeignReadings(languages: readonly ForeignReadingLanguage[]): void {
+  write(FOREIGN_READING_KEY, JSON.stringify(normalizeForeignReadings(languages)));
+}
 
 /** 知らない値（古い・壊れた設定）は既定に落とす */
 function read<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
@@ -47,6 +70,13 @@ function write(key: string, value: string): void {
 const SORT_KEYS = SORT_MODES.map(m => m.key);
 const HEIGHT_KEYS = KEY_HEIGHTS.map(h => h.key);
 const KANA_KEYS = KANA_LAYOUTS.map(k => k.id);
+const MENU_KEYS = KEYBOARD_MENUS.map(m => m.id);
+
+/** アプリの次回起動時に開くメニュー。操作中のメニューは保存しない。 */
+export const loadStartupMenu = (): KeyboardMenu =>
+  read(STARTUP_MENU_KEY, MENU_KEYS, DEFAULT_KEYBOARD_MENU);
+export const saveStartupMenu = (menu: KeyboardMenu): void =>
+  write(STARTUP_MENU_KEY, menu);
 
 /** 候補の並び順 */
 export const loadSortMode = (): SortMode => read(ORDER_KEY, SORT_KEYS, DEFAULT_SORT);

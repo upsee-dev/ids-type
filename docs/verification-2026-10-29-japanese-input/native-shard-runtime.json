@@ -1,0 +1,16 @@
+[
+  {
+    "platform": "ios",
+    "containsYoroyoro": true,
+    "length": 462031,
+    "missingIsEmpty": true,
+    "invalidRejected": true
+  },
+  {
+    "platform": "android",
+    "containsYoroyoro": true,
+    "length": 462031,
+    "missingIsEmpty": true,
+    "invalidRejected": true
+  }
+]

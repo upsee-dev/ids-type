@@ -174,6 +174,17 @@
       "role": "読みが1つも無かった字を1字ずつ引いて拾った読み。zi.tools は読みを異体字グループ(ies)単位で持つので、Unihan の異体字では繋がらない組が拾える。24字ぶん(うち8字が実際に埋まった)",
       "note": "**2026-09-29 に推定をやめたのでビルドでは使っていない**(取り直しに時間がかかるのでファイルだけ残してある)。**2,158字のうち1,338字(62%)まで取得して打ち切った**。1件あたり数十秒かかるうえ、終盤は相手側が捌けず失敗が4.2%出て毎分1字を割ったため。収穫率は1.7%ほどなので、残り820字を足しても増えるのは10字前後の見込み。fetch は取得済みを飛ばすので、続きから再開できる",
       "unused": true
+    },
+    {
+      "id": "animcjk",
+      "title": "AnimCJK (FM&SH)",
+      "url": "https://github.com/parsimonhi/animCJK",
+      "commit": "0d63edf42b5e36c57e6124c14150056b177aab30",
+      "file": "animcjk/source.json",
+      "license": "Arphic Public License",
+      "licenseUrl": "https://github.com/parsimonhi/animCJK/blob/master/licenses/COPYING.txt",
+      "role": "KanjiVG に無い4,404字の筆画中心線。既存の日本語パターンを保持し、合計10,851字を照合可能にする。",
+      "note": "graphics の文字と medians だけを抽出した固定スナップショット。原本のSHA-256と圧縮ファイルの一覧は animcjk/source.json。"
     }
   ]
 }

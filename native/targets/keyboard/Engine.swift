@@ -389,7 +389,7 @@ final class Engine {
         offset: Int = 0,
         limit: Int = 60,
     ) -> (items: [String], total: Int) {
-        let kana = Kana.toHiragana(query.trimmingCharacters(in: .whitespaces))
+        let kana = Kana.toHiragana(query.trimmingCharacters(in: .whitespaces).precomposedStringWithCanonicalMapping)
         if kana.isEmpty { return ([], 0) }
         // 上位に並び順(段→Unicodeの追加版)、下位20bitに添字を詰めて Int 1本で並べる
         var hits: [Int] = []
@@ -408,7 +408,16 @@ final class Engine {
             let key = tier * Age.step + Age.key(dict.char(at: i))
             hits.append((key << 20) | i)
         }
-        hits.sort()
+        sortPageHits(&hits, strokes: strokes)
+        if kana.count >= 4 {
+            let groups = Dictionary(grouping: hits) { hit in
+                let i = hit & 0xF_FFFF
+                let kun = dict.readings(at: i).components(separatedBy: "\t").dropFirst().joined(separator: " ")
+                let source = dict.refKind(at: i)
+                return Kana.matchesLongKun(kana, kun, dict.ref(at: i), allowReference: source != 0 && source != 5)
+            }
+            hits = (groups[true] ?? []) + (groups[false] ?? [])
+        }
         let page = hits.dropFirst(offset).prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
         return (page, hits.count)
     }
@@ -418,13 +427,27 @@ final class Engine {
         want >= Self.strokeMax ? n >= Self.strokeMax : n == want
     }
 
+    /// 30画以上では画数を優先し、同画数は既存のキー順。ページ分割より先に並べる
+    private func sortPageHits(_ hits: inout [Int], strokes: Int) {
+        if strokes >= Self.strokeMax {
+            hits.sort {
+                let a = dict.strokes(at: $0 & 0xF_FFFF)
+                let b = dict.strokes(at: $1 & 0xF_FFFF)
+                return a == b ? $0 < $1 : a < b
+            }
+        } else {
+            hits.sort()
+        }
+    }
+
     /// 画数だけで引く。読みを打たずに画数のチップだけ選んだときに使う
     /// (読めない字でも画数は数えられるので、それだけで探し始められる)。
     ///
     /// 並びは byReading と同じ**段(常用・人名用 → KANJIDIC2の残り → 拡張漢字) →
     /// 段の中は Unicode に追加された版の順**。符号位置順のままだと拡張A(U+3400〜)が
     /// 統合漢字より前に来て、常用漢字が数百字うしろに沈む。
-    /// core/engine.ts の list({ strokes }) と同じ並びになること。strokeMax は「それ以上」
+    /// core/engine.ts の list({ strokes }) と同じ並びになること。strokeMax は「それ以上」で、
+    /// 実際の画数を第一に、同画数では上記の順に並べる
     func byStrokes(_ strokes: Int, offset: Int = 0, limit: Int = 60) -> (items: [String], total: Int) {
         guard strokes > 0 else { return ([], 0) }
         var hits: [Int] = []
@@ -437,7 +460,7 @@ final class Engine {
             let key = tier * Age.step + Age.key(dict.char(at: i))
             hits.append((key << 20) | i)
         }
-        hits.sort()
+        sortPageHits(&hits, strokes: strokes)
         let page = hits.dropFirst(offset).prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
         return (page, hits.count)
     }
@@ -464,7 +487,7 @@ final class Engine {
             if strokes > 0, !strokeHit(dict.strokes(at: i), strokes) { continue }
             hits.append((cp << 20) | i)
         }
-        hits.sort()
+        sortPageHits(&hits, strokes: strokes)
         let page = hits.dropFirst(offset).prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
         return (page, hits.count)
     }

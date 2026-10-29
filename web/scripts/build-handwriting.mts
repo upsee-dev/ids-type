@@ -7,15 +7,14 @@
 // 1画を等間隔8点に間引き、字全体の外接枠で正規化して0〜63に量子化、
 // 1点=2文字(64進)の文字列に畳む(1画=16文字)。復号と照合は core/handwriting.ts。
 //
-// 収録は KanjiVG が筆順を持つ字のうち CJK 漢字(と々〆〇・部首)だけ。約6,600字で、
-// 常用・人名用・JIS第1〜2水準を覆う。「読めない日本の漢字を書いて引く」が目的なので、
-// 辞書10万字ぜんぶに筆順データが無いことは欠陥ではない(そもそも存在しない)。
+// KanjiVG の日本語字形を基礎に、AnimCJK の実際の筆画資料で未収録字を補う。
+// 筆画資料のない文字は、検索辞書にあっても手書きの候補にはできない。
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { DATA_SRC, ensureOutDirs, OUT_DIRS, ROOT } from "./build-data/paths.mts";
 import { isIdeograph } from "../../core/data/blocks.ts";
-import { HandwritingIndex } from "../../core/handwriting.ts";
+import { HandwritingIndex, resampleStroke } from "../../core/handwriting.ts";
 import { strokesOf } from "./build-data/kanjivg.mts";
 
 /** 1画を何点に間引くか。core/handwriting.ts の照合と合わせること */
@@ -90,7 +89,44 @@ for (const m of xml.matchAll(
   strokeHist.set(strokes.length, (strokeHist.get(strokes.length) ?? 0) + 1);
 }
 
+// KanjiVG に無い字だけを実際の筆画資料から補う。日本語の字形を優先し、
+// 繁体字・簡体字の順に補完する。元の日本語パターンは上書きしない。
+let added = 0;
+for (const language of ["Ja", "ZhHant", "ZhHans"]) {
+  const input = gunzipSync(readFileSync(join(DATA_SRC, "animcjk", `medians${language}.jsonl.gz`))).toString("utf8");
+  for (const line of input.trim().split("\n")) {
+    const row = JSON.parse(line) as { character: string; medians: [number, number][][] };
+    const ch = row.character;
+    if ([...ch].length !== 1 || !isTarget(ch.codePointAt(0)!) || chars[ch] || !row.medians.length) continue;
+    if (row.medians.some(s => !s.length || s.some(p => p.length !== 2 || !p.every(Number.isFinite)))) {
+      throw new Error(`不正な筆画データ: ${language} ${ch}`);
+    }
+    // graphics 形式は y 軸が上向き。画面座標に戻し、既存辞書と同じ正規化をする。
+    const strokes = row.medians.map(s => resampleStroke(s.map(([x, y]) => [x, 900 - y]), POINTS_PER_STROKE));
+    const points = strokes.flat();
+    const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const scale = Math.max(maxX - minX, maxY - minY);
+    if (!(scale > 0)) continue;
+    const midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
+    chars[ch] = points.map(([x, y]) =>
+      ALPHABET[Math.min(63, Math.max(0, Math.round((0.5 + (x - midX) / scale) * 63)))] +
+      ALPHABET[Math.min(63, Math.max(0, Math.round((0.5 + (y - midY) / scale) * 63)))],
+    ).join("");
+    added++;
+    strokeHist.set(strokes.length, (strokeHist.get(strokes.length) ?? 0) + 1);
+  }
+}
+console.log(`AnimCJK から ${added} 字を追加（Arphic Public License）`);
+
 const json = JSON.stringify({ v: 1, n: POINTS_PER_STROKE, chars });
+const license = "AnimCJK — Copyright 2016–2026 FM&SH\nhttps://github.com/parsimonhi/animCJK\n\n"
+  + "変更: 筆画中心線の抽出・座標の反転・正規化・量子化。\n\n"
+  + readFileSync(join(DATA_SRC, "animcjk", "ARPHIC-PUBLIC-LICENSE.txt"), "utf8");
+writeFileSync(join(ROOT, "core", "data", "handwriting-license.ts"),
+  `// 自動生成: build-handwriting.mts。元の権利表示を含めてアプリへ同梱する。\nexport const HANDWRITING_LICENSE = ${JSON.stringify(license)};\n`);
+writeFileSync(join(ROOT, "web", "public", "data", "handwriting-license.txt"), license);
 ensureOutDirs();
 const names: string[] = [];
 for (const d of OUT_DIRS) {

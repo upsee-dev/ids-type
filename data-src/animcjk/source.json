@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/parsimonhi/animCJK",
+  "commit": "0d63edf42b5e36c57e6124c14150056b177aab30",
+  "license": "Arphic Public License",
+  "modification": "Only character and median centerlines retained; contours removed. Original graphics files can be retrieved at the pinned commit.",
+  "files": [
+    {
+      "source": "graphicsJa.txt",
+      "sourceSha256": "91ff757c3698e1198df74e4649aa93631b3c613d99e6c108a403a73b1eddebcf",
+      "output": "mediansJa.jsonl.gz",
+      "records": 7335
+    },
+    {
+      "source": "graphicsZhHant.txt",
+      "sourceSha256": "2110e25f5909e8781cb4948d53016207a06ca623c357db3ea06c35b59ef7ae4b",
+      "output": "mediansZhHant.jsonl.gz",
+      "records": 1425
+    },
+    {
+      "source": "graphicsZhHans.txt",
+      "sourceSha256": "b98f2ffb53f80d1a6f75c39e2b580a9dc22e33af884c759bd563748e812bbc48",
+      "output": "mediansZhHans.jsonl.gz",
+      "records": 8190
+    }
+  ]
+}

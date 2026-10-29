@@ -20,6 +20,18 @@ public class KatachiSharedModule: Module {
   public func definition() -> ModuleDefinition {
     Name("KatachiShared")
 
+    AsyncFunction("getJapaneseShard") { (key: String) throws -> String in
+      guard key.range(of: "^[0-9a-f]{4,6}$", options: .regularExpression) != nil else {
+        throw NSError(domain: "KatachiShared", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid dictionary shard"])
+      }
+      // The embedded keyboard owns the same dictionary; avoid a second 63 MB copy.
+      guard let url = Bundle.main.builtInPlugInsURL?
+        .appendingPathComponent("japanese.appex")
+        .appendingPathComponent("japanese-\(key).tsv"),
+        FileManager.default.fileExists(atPath: url.path) else { return "" }
+      return try String(contentsOf: url, encoding: .utf8)
+    }
+
     Function("getItem") { (key: String) -> String? in
       self.store?.string(forKey: key)
     }

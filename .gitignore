@@ -44,3 +44,7 @@ store/AuthKey/
 *.p8
 *-service-account*.json
 
+
+# Python の実行時キャッシュ
+__pycache__/
+*.py[cod]

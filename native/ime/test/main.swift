@@ -74,8 +74,15 @@ checkReading("つち", "土 地 培 塊 壌 己 戊 杵 椎 槌 凷 圡", "常�
 checkReading("あきら", "亨 亮 侃 光 公 卯 叡 史 哲 啓 央 察", "人名読みでも引ける")
 // 寧 のあとの3字は互換漢字(U+F95F・U+F9AA・U+2F86F)。統合漢字と同じ字なのでその読みで出る。
 // 以前は 乌 が異体字 烏 の読みを借りて出ていたが、推定はやめた
-checkReading("いずくんぞ", "安 寧 悪 烏 曷 渠 焉 寧 寧 寧 𭴚", "資料にしか無い読みでも引ける")
+checkReading("いずくんぞ", "安 寧 烏 曷 渠 焉 寧 寧 寧 𭴚 悪", "資料にしか無い読みでも引ける")
 checkReading("ぎょう", "仰 倖 凝 刑 効 喬 営 型 堯 尭 幸 形", "拡張漢字は後ろの段")
+
+// 4文字以上の訓読みは、画数やページ分割より先に完全一致を優先する。
+for (query, expected) in [("こころざす", "志"), ("うけたまわる", "承"), ("いきおい", "勢")] {
+    let all = engine.byReading(query, limit: 1000)
+    let paged = all.items.indices.flatMap { engine.byReading(query, offset: $0, limit: 1).items }
+    if all.items.first != expected || paged != all.items { fail += 1; print("NG [exact kun] \(query)") }
+}
 
 // 読みの持ち方。正式・人名・参考が混ざらずに入っていること
 func checkReadingFields(_ ch: String, _ want: (String, String, String)) {
@@ -116,11 +123,48 @@ checkPage("strokes-only 1画", engine.byStrokes(1, limit: 12), "一 乙 丨 丶 
 checkPage("strokes-only 5画", engine.byStrokes(5, limit: 12), "且 世 丘 丙 主 丼 乎 仔 仕 他 付 仙", strokeCount(5))
 checkPage(
     "strokes-only 30画+", engine.byStrokes(Engine.strokeMax, limit: 12),
-    "厵 灩 癴 籲 韊 驫 鱺 鱻 鸝 鸞 麤 龖", strokeCount(Engine.strokeMax),
+    "厵 癴 韊 驫 鱺 鸝 鸞 癵 籱 饢 麣 鸞", strokeCount(Engine.strokeMax),
 )
 checkPage("code 4E00", engine.byCode("4E00"), "一", 1)
 checkPage("code 4E0", engine.byCode("4E0", limit: 4), "一 丁 丂 七", 16)
 checkPage("code 2B81", engine.byCode("2B81", limit: 3), "𫠐 𫠑 𫠒", 15)
+
+// 30画以上の全件とページ送りを確認。同画数では元の段→版順を保つ。
+func checkStrokeOrder(
+    _ tag: String,
+    _ fetch: (Int, Int) -> (items: [String], total: Int),
+    expected: [String]
+) {
+    let all = fetch(0, dict.count)
+    let counts = all.items.map { dict.strokes(at: dict.index(of: $0)!) }
+    let sorted = counts.indices.allSatisfy { $0 == 0 || counts[$0 - 1] <= counts[$0] }
+    let paged = stride(from: 0, to: all.total, by: 7).flatMap { fetch($0, 7).items }
+    let ok = all.total > 0 && counts.allSatisfy { $0 >= Engine.strokeMax }
+        && sorted && paged == all.items && expected == all.items
+    if !ok { fail += 1 }
+    print("\(ok ? "OK " : "NG ") [30画+] \(tag): 画数順・同画数の順序・ページ送り (\(all.total)件)")
+}
+func sortedByStrokes(_ chars: [String]) -> [String] {
+    chars.enumerated().filter { dict.strokes(at: dict.index(of: $0.element)!) >= Engine.strokeMax }
+        .sorted {
+            let a = dict.strokes(at: dict.index(of: $0.element)!)
+            let b = dict.strokes(at: dict.index(of: $1.element)!)
+            return a == b ? $0.offset < $1.offset : a < b
+        }.map(\.element)
+}
+let strokeBaseline = (0..<dict.count).sorted {
+    func key(_ i: Int) -> Int {
+        let tier = dict.grade(at: i) > 0 ? 0 : (dict.isExt(i) ? 2 : 1)
+        return tier * Age.step + Age.key(dict.char(at: i))
+    }
+    return key($0) < key($1)
+}.map { dict.char(at: $0) }
+checkStrokeOrder("画数のみ", { engine.byStrokes(Engine.strokeMax, offset: $0, limit: $1) },
+    expected: sortedByStrokes(strokeBaseline))
+checkStrokeOrder("読み こう", { engine.byReading("こう", strokes: Engine.strokeMax, offset: $0, limit: $1) },
+    expected: sortedByStrokes(engine.byReading("こう", limit: dict.count).items))
+checkStrokeOrder("符号位置 9", { engine.byCode("9", strokes: Engine.strokeMax, offset: $0, limit: $1) },
+    expected: sortedByStrokes(engine.byCode("9", limit: dict.count).items))
 
 // ── 手書き照合 ──
 // web の build:handwriting が書き出した問題集を読み、TypeScript 実装が返したのと

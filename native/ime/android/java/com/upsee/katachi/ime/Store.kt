@@ -17,6 +17,12 @@ class Store(context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    fun foreignReadings(): List<String> = JapaneseLexicon.languages(read(JapaneseLexicon.languageKey))
+    fun saveForeignReadings(languages: List<String>) = write(JapaneseLexicon.languageKey, JapaneseLexicon.languages(languages))
+
+    fun japaneseOrder(): List<String> = JapaneseLexicon.order(read(JapaneseLexicon.orderKey))
+    fun saveJapaneseOrder(order: List<String>) = write(JapaneseLexicon.orderKey, JapaneseLexicon.order(order))
+
     private companion object {
         const val PREFS = "katachi"
         const val HISTORY = "katachi.history"

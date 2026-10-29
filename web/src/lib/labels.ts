@@ -23,17 +23,17 @@ export const MODE_LABEL: Record<string, string> = {
 
 /** 入力画面の「使い方」に出す例 */
 export const SAMPLES = [
-  { q: "LR日月", hint: "明" },
-  { q: "UD宀子", hint: "字" },
-  { q: "OC囗玉", hint: "国" },
-  { q: "RU辶刀", hint: "辺" },
-  { q: "LR氵?", hint: "海…" },
+  { q: "⿰日月", hint: "明" },
+  { q: "⿱宀子", hint: "字" },
+  { q: "⿴囗玉", hint: "国" },
+  { q: "⿺辶刀", hint: "辺" },
+  { q: "⿰氵?", hint: "海…" },
   { q: "日月", hint: "部品検索" },
 ];
 
 /** 一覧画面の絞り込み例 */
 export const LIST_EXAMPLES = [
-  { q: "LR木木", hint: "かたち" },
+  { q: "⿰木木", hint: "かたち" },
   { q: "氵", hint: "部品" },
   { q: "あお", hint: "読み" },
   { q: "U+3134A", hint: "符号位置" },

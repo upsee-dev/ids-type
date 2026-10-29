@@ -1,0 +1,31 @@
+{
+  "basis": "JIS X 0208 first and second levels; a guide to first-grade Kanken scope, not an official grade assignment or exhaustive exam-word list",
+  "officialScope": "https://www.kanken.or.jp/kanken/grades/overview/",
+  "officialGradeList": "https://faq-kanken.dga.jp/dantai-sprt/faq_detail.html?id=1010040&page=1",
+  "jisX0208": {
+    "level1": {
+      "expected": 2965,
+      "characterSearch": 2965,
+      "flickReading": 2965,
+      "missing": [],
+      "missingCharacterSearch": []
+    },
+    "level2": {
+      "expected": 3390,
+      "characterSearch": 3390,
+      "flickReading": 3390,
+      "missing": [],
+      "missingCharacterSearch": []
+    }
+  },
+  "joyo": {
+    "expected": 2136,
+    "characterSearch": 2136,
+    "flickReading": 2136,
+    "missing": []
+  },
+  "jmdictLexicalPairs": 244439,
+  "jmdictNewPairs": 136564,
+  "fourKanjiSpellingPairs": 26223,
+  "fullKunCharacterPairsAdded": 7918
+}

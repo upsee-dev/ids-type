@@ -75,6 +75,17 @@ object Kana {
         return sb.toString()
     }
 
+    /** Whole kun readings including okurigana; exclude on, nanori and foreign transcriptions. */
+    fun matchesLongKun(query: String, kun: String, reference: String = "", allowReference: Boolean = false): Boolean {
+        val q = toHiragana(java.text.Normalizer.normalize(query, java.text.Normalizer.Form.NFC))
+        if (q.length < 4 || q.any { it !in 'ぁ'..'ゖ' && it != 'ー' }) return false
+        fun has(value: String) = value.split(Regex("\\s+")).any { token ->
+            token.isNotEmpty() && token.all { it in 'ぁ'..'ゖ' || it in "ー.-" } &&
+                java.text.Normalizer.normalize(token.replace(".", "").replace("-", ""), java.text.Normalizer.Form.NFC) == q
+        }
+        return has(kun) || (allowReference && has(reference))
+    }
+
     /**
      * ローマ字をかなに直す。表は Romaji.TABLE(core/data/romaji.ts から生成)。
      * 打ちかけ(k・ky)は変換できないので second に残し、次の字と合わせて見る。

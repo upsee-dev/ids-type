@@ -883,7 +883,7 @@ class KeyboardView(context: Context, private val host: Host) :
 
     private fun buildStrokeChips() {
         strokeInner.removeAllViews()
-        val groups = listOf("favorites" to "お気に入り", "curve" to "曲線を含む") +
+        val groups = listOf("unicode" to "Unicode部首索引", "favorites" to "お気に入り", "curve" to "曲線を含む") +
             Palettes.DIFFICULT.map { it.strokes to "${it.strokes}画" }
         for ((key, label) in groups) {
             val active = strokeGroup == key
@@ -989,6 +989,11 @@ class KeyboardView(context: Context, private val host: Host) :
         hwCount = null
 
         keyScroll.layoutParams = LayoutParams(matchParent, faceHeight())
+
+        if (!faceOpen && strokeGroup == "unicode") {
+            keyArea.addView(RadicalIndexView(context, { host.select(it) }, { fontFor(it) }), LayoutParams(matchParent, faceHeight()))
+            return
+        }
 
         if (kanaOpen) {
             buildReadingArea()

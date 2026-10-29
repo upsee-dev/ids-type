@@ -21,4 +21,5 @@ dependencies {
   // 日本語モデルを**APKに同梱する**版。未同梱版(text-recognition + Play services)は
   // 初回に落としに行くので、通信をしないという約束を破ってしまう
   implementation "com.google.mlkit:text-recognition-japanese:16.0.1"
+  implementation "com.google.mlkit:text-recognition-chinese:16.0.1"
 }

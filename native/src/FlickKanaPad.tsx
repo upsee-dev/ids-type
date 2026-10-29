@@ -13,6 +13,7 @@ import {
 } from "./engine";
 import type { Theme } from "./theme";
 import { haptic } from "./feedback";
+import { isToggleTap, trackFlick } from "./flickGesture";
 
 /**
  * 読みを打つための12キーフリック面。システムキーボード
@@ -29,25 +30,8 @@ import { haptic } from "./feedback";
  * トグル入力も受ける(標準のかなキーボードと同じ)。
  */
 
-/**
- * これ以上動いたらフリックとみなす。**距離**で見る(縦横それぞれではなく)。
- * 小さすぎると普通のタップが滑り、大きすぎると払ったつもりが中央になる
- */
-const FLICK_THRESHOLD = 18;
-
 /** 同じキーの叩き直しをトグルとして扱う間合い(ミリ秒) */
 const TOGGLE_WINDOW = 900;
-
-/**
- * 0=中央 1=左 2=上 3=右 4=下。
- * しきい値は**動いた距離**で見る。縦横それぞれで見ると、斜めに払ったときに
- * どちらも届かず中央(あ段)になってしまう
- */
-function direction(dx: number, dy: number): number {
-  if (dx * dx + dy * dy < FLICK_THRESHOLD * FLICK_THRESHOLD) return 0;
-  if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 1 : 3;
-  return dy < 0 ? 2 : 4;
-}
 
 export function FlickKanaPad({
   theme,
@@ -73,10 +57,10 @@ export function FlickKanaPad({
   const lastStep = useRef(0);
   const lastTapAt = useRef(0);
 
-  const commit = (key: KanaKey, dir: number) => {
+  const commit = (key: KanaKey, dir: number, toggleTap: boolean) => {
     const now = Date.now();
     if (
-      dir === 0 &&
+      toggleTap &&
       key.label === lastLabel.current &&
       now - lastTapAt.current < TOGGLE_WINDOW
     ) {
@@ -92,8 +76,7 @@ export function FlickKanaPad({
       return;
     }
     const ch = kanaFlick(key, dir);
-    lastLabel.current = key.label;
-    // フリックで入れた字は、その向きから続けて巡らせる
+    lastLabel.current = toggleTap ? key.label : null;
     lastStep.current = Math.max(0, key.chars.indexOf(ch));
     lastTapAt.current = now;
     onAppend(ch);
@@ -115,7 +98,8 @@ export function FlickKanaPad({
               k={key}
               theme={theme}
               onPreview={onPreview}
-              onRelease={(dir) => {
+              onCancel={resetToggle}
+              onRelease={(dir, toggleTap) => {
                 if (key.chars.length === 0) {
                   if (key.label === KANA_BACKSPACE) {
                     onBackspace();
@@ -125,7 +109,7 @@ export function FlickKanaPad({
                   resetToggle();
                   return;
                 }
-                commit(key, dir);
+                commit(key, dir, toggleTap);
               }}
             />
           ))}
@@ -141,27 +125,28 @@ function KanaKeyView({
   theme,
   onPreview,
   onRelease,
+  onCancel,
 }: {
   k: KanaKey;
   theme: Theme;
   onPreview: (ch: string | null) => void;
-  onRelease: (dir: number) => void;
+  onRelease: (dir: number, toggleTap: boolean) => void;
+  onCancel?: () => void;
 }) {
   const [pressed, setPressed] = useState(false);
-  const down = useRef({ x: 0, y: 0 });
-  /**
-   * 指が**いちばん遠かった**ところ。向きはここで決める。
-   * 放るように払うと離す瞬間には戻ってきていることがあり、
-   * 終点だけ見ると中央(あ段)になってしまう
-   */
-  const far = useRef({ x: 0, y: 0, d2: 0 });
+  const down = useRef({ x: 0, y: 0, at: 0, pointer: null as GestureResponderEvent["nativeEvent"]["identifier"] | null });
+  const lastDirection = useRef(0);
 
   const track = (e: GestureResponderEvent) => {
-    const dx = e.nativeEvent.locationX - down.current.x;
-    const dy = e.nativeEvent.locationY - down.current.y;
-    const d2 = dx * dx + dy * dy;
-    if (d2 > far.current.d2) far.current = { x: dx, y: dy, d2 };
-    return direction(far.current.x, far.current.y);
+    const event = e.nativeEvent;
+    const touch = event.identifier === down.current.pointer ? event
+      : [...event.changedTouches, ...event.touches].find(t => t.identifier === down.current.pointer);
+    if (!touch) return lastDirection.current;
+    // locationX/Y は子の Text を触ると原点が変わることがある。画面座標で追う。
+    lastDirection.current = trackFlick(
+      touch.pageX - down.current.x, touch.pageY - down.current.y, lastDirection.current,
+    );
+    return lastDirection.current;
   };
 
   const isChar = k.chars.length > 0;
@@ -179,10 +164,12 @@ function KanaKeyView({
       onResponderTerminationRequest={() => false}
       onResponderGrant={(e) => {
         down.current = {
-          x: e.nativeEvent.locationX,
-          y: e.nativeEvent.locationY,
+          x: e.nativeEvent.pageX,
+          y: e.nativeEvent.pageY,
+          at: Date.now(),
+          pointer: e.nativeEvent.identifier,
         };
-        far.current = { x: 0, y: 0, d2: 0 };
+        lastDirection.current = 0;
         setPressed(true);
         haptic("key"); // 触覚は指が触れた瞬間に返す
         if (isChar) onPreview(k.chars[0]);
@@ -195,11 +182,15 @@ function KanaKeyView({
         const dir = track(e);
         setPressed(false);
         onPreview(null);
-        onRelease(isChar ? dir : 0);
+        onRelease(isChar ? dir : 0, isToggleTap(dir, Date.now() - down.current.at));
+        down.current.pointer = null;
       }}
       onResponderTerminate={() => {
         setPressed(false);
+        down.current.pointer = null;
+        lastDirection.current = 0;
         onPreview(null);
+        onCancel?.();
       }}
     >
       <Text

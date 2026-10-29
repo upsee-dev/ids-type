@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Linking,
   AppState,
@@ -53,10 +53,14 @@ import {
   loadKanaLayout,
   loadKeyHeight,
   loadSortMode,
+  loadStartupMenu,
   saveKanaLayout,
   saveKeyHeight,
   saveSortMode,
+  saveStartupMenu,
 } from "./src/prefs";
+import { type KeyboardMenu } from "./src/keyboardMenus";
+import { backspaceSelection, replaceSelection, type TextSelection } from "./src/textEditing";
 import { loadPro } from "./src/purchases";
 import {
   loadFavorites,
@@ -140,6 +144,7 @@ function Screen() {
   const [keyHeight, setKeyHeight] = useState<KeyHeight>(loadKeyHeight);
   /** 読みを打つ入力方法(フリック / ローマ字 / Godan)。キーボードとも共有する */
   const [kanaLayout, setKanaLayout] = useState<KanaLayout>(loadKanaLayout);
+  const [startupMenu, setStartupMenu] = useState<KeyboardMenu>(loadStartupMenu);
   useEffect(() => {
     AsyncStorage.multiGet([THEME_STORAGE_KEY, HAPTIC_STORAGE_KEY])
       .then(([[, theme], [, level]]) => {
@@ -170,6 +175,11 @@ function Screen() {
     haptic("toggle");
     setKanaLayout(next);
     saveKanaLayout(next);
+  };
+  const pickStartupMenu = (next: KeyboardMenu) => {
+    haptic("toggle");
+    setStartupMenu(next);
+    saveStartupMenu(next);
   };
   const pickHaptic = (next: HapticLevel) => {
     setLevel(next);
@@ -224,6 +234,9 @@ function Screen() {
 
   const [engine, setEngine] = useState<Engine | null>(null);
   const [query, setQuery] = useState("");
+  const queryText = useRef("");
+  const querySelection = useRef<TextSelection>({ start: 0, end: 0 });
+  const pendingSelection = useRef<TextSelection | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   /** 絞り込みの全件数と、いま何ページめを見ているか(0始まり) */
   const [total, setTotal] = useState(0);
@@ -316,23 +329,29 @@ function Screen() {
     gridRef.current?.scrollToOffset({ offset: 0, animated: false });
   };
 
-  /**
-   * かたちコードの編集。
-   *
-   * 以前はキャレット位置を selection で毎回押し込んでいたが、これが日本語IMEの
-   * 変換と衝突し、変換を始めた瞬間に欄の中身ごと消えていた（先に選んだ〈左右〉が
-   * 飛ぶ原因）。selection は渡さず、パレットからの挿入は末尾に足すだけにする。
-   * 左から順に組み立てる入力なので、これで困る場面はほぼない。
-   */
-  const insert = (s: string) => setQuery(q => q + s);
+  // selection を常時制御するとIME変換と衝突するので、アプリの編集操作後だけ戻す。
+  useLayoutEffect(() => {
+    if (!pendingSelection.current) return;
+    inputRef.current?.setNativeProps({ selection: pendingSelection.current });
+    pendingSelection.current = null;
+  }, [query]);
 
-  const backspace = () => {
-    // サロゲートペア(𠮟 など)を1文字として消す
-    setQuery(q => {
-      const dropped = [...q].pop() ?? "";
-      return q.slice(0, q.length - dropped.length);
-    });
+  const editQuery = (edit: { text: string; selection: TextSelection }) => {
+    const unchanged = queryText.current === edit.text;
+    queryText.current = edit.text;
+    querySelection.current = edit.selection;
+    pendingSelection.current = edit.selection;
+    setQuery(edit.text);
+    if (unchanged) {
+      inputRef.current?.setNativeProps({ selection: edit.selection });
+      pendingSelection.current = null;
+    }
+    inputRef.current?.focus();
   };
+  const insert = (s: string) =>
+    editQuery(replaceSelection(queryText.current, querySelection.current, s));
+  const backspace = () =>
+    editQuery(backspaceSelection(queryText.current, querySelection.current));
 
   const copy = async () => {
     if (!output) return;
@@ -558,7 +577,7 @@ function Screen() {
       )}
 
       {/* ── 中段: 候補 ── */}
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, overflow: "hidden" }}>
         {!engine && (
           <Text style={[s.notice, { color: t.sub }]}>辞書データを読み込み中…</Text>
         )}
@@ -814,7 +833,13 @@ function Screen() {
         <TextInput
           ref={inputRef}
           value={query}
-          onChangeText={setQuery}
+          onChangeText={text => {
+            queryText.current = text;
+            setQuery(text);
+          }}
+          onSelectionChange={e => {
+            querySelection.current = e.nativeEvent.selection;
+          }}
           // ⌨ を押したときだけ端末のキーボードを出す。出すのは変換の起きない
           // 英数キーボード(iOS: ascii-capable / Android: visible-password)。
           // かな入力のまま打たせると変換が始まった瞬間に欄ごと持っていかれ、
@@ -822,7 +847,7 @@ function Screen() {
           showSoftInputOnFocus={directInput}
           autoCorrect={false}
           autoCapitalize="none"
-          placeholder="例: LR日月"
+          placeholder="例: ⿰日月"
           placeholderTextColor={t.faint}
           style={[
             s.field,
@@ -878,7 +903,7 @@ function Screen() {
         </Pressable>
         <Pressable
           onPressIn={() => haptic("delete")}
-          onPress={() => setQuery("")}
+          onPress={() => editQuery({ text: "", selection: { start: 0, end: 0 } })}
           accessibilityLabel="入力を全部消す"
           style={[s.smallBtn, { borderColor: t.border }]}
         >
@@ -898,9 +923,12 @@ function Screen() {
         // 出力へためる(履歴にも残す)。詳細も開くので、書いた字の読みがすぐ分かる
         onCommit={ch => {
           setOutput(o => o + ch);
-          setSelected(ch);
+          // The Japanese IME also commits whole words. Character details/history accept
+          // a single glyph; a phrase must not become a bogus single-character entry.
+          const single = [...ch].length === 1 && ch.trim().length > 0;
+          setSelected(single ? ch : null);
           setCharCopied(false);
-          remember(ch);
+          if (single) remember(ch);
         }}
         maxHeight={keyboardMaxHeight}
         cameraRequest={cameraRequest}
@@ -926,6 +954,8 @@ function Screen() {
         onPickHeight={pickHeight}
         kanaLayout={kanaLayout}
         onPickKanaLayout={pickKanaLayout}
+        startupMenu={startupMenu}
+        onPickStartupMenu={pickStartupMenu}
         historyCount={history.length}
         favoriteCount={favorites.length}
         onClearHistory={clearHistory}

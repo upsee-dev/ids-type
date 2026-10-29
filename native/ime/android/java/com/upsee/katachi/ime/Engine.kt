@@ -370,7 +370,7 @@ class Engine(private val dict: Dict) {
         offset: Int = 0,
         limit: Int = 60,
     ): Page {
-        val kana = Kana.toHiragana(query.trim())
+        val kana = Kana.toHiragana(java.text.Normalizer.normalize(query.trim(), java.text.Normalizer.Form.NFC))
         if (kana.isEmpty()) return Page(emptyList(), 0)
         // 上位に並び順(段→Unicodeの追加版)、下位20bitに添字を詰めて Long 1本で並べる
         // (段と版を別に持つと、比較のたびに読みを組み直すことになる)
@@ -390,7 +390,15 @@ class Engine(private val dict: Dict) {
             val key = tier * Age.STEP + Age.key(dict.chars[i])
             hits.add((key shl 20) or i.toLong())
         }
-        hits.sort()
+        sortPageHits(hits, strokes)
+        if (kana.length >= 4) {
+            val (exact, rest) = hits.partition { hit ->
+                val i = (hit and 0xFFFFF).toInt()
+                val source = dict.refKindAt(i)
+                Kana.matchesLongKun(kana, dict.kunAt(i), dict.refAt(i), source.isNotEmpty() && !source.startsWith("i"))
+            }
+            hits.clear(); hits.addAll(exact); hits.addAll(rest)
+        }
         val page = hits.drop(offset).take(limit).map { dict.chars[(it and 0xFFFFF).toInt()] }
         return Page(page, hits.size)
     }
@@ -402,6 +410,15 @@ class Engine(private val dict: Dict) {
     private fun strokeHit(n: Int, want: Int): Boolean =
         if (want >= STROKE_MAX) n >= STROKE_MAX else n == want
 
+    /** 30画以上では画数を優先し、同画数は既存のキー順。ページ分割より先に並べる */
+    private fun sortPageHits(hits: MutableList<Long>, strokes: Int) {
+        if (strokes >= STROKE_MAX) {
+            hits.sortWith(compareBy<Long> { dict.strokesAt((it and 0xFFFFF).toInt()) }.thenBy { it })
+        } else {
+            hits.sort()
+        }
+    }
+
     /**
      * 画数だけで引く。読みを打たずに画数のチップだけ選んだときに使う
      * (読めない字でも画数は数えられるので、それだけで探し始められる)。
@@ -409,7 +426,8 @@ class Engine(private val dict: Dict) {
      * 並びは byReading と同じ**段(常用・人名用 → KANJIDIC2の残り → 拡張漢字) →
      * 段の中は Unicode に追加された版の順**。符号位置順のままだと拡張A(U+3400〜)が
      * 統合漢字より前に来て、常用漢字が数百字うしろに沈む。
-     * core/engine.ts の list({ strokes }) と同じ並びになること。STROKE_MAX は「それ以上」
+     * core/engine.ts の list({ strokes }) と同じ並びになること。STROKE_MAX は「それ以上」で、
+     * 実際の画数を第一に、同画数では上記の順に並べる
      */
     fun byStrokes(strokes: Int, offset: Int = 0, limit: Int = 60): Page {
         if (strokes <= 0) return Page(emptyList(), 0)
@@ -422,7 +440,7 @@ class Engine(private val dict: Dict) {
             val key = tier * Age.STEP + Age.key(dict.chars[i])
             hits.add((key shl 20) or i.toLong())
         }
-        hits.sort()
+        sortPageHits(hits, strokes)
         val page = hits.drop(offset).take(limit).map { dict.chars[(it and 0xFFFFF).toInt()] }
         return Page(page, hits.size)
     }
@@ -447,7 +465,7 @@ class Engine(private val dict: Dict) {
             if (strokes > 0 && !strokeHit(dict.strokesAt(i), strokes)) continue
             hits.add((cp.toLong() shl 20) or i.toLong())
         }
-        hits.sort()
+        sortPageHits(hits, strokes)
         val page = hits.drop(offset).take(limit).map { dict.chars[(it and 0xFFFFF).toInt()] }
         return Page(page, hits.size)
     }

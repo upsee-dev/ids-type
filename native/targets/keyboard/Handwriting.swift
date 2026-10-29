@@ -42,7 +42,7 @@ final class Handwriting {
     /// 続け書き(1画で参照の2画ぶんを書いた)対応への加点
     private static let mergePenalty = 0.05
     /// 粗選別で残す数。重心だけの安い距離で足切りしてから本照合する
-    private static let prefilter = 400
+    private static let prefilter = 800
     /// 量子化の段数(0〜63)。参照の1目盛りぶん
     private static let inv63 = 1.0 / 63.0
 

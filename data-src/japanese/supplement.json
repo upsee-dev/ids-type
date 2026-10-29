@@ -1,0 +1,85 @@
+[
+  {
+    "text": "乒乓",
+    "readings": [
+      "ぴんぽん"
+    ],
+    "category": "ketsuren",
+    "status": "accepted",
+    "primary": true,
+    "sources": [
+      {
+        "id": "enjo-torishima-2018-inquire",
+        "title": "円城塔・酉島伝法「文字を巧みに操る2人のSF作家、円城塔×酉島伝法が語る『文字の可能性』」inquire、2018年9月19日",
+        "url": "https://inquire.jp/2018/09/19/mojika_mojinokanousei/",
+        "locator": "「変形する漢字、に垣間見る『文字渦』の遊び心」節、円城塔の「ピンポン」「乒乓と書く」の発言"
+      },
+      {
+        "id": "sato-1991-shaon",
+        "title": "佐藤恵一「外来語の時代背景と写音による母語化」『日本英語教育史研究』6巻、1991年、111-126頁",
+        "url": "https://www.jstage.jst.go.jp/article/hisetjournal1986/6/0/6_111/_article/-char/ja/",
+        "locator": "122頁、英語・中国語・拼音字母・かなの対応表のpingpong行",
+        "pdf": "https://www.jstage.jst.go.jp/article/hisetjournal1986/6/0/6_111/_pdf/-char/ja",
+        "doi": "10.11222/hisetjournal1986.6.0_111"
+      }
+    ],
+    "note": "複数文献で明示された「乒乓／ピンポン」の対応に基づく検索用の読み。中国語拼音から推定して生成したものではない。"
+  },
+  {
+    "text": "乒乓",
+    "readings": [
+      "よろよろ"
+    ],
+    "category": "ketsuren",
+    "status": "pending",
+    "sources": [
+      {
+        "id": "takezawa-2024-ketsuren",
+        "title": "竹澤雅文「不思議な漢字①一画足りない！『乒乓』の正体とは？」漢字カフェ、2024年10月2日",
+        "url": "https://www.kanjicafe.jp/detail/11252.html",
+        "locator": "「日本でも使われた『乒乓』」節"
+      }
+    ],
+    "note": "古い用例を紹介する記事は確認済みだが、同じ読みを独立した別文献でまだ確認できていないため手動補足からは除外。誤読と断定するものではない。"
+  },
+  {
+    "text": "乒乓く",
+    "readings": [
+      "よろめく"
+    ],
+    "category": "ketsuren",
+    "status": "pending",
+    "sources": [
+      {
+        "id": "takezawa-2024-ketsuren",
+        "title": "竹澤雅文「不思議な漢字①一画足りない！『乒乓』の正体とは？」漢字カフェ、2024年10月2日",
+        "url": "https://www.kanjicafe.jp/detail/11252.html",
+        "locator": "「日本でも使われた『乒乓』」節"
+      }
+    ],
+    "note": "複数作品への言及はあるが、当該読みの別文献を直接確認できていないため手動補足からは除外。誤読と断定するものではない。"
+  },
+  {
+    "text": "明日",
+    "readings": [
+      "あす",
+      "あした"
+    ],
+    "category": "jukujikun",
+    "status": "accepted",
+    "sources": [
+      {
+        "id": "taishukan-q0497",
+        "title": "大修館書店・漢字文化資料館「『明日』を『あした』と読むのは、間違いなのですか？」Q0497",
+        "url": "https://kanjibunka.com/kanji-faq/old-faq/q0497/",
+        "locator": "「あした」の熟字訓と「あす」の読みの説明"
+      },
+      {
+        "id": "shogakukan-progressive-je-4",
+        "title": "小学館『プログレッシブ和英中辞典』第4版「明日」",
+        "url": "https://kotobank.jp/jeword/明日",
+        "locator": "「あす【明日】」「あした【明日】」の各見出し"
+      }
+    ]
+  }
+]

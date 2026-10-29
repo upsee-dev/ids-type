@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleDisplayName</key><string>日本語拡張フリック</string>
+  <key>UIAppFonts</key><array><string>KatachiExt1.ttf</string><string>KatachiExt2.ttf</string></array>
+  <key>NSExtension</key><dict>
+    <key>NSExtensionPointIdentifier</key><string>com.apple.keyboard-service</string>
+    <key>NSExtensionPrincipalClass</key><string>$(PRODUCT_MODULE_NAME).JapaneseKeyboardViewController</string>
+    <key>NSExtensionAttributes</key><dict>
+      <key>RequestsOpenAccess</key><true/>
+      <key>IsASCIICapable</key><true/>
+      <key>PrefersRightToLeft</key><false/>
+      <key>PrimaryLanguage</key><string>ja-JP</string>
+    </dict>
+  </dict>
+</dict></plist>

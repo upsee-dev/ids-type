@@ -2,6 +2,9 @@ import { registerWebModule, NativeModule } from "expo";
 
 /** expo start --web で読んだときの受け皿。共有相手のキーボードが居ないので localStorage */
 class KatachiSharedModule extends NativeModule<{}> {
+  async getJapaneseShard(_key: string): Promise<string> {
+    throw new Error("日本語拡張フリックはアプリ版で利用できます。");
+  }
   getItem(key: string): string | null {
     try {
       return globalThis.localStorage?.getItem(key) ?? null;

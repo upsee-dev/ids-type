@@ -105,6 +105,7 @@ export {
 } from "./data/themes.ts";
 
 export { radicalChar, refReadingLabel } from "./data/types.ts";
+export { HANDWRITING_LICENSE } from "./data/handwriting-license.ts";
 
 export type {
   CharMeta,

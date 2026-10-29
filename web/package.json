@@ -9,12 +9,13 @@
     "build:data": "node --experimental-strip-types scripts/build-data.mts",
     "build:handwriting": "node --experimental-strip-types scripts/build-handwriting.mts",
     "test:engine": "node --experimental-strip-types scripts/test-engine.mts",
+    "test:wasei": "node --experimental-strip-types --test scripts/test-wasei.mts",
     "test:handwriting": "node --experimental-strip-types scripts/test-handwriting.mts",
+    "test:handwriting:coverage": "node --experimental-strip-types scripts/test-handwriting-coverage.mts",
     "typecheck": "tsc --noEmit",
     "bench:handwriting": "node --experimental-strip-types scripts/bench-handwriting.mts",
     "build:handwriting-bench": "node --experimental-strip-types scripts/build-handwriting-bench.mts",
-    "fetch:irg": "node --experimental-strip-types scripts/fetch-irg.mts",
-    "test:wasei": "node --experimental-strip-types --test scripts/test-wasei.mts"
+    "fetch:irg": "node --experimental-strip-types scripts/fetch-irg.mts"
   },
   "dependencies": {
     "next": "16.2.11",

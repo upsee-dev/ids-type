@@ -1,0 +1,264 @@
+日本語拡張フリック辞書
+
+Mozc dictionary / Google, IPAdic (NAIST), Okinawa dictionary
+https://github.com/google/mozc
+
+Copyright 2010-2018, Google Inc.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+  * Redistributions in binary form must reproduce the above
+    copyright notice, this list of conditions and the following disclaimer
+    in the documentation and/or other materials provided with the
+    distribution.
+  * Neither the name of Google Inc. nor the names of its
+    contributors may be used to endorse or promote products derived from
+    this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+---
+
+Files: src/data/dictionary*
+
+Copyright 2000, 2001, 2002, 2003 Nara Institute of Science
+and Technology.  All Rights Reserved.
+
+Use, reproduction, and distribution of this software is permitted.
+Any copy of this software, whether in its original form or modified,
+must include both the above copyright notice and the following
+paragraphs.
+
+Nara Institute of Science and Technology (NAIST),
+the copyright holders, disclaims all warranties with regard to this
+software, including all implied warranties of merchantability and
+fitness, in no event shall NAIST be liable for
+any special, indirect or consequential damages or any damages
+whatsoever resulting from loss of use, data or profits, whether in an
+action of contract, negligence or other tortuous action, arising out
+of or in connection with the use or performance of this software.
+
+A large portion of the dictionary entries
+originate from ICOT Free Software.  The following conditions for ICOT
+Free Software applies to the current dictionary as well.
+
+Each User may also freely distribute the Program, whether in its
+original form or modified, to any third party or parties, PROVIDED
+that the provisions of Section 3 ("NO WARRANTY") will ALWAYS appear
+on, or be attached to, the Program, which is distributed substantially
+in the same form as set out herein and that such intended
+distribution, if actually made, will neither violate or otherwise
+contravene any of the laws and regulations of the countries having
+jurisdiction over the User or the intended distribution itself.
+
+NO WARRANTY
+
+The program was produced on an experimental basis in the course of the
+research and development conducted during the project and is provided
+to users as so produced on an experimental basis.  Accordingly, the
+program is provided without any warranty whatsoever, whether express,
+implied, statutory or otherwise.  The term "warranty" used herein
+includes, but is not limited to, any warranty of the quality,
+performance, merchantability and fitness for a particular purpose of
+the program and the nonexistence of any infringement or violation of
+any right of any third party.
+
+Each user of the program will agree and understand, and be deemed to
+have agreed and understood, that there is no warranty whatsoever for
+the program and, accordingly, the entire risk arising from or
+otherwise connected with the program is assumed by the user.
+
+Therefore, neither ICOT, the copyright holder, or any other
+organization that participated in or was otherwise related to the
+development of the program and their respective officials, directors,
+officers and other employees shall be held liable for any and all
+damages, including, without limitation, general, special, incidental
+and consequential damages, arising out of or otherwise in connection
+with the use or inability to use the program or any product, material
+or result produced or otherwise obtained by using the program,
+regardless of whether they have been advised of, or otherwise had
+knowledge of, the possibility of such damages at any time during the
+project or thereafter.  Each user will be deemed to have agreed to the
+foregoing by his or her commencement of use of the program.  The term
+"use" as used herein includes, but is not limited to, the use,
+modification, copying and distribution of the program and the
+production of secondary products from the program.
+
+In the case where the program, whether in its original form or
+modified, was distributed or delivered to or received by a user from
+any person, organization or entity other than ICOT, unless it makes or
+grants independently of ICOT any specific warranty to the user in
+writing, such person, organization or entity, will also be exempted
+from and not be held liable to the user for any such damages as noted
+above as far as the program is concerned.
+
+---
+
+Files: src/data/dictionary*
+
+Public Domain Dataです。使用・変更・配布に関しては一切の制限をつけません。
+商品などに組み込むことも自由に行なってください。すでにいくつかの辞書には沖縄辞書が採用されています。
+勝手ながら、沖縄辞書に寄贈された辞書も in the Public Domain' 扱いとさせていただきます。
+
+
+Open source mozc dictionary is different from the dictionary
+used for Google Japanese Input. The differences are as follows:
+
+- Large vocabulary set generated from the Web corpus is not included.
+- The vocabulary set is basically the same as that of IPAdic.
+  The licenses of IPAdic is found below.
+  Here's the version of IPAdic Mozc uses.
+  * mecab-ipadic-2.7.0-20070801 (ipadic-2.7.0)
+- Okinawa Dictionary is used to enrich named entities.
+  http://sourceforge.jp/projects/o-dic/
+  The license of Okinawa dictionary is found below.
+- Google manually added some extra adjective/verbs which are not in IPAdic.
+- Many Katakana words are included in the dictionary. They are collected as unknown words
+  during the text processing over the Web data.
+- To improve the conversion quality of Mozc, several compound words
+  (like 社員証, 再起動) are added. We basically collected these compounds from the Web
+  by using MeCab and IPAdic.
+- Open source version doesn't include Japanese postal code dictionary.
+
+You can add zip code dictionary by follows:
+1. Download zip code data from http://www.post.japanpost.jp/zipcode/download.html
+2. Extract them
+3. Update zip_code_seed.tsv by
+  PYTHONPATH="${PYTHONPATH}:../../"  \
+    python ../../dictionary/gen_zip_code_seed.py \
+    --zip_code=KEN_ALL.CSV --jigyosyo=JIGYOSYO.CSV >> dictionary09.txt
+
+
+-------------------------------------------------------------------------------
+IPAdic is licensed as follows:
+
+Copyright 2000, 2001, 2002, 2003 Nara Institute of Science
+and Technology.  All Rights Reserved.
+
+Use, reproduction, and distribution of this software is permitted.
+Any copy of this software, whether in its original form or modified,
+must include both the above copyright notice and the following
+paragraphs.
+
+Nara Institute of Science and Technology (NAIST),
+the copyright holders, disclaims all warranties with regard to this
+software, including all implied warranties of merchantability and
+fitness, in no event shall NAIST be liable for
+any special, indirect or consequential damages or any damages
+whatsoever resulting from loss of use, data or profits, whether in an
+action of contract, negligence or other tortuous action, arising out
+of or in connection with the use or performance of this software.
+
+A large portion of the dictionary entries
+originate from ICOT Free Software.  The following conditions for ICOT
+Free Software applies to the current dictionary as well.
+
+Each User may also freely distribute the Program, whether in its
+original form or modified, to any third party or parties, PROVIDED
+that the provisions of Section 3 ("NO WARRANTY") will ALWAYS appear
+on, or be attached to, the Program, which is distributed substantially
+in the same form as set out herein and that such intended
+distribution, if actually made, will neither violate or otherwise
+contravene any of the laws and regulations of the countries having
+jurisdiction over the User or the intended distribution itself.
+
+NO WARRANTY
+
+The program was produced on an experimental basis in the course of the
+research and development conducted during the project and is provided
+to users as so produced on an experimental basis.  Accordingly, the
+program is provided without any warranty whatsoever, whether express,
+implied, statutory or otherwise.  The term "warranty" used herein
+includes, but is not limited to, any warranty of the quality,
+performance, merchantability and fitness for a particular purpose of
+the program and the nonexistence of any infringement or violation of
+any right of any third party.
+
+Each user of the program will agree and understand, and be deemed to
+have agreed and understood, that there is no warranty whatsoever for
+the program and, accordingly, the entire risk arising from or
+otherwise connected with the program is assumed by the user.
+
+Therefore, neither ICOT, the copyright holder, or any other
+organization that participated in or was otherwise related to the
+development of the program and their respective officials, directors,
+officers and other employees shall be held liable for any and all
+damages, including, without limitation, general, special, incidental
+and consequential damages, arising out of or otherwise in connection
+with the use or inability to use the program or any product, material
+or result produced or otherwise obtained by using the program,
+regardless of whether they have been advised of, or otherwise had
+knowledge of, the possibility of such damages at any time during the
+project or thereafter.  Each user will be deemed to have agreed to the
+foregoing by his or her commencement of use of the program.  The term
+"use" as used herein includes, but is not limited to, the use,
+modification, copying and distribution of the program and the
+production of secondary products from the program.
+
+In the case where the program, whether in its original form or
+modified, was distributed or delivered to or received by a user from
+any person, organization or entity other than ICOT, unless it makes or
+grants independently of ICOT any specific warranty to the user in
+writing, such person, organization or entity, will also be exempted
+from and not be held liable to the user for any such damages as noted
+above as far as the program is concerned.
+
+-------------------------------------------------------------------------------
+Okinawa dictionary is licensed as follows
+
+Public Domain Dataです。使用・変更・配布に関しては一切の制限をつけません。
+商品などに組み込むことも自由に行なってください。すでにいくつかの辞書には沖縄辞書が採用されています。
+勝手ながら、沖縄辞書に寄贈された辞書も in the Public Domain' 扱いとさせていただきます。
+
+
+
+JMdict / JMnedict / KANJIDIC2: Copyright Jim Breen and the Electronic Dictionary Research and Development Group.
+熟語・四字熟語を含む語彙、熟字訓・義訓、人名・地名および単漢字の読みを抽出・分類しました。これらの派生辞書は CC BY-SA 4.0。
+https://www.edrdg.org/edrdg/licence.html
+https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project
+https://creativecommons.org/licenses/by-sa/4.0/
+
+部首索引: Unicode Unihan (Unicode License v3)
+https://www.unicode.org/reports/tr38/
+https://www.unicode.org/license.txt
+
+外国語の読み: Unicode Unihan kMandarin / kHangul / kVietnamese (Unicode License v3)。
+かなは検索用のカナ転写で、声調など一部の発音の区別を省略しています。原語の読みを保持しています。
+台湾語（閩南語）: iTaigi華台對照典 / iTaigi contributors、ChhoeTaigi資料庫 (CC0 1.0)。
+https://github.com/ChhoeTaigi/ChhoeTaigiDatabase
+https://creativecommons.org/publicdomain/zero/1.0/
+
+漢検一級までの語彙拡充: JIS第一・第二水準6,355字の単漢字候補を照合し、JMdictの漢字を含む語彙を頻度で切らず取り込みました。公式の級別配当・全出題語一覧の転載や網羅認定ではありません。
+https://www.kanken.or.jp/kanken/grades/overview/
+
+手動補足の読み（独立した2文献以上で確認したものを採用）
+自然分野の分類: JMdictの分野タグ・語義から植物、鉱物、動物、鳥類、虫類、魚類、藻類を分類。読み・表記の制限を尊重し、同じ綴りでも語義の違う別の読みへ分類を流用しません。
+乒乓: ぴんぽん
+円城塔・酉島伝法「文字を巧みに操る2人のSF作家、円城塔×酉島伝法が語る『文字の可能性』」inquire、2018年9月19日
+「変形する漢字、に垣間見る『文字渦』の遊び心」節、円城塔の「ピンポン」「乒乓と書く」の発言
+https://inquire.jp/2018/09/19/mojika_mojinokanousei/
+佐藤恵一「外来語の時代背景と写音による母語化」『日本英語教育史研究』6巻、1991年、111-126頁
+122頁、英語・中国語・拼音字母・かなの対応表のpingpong行
+https://www.jstage.jst.go.jp/article/hisetjournal1986/6/0/6_111/_article/-char/ja/
+明日: あす・あした
+大修館書店・漢字文化資料館「『明日』を『あした』と読むのは、間違いなのですか？」Q0497
+「あした」の熟字訓と「あす」の読みの説明
+https://kanjibunka.com/kanji-faq/old-faq/q0497/
+小学館『プログレッシブ和英中辞典』第4版「明日」
+「あす【明日】」「あした【明日】」の各見出し
+https://kotobank.jp/jeword/明日

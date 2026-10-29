@@ -1,0 +1,30 @@
+{
+  "mozc": {
+    "commit": "e5f1494923a0a624d01f19c50d57bbdfa03ea5ba",
+    "url": "https://github.com/google/mozc",
+    "file": "mozc.tsv.gz",
+    "sha256": "3663f489a4eda7163a5c49ba9fceef4073b9fa0f6cc48fb0dc9e9a90ea0a6851"
+  },
+  "jmdict": {
+    "url": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
+    "file": "JMdict_e.gz",
+    "retrieved": "2026-10-29",
+    "sha256": "7ab07ce0ffae022443ac240b6db343254a316ae63a4d3d9dea82dfbc941c9a58"
+  },
+  "jmnedict": {
+    "url": "https://www.edrdg.org/pub/Nihongo/JMnedict.xml.gz",
+    "file": "JMnedict.xml.gz",
+    "retrieved": "2026-10-29",
+    "sha256": "17567eac71be524fa1be7041b257bad39265bb343cde8dbccbff5365dd4edd40"
+  },
+  "mozc-id.def": {
+    "url": "https://github.com/google/mozc/tree/e5f1494923a0a624d01f19c50d57bbdfa03ea5ba/src/data",
+    "file": "mozc-id.def",
+    "sha256": "07a05a268c3783b7e02b36e4aa591555a2dd19a1f3c93891576740761c154f2d"
+  },
+  "mozc-symbol.tsv": {
+    "url": "https://github.com/google/mozc/tree/e5f1494923a0a624d01f19c50d57bbdfa03ea5ba/src/data",
+    "file": "mozc-symbol.tsv",
+    "sha256": "bc68b032a195f203dccba6f95667424199ba9b185fee2be64eeaa959253c097a"
+  }
+}

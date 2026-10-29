@@ -153,7 +153,7 @@ export default function CharsPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !composing) e.currentTarget.blur();
               }}
-              placeholder="絞り込み: かたち(LR木木) / 部品(氵) / 読み(あお) / U+3134A"
+              placeholder="絞り込み: かたち(⿰木木) / 部品(氵) / 読み(あお) / U+3134A"
               className="kanji w-full rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 pr-9 text-base dark:border-stone-700 dark:bg-stone-950"
             />
             {input && (

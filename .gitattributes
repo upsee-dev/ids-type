@@ -1,0 +1,6 @@
+# 原資料は配布元のバイト列とSHA-256を維持する。空白・改行を整形しない。
+data-src/japanese/itaigi.csv -text -whitespace
+data-src/japanese/ITAIGI-README.md -whitespace
+data-src/japanese/MOZC-DICTIONARY-README.txt -whitespace
+data-src/animcjk/ARPHIC-PUBLIC-LICENSE.txt -whitespace
+web/public/data/handwriting-license.txt -whitespace

@@ -32,12 +32,19 @@ export function CameraPad({
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [ready, setReady] = useState(false);
+  const [focus, setFocus] = useState(true);
+  const [zoom, setZoom] = useState(0);
+  const [torch, setTorch] = useState(false);
+  const [previewSize, setPreviewSize] = useState({ width: 1, height: 1 });
   const [hits, setHits] = useState<string[]>([]);
   const [note, setNote] = useState("枠に字を入れて丸いボタンを押してください");
   const cam = useRef<CameraView>(null);
 
   const shoot = async () => {
-    if (busy) return;
+    if (busyRef.current || !ready) return;
+    busyRef.current = true;
     haptic("commit");
     setBusy(true);
     setNote("読み取り中…");
@@ -48,10 +55,10 @@ export function CameraPad({
     try {
       // skipProcessing は使わない。センサーの向きのまま返ってきて、
       // 横倒しの写真を読ませることになる(端末によっては全滅する)
-      const shot = await cam.current?.takePictureAsync({ quality: 0.9 });
+      const shot = await cam.current?.takePictureAsync({ quality: 1 });
       if (!shot?.uri) throw new Error("no photo");
       photo = shot.uri;
-      const text = await recognizeText(shot.uri);
+      const text = await recognizeText(shot.uri, focus, previewSize.width / previewSize.height);
       // 読めた順のまま、漢字だけを重複なく拾う
       const seen = new Set<string>();
       const chars = [...text].filter(
@@ -71,6 +78,7 @@ export function CameraPad({
     } finally {
       if (photo) await discardPhoto(photo).catch(() => {});
       setBusy(false);
+      busyRef.current = false;
     }
   };
 
@@ -104,6 +112,21 @@ export function CameraPad({
 
   return (
     <View style={{ flex: 1, gap: 6 }}>
+      <View style={{ flexDirection: "row", gap: 6 }}>
+        {[
+          { label: focus ? "中央の1字" : "全体を読む", active: focus, press: () => setFocus(v => !v) },
+          { label: zoom === 0 ? "拡大" : "拡大中", active: zoom > 0, press: () => setZoom(v => v === 0 ? 0.15 : 0) },
+          { label: "ライト", active: torch, press: () => setTorch(v => !v) },
+        ].map(control => (
+          <Pressable key={control.label} onPress={control.press} disabled={busy}
+            accessibilityRole="button" accessibilityState={{ selected: control.active, disabled: busy }}
+            style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center", borderRadius: 8,
+              borderWidth: 1, borderColor: control.active ? theme.accent : theme.border,
+              backgroundColor: control.active ? theme.accentBg : theme.card }}>
+            <Text style={{ fontSize: 12, color: control.active ? theme.accent : theme.sub }}>{control.label}</Text>
+          </Pressable>
+        ))}
+      </View>
       <Text style={{ fontSize: 11, color: theme.faint }} numberOfLines={1}>
         {note}
       </Text>
@@ -149,6 +172,7 @@ export function CameraPad({
           読み取りそのものが当たらなくなる（写った字が小さいほど当たらない）。
           シャッターは横に並べず枠の上に重ねる＝そのぶん枠が横にも広がる */}
       <View
+        onLayout={e => setPreviewSize(e.nativeEvent.layout)}
         style={{
           flex: 1,
           overflow: "hidden",
@@ -157,10 +181,19 @@ export function CameraPad({
           borderColor: theme.border,
         }}
       >
-        <CameraView ref={cam} style={{ flex: 1 }} facing="back" animateShutter={false} />
+        <CameraView ref={cam} style={{ flex: 1 }} facing="back" animateShutter={false}
+          zoom={zoom} enableTorch={torch} onCameraReady={() => setReady(true)}
+          onMountError={() => { setReady(false); setNote("カメラを起動できませんでした。別のメニューから開き直してください"); }} />
+        {focus && (
+          <View pointerEvents="none" style={{ position: "absolute", borderWidth: 2, borderColor: "white",
+            width: Math.min(previewSize.width, previewSize.height) * 0.72,
+            height: Math.min(previewSize.width, previewSize.height) * 0.72,
+            left: (previewSize.width - Math.min(previewSize.width, previewSize.height) * 0.72) / 2,
+            top: (previewSize.height - Math.min(previewSize.width, previewSize.height) * 0.72) / 2 }} />
+        )}
         <Pressable
           onPress={shoot}
-          disabled={busy}
+          disabled={busy || !ready}
           accessibilityLabel="撮って読み取る"
           style={{
             position: "absolute",

@@ -20,7 +20,7 @@
     "react-native-svg": "15.15.4"
   },
   "devDependencies": {
-    "@bacons/apple-targets": "^5.0.0",
+    "@bacons/apple-targets": "5.0.0",
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
   },
@@ -31,9 +31,14 @@
     "web": "expo start --web",
     "sync-core": "node scripts/sync-core.mjs",
     "typecheck": "npm run sync-core && tsc --noEmit",
-    "build:android": "bash scripts/build-android.sh",
+    "test:input": "node --experimental-strip-types --test scripts/test-input.mts",
     "build:irg": "node --experimental-strip-types scripts/build-irg.mts",
-    "test:irg": "node --experimental-strip-types --test scripts/test-irg.mts"
+    "test:irg": "node --experimental-strip-types --test scripts/test-irg.mts",
+    "build:android": "bash scripts/build-android.sh",
+    "build:japanese": "python3 ../scripts/build-japanese.py",
+    "test:nature": "python3 ../scripts/test_nature_categories.py",
+    "test:jmdict": "python3 ../scripts/test_jmdict_words.py",
+    "test:japanese": "npm run test:nature && npm run test:jmdict && node --experimental-strip-types --test scripts/test-japanese.mts scripts/test-reading-priority.mts"
   },
   "private": true
 }
