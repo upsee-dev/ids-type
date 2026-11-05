@@ -17,6 +17,9 @@ final class JapaneseLexicon {
     static let languageShortLabels = ["韓国語", "中国語", "越南語", "台湾語"]
     static let languageKey = "katachi.foreignReadings.v1"
     static func languages(_ values: [String]) -> [String] { languageIDs.filter { values.contains($0) } }
+    /// Chinese is typed as pinyin on QWERTY only (keys are toneless, ü = v); the kana flick pad never searches it.
+    static let pinyinLanguage = "zh"
+    static func searchLanguages(_ values: [String], pinyin: Bool) -> [String] { languages(values).filter { ($0 == pinyinLanguage) == pinyin } }
     static func languageLabel(_ id: String) -> String { languageIDs.firstIndex(of:id).map { languageShortLabels[$0] } ?? "" }
     static let orderKey = "katachi.japaneseOrder.v1"
     static func order(_ values: [String]) -> [String] {

@@ -266,7 +266,7 @@ class FlickKanaView(
     /** 端末が「動かした」とみなす最小の移動量(px)。手ぶれの下限に使う */
     private val slop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
 
-    /** 向きに割り当てが無ければ中央の字（や行の左右など） */
+    /** 向きに割り当てが無ければ中央の字 */
     private fun charAt(key: Kana.Key, dir: Int): String =
         key.chars.getOrNull(dir)?.takeIf { it.isNotEmpty() } ?: key.chars[0]
 

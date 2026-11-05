@@ -15,6 +15,7 @@ final class JapaneseKeyboardViewController: UIInputViewController, FlickKanaView
     private var mode = "kana"
     private var caps = false
     private var root = UIStackView()
+    private var toolbar = UIStackView()
     private var content = UIStackView()
     private var candidates = UIStackView()
     private var composingLabel = UILabel()
@@ -36,23 +37,40 @@ final class JapaneseKeyboardViewController: UIInputViewController, FlickKanaView
             root.topAnchor.constraint(equalTo:view.topAnchor,constant:4), root.bottomAnchor.constraint(equalTo:view.safeAreaLayoutGuide.bottomAnchor,constant:-4),
             view.heightAnchor.constraint(greaterThanOrEqualToConstant:420),
         ])
-        let globe = button("🌐") {}
-        globe.accessibilityLabel = "入力方式を切り替え"
-        globe.addTarget(self,action:#selector(switchKeyboard(_:event:)),for:.allTouchEvents)
-        let toolbar = row([globe,button("かな") { [weak self] in self?.mode = "kana"; self?.buildContent() },button("ABC/123") { [weak self] in self?.mode = "ascii"; self?.buildContent() },button("部首索引") { [weak self] in self?.mode = "radical"; self?.buildContent() },button("設定") { [weak self] in self?.mode = "settings"; self?.buildContent() }])
-        toolbar.heightAnchor.constraint(equalToConstant:36).isActive = true; root.addArrangedSubview(toolbar)
+        toolbar.distribution = .fillEqually; toolbar.spacing = 4
+        toolbar.heightAnchor.constraint(equalToConstant:36).isActive = true; root.addArrangedSubview(toolbar); buildToolbar()
         composingLabel.font = .systemFont(ofSize:17); composingLabel.numberOfLines = 1; composingLabel.adjustsFontSizeToFitWidth = true
         composingLabel.heightAnchor.constraint(equalToConstant:28).isActive = true; root.addArrangedSubview(composingLabel)
         content.axis = .vertical; content.spacing = 4; root.addArrangedSubview(content)
         buildContent()
     }
-    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); order = store.japaneseOrder; languages = store.foreignReadings; if mode == "settings" { buildContent() } else { refresh() } }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated); order = store.japaneseOrder; languages = store.foreignReadings; buildToolbar()
+        if mode == "pinyin" && !pinyinEnabled { mode = "kana"; buildContent() } else if mode == "settings" { buildContent() } else { refresh() }
+    }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); sequence += 1; reading = ""; flick?.resetToggle() }
     override func textWillChange(_ textInput: UITextInput?) {
         // Moving the host cursor must not send a stale composition into a different field.
         if !ownEdit && !reading.isEmpty { reading = ""; flick?.resetToggle(); refresh() }
     }
     @objc private func switchKeyboard(_ sender: UIButton, event: UIEvent) { handleInputModeList(from:sender,with:event) }
+    /// 中国語は「拼音」の QWERTY だけで打つ。中国語をオンにしたときだけ出す
+    private var pinyinEnabled: Bool { languages.contains(JapaneseLexicon.pinyinLanguage) }
+    private func buildToolbar() {
+        toolbar.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let globe = button("🌐") {}
+        globe.accessibilityLabel = "入力方式を切り替え"
+        globe.addTarget(self,action:#selector(switchKeyboard(_:event:)),for:.allTouchEvents)
+        var items = [globe,button("かな") { [weak self] in self?.setMode("kana") },button("ABC/123") { [weak self] in self?.setMode("ascii") }]
+        if pinyinEnabled { items.append(button("拼音") { [weak self] in self?.setMode("pinyin") }) }
+        items += [button("部首索引") { [weak self] in self?.setMode("radical") },button("設定") { [weak self] in self?.setMode("settings") }]
+        items.forEach { toolbar.addArrangedSubview($0) }
+    }
+    /// かなの読みを拼音で引かない（その逆も）。境をまたぐときは打ちかけをそのまま確定する
+    private func setMode(_ next: String) {
+        if (mode == "pinyin") != (next == "pinyin") && !reading.isEmpty { literal("") }
+        mode = next; buildContent()
+    }
     private func button(_ text: String, _ action: @escaping () -> Void) -> UIButton {
         let b = UIButton(type:.system); b.setTitle(text,for:.normal); b.titleLabel?.font = .systemFont(ofSize:12)
         b.titleLabel?.numberOfLines = 2; b.titleLabel?.textAlignment = .center
@@ -95,11 +113,22 @@ final class JapaneseKeyboardViewController: UIInputViewController, FlickKanaView
                 } }))
             }
             content.addArrangedSubview(pad)
+        } else if mode == "pinyin" {
+            // フリックの面は出さない。打った英字がそのまま拼音の読み（ü は v）
+            let pad = UIStackView(); pad.axis = .vertical; pad.spacing = 3; pad.distribution = .fillEqually
+            for raw in ["qwertyuiop","asdfghjkl","zxcvbnm⌫"] {
+                pad.addArrangedSubview(row(raw.map { ch in button(String(ch)) { [weak self] in
+                    guard let self else { return }
+                    if ch == "⌫" { self.flickBackspace() } else { self.reading.append(ch); self.refresh() }
+                } }))
+            }
+            content.addArrangedSubview(pad)
         } else {
             let pad = FlickKanaView(text:.label,sub:.secondaryLabel,card:.secondarySystemBackground,border:.separator,accentBg:.tertiarySystemFill,layout:"flick")
             pad.delegate = self; flick = pad; content.addArrangedSubview(pad)
         }
-        let actions = row([button("、") { [weak self] in self?.literal("、") },button("。") { [weak self] in self?.literal("。") },button("空白") { [weak self] in self?.literal(" ") },button("かな確定") { [weak self] in self?.literal("") },button("改行") { [weak self] in self?.literal("\n") }])
+        let comma = mode == "pinyin" ? "，" : "、"
+        let actions = row([button(comma) { [weak self] in self?.literal(comma) },button("。") { [weak self] in self?.literal("。") },button("空白") { [weak self] in self?.literal(" ") },button(mode == "pinyin" ? "確定" : "かな確定") { [weak self] in self?.literal("") },button("改行") { [weak self] in self?.literal("\n") }])
         actions.heightAnchor.constraint(equalToConstant:36).isActive = true; content.addArrangedSubview(actions)
         refresh()
     }
@@ -114,11 +143,11 @@ final class JapaneseKeyboardViewController: UIInputViewController, FlickKanaView
             toggle.addAction(UIAction { [weak self, weak toggle] _ in
                 guard let self, let toggle else { return }
                 self.languages = JapaneseLexicon.languages(toggle.isOn ? self.languages + [id] : self.languages.filter { $0 != id })
-                self.store.saveForeignReadings(self.languages)
+                self.store.saveForeignReadings(self.languages); self.buildToolbar()
             },for:.valueChanged)
             let line = UIStackView(arrangedSubviews:[label,toggle]); line.alignment = .center; line.heightAnchor.constraint(equalToConstant:40).isActive = true; stack.addArrangedSubview(line)
         }
-        let explanation = UILabel(); explanation.text = "かなで入力。カナは発音の目安で声調は省略。候補に言語名と元の読みを表示します。"; explanation.numberOfLines = 0; explanation.font = .systemFont(ofSize:11); stack.addArrangedSubview(explanation)
+        let explanation = UILabel(); explanation.text = "韓国語・越南語・台湾語はかなのフリックで入力（カナは発音の目安で声調は省略）。中国語は「拼音」のQWERTYだけで入力し、声調は付けず ü は v。候補に言語名と元の読みを表示します。"; explanation.numberOfLines = 0; explanation.font = .systemFont(ofSize:11); stack.addArrangedSubview(explanation)
         let priorityHeading = UILabel(); priorityHeading.text = "候補の優先順位"; priorityHeading.font = .boldSystemFont(ofSize:13); stack.addArrangedSubview(priorityHeading)
         for (i,id) in order.enumerated() {
             let label = UILabel(); label.text = "\(i+1). \(JapaneseLexicon.labels[JapaneseLexicon.ids.firstIndex(of:id)!])"; label.font = .systemFont(ofSize:13)
@@ -137,19 +166,20 @@ final class JapaneseKeyboardViewController: UIInputViewController, FlickKanaView
     }
     private func refresh(resetPage: Bool = true) {
         if resetPage { page = 0 }; sequence += 1
-        composingLabel.text = reading.isEmpty ? "日本語拡張フリック" : reading
-        guard mode == "kana" || mode == "ascii" else { return }
+        let pinyin = mode == "pinyin", prompt = pinyin ? "拼音を入力" : "読みを入力"
+        composingLabel.text = reading.isEmpty ? (pinyin ? "拼音（QWERTY）" : "日本語拡張フリック") : reading
+        guard mode == "kana" || mode == "ascii" || pinyin else { return }
         candidates.arrangedSubviews.forEach { $0.removeFromSuperview() }
         previous?.isEnabled = false; nextPageButton?.isEnabled = false
-        countLabel.text = reading.isEmpty ? "読みを入力" : "検索中…"
-        let token = sequence, q = reading, p = page, priority = order, enabled = languages
+        countLabel.text = reading.isEmpty ? prompt : "検索中…"
+        let token = sequence, q = reading, p = page, priority = order, enabled = JapaneseLexicon.searchLanguages(languages,pinyin:pinyin)
         queue.async { [weak self] in
             guard let self else { return }
             self.lexicon.search(q,order:priority,languages:enabled)
             let total = self.lexicon.count, items = self.lexicon.page(offset:p*8,limit:8)
             DispatchQueue.main.async { [weak self] in
                 guard let self, token == self.sequence else { return }
-                self.total = total; self.countLabel.text = total == 0 ? "読みを入力" : "\(total)件 · \(p+1)/\((total+7)/8)"
+                self.total = total; self.countLabel.text = total == 0 ? prompt : "\(total)件 · \(p+1)/\((total+7)/8)"
                 self.previous?.isEnabled = p > 0; self.nextPageButton?.isEnabled = (p+1)*8 < total
                 for r in 0..<2 {
                     var cells: [UIView] = []

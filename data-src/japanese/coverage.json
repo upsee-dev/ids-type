@@ -1,6 +1,6 @@
 {
   "entries": 1770673,
-  "foreignEntries": 76825,
+  "foreignEntries": 77706,
   "categories": {
     "common": 803249,
     "symbol": 4858,
@@ -26,5 +26,5 @@
   "jmnedictPairs": 672571,
   "manualReadings": 3,
   "pendingManualReadings": 2,
-  "shards": 86
+  "shards": 109
 }

@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { JapaneseLexicon, JAPANESE_CATEGORIES, DEFAULT_JAPANESE_ORDER, normalizeJapaneseOrder, moveCategory, normalizeForeignReadings } from "../../core/japanese.ts";
+import { JapaneseLexicon, JAPANESE_CATEGORIES, DEFAULT_JAPANESE_ORDER, normalizeJapaneseOrder, moveCategory, normalizeForeignReadings, searchLanguages } from "../../core/japanese.ts";
 import { KUN_READING_FLAG, matchesLongKun } from "../../core/reading-priority.ts";
 import { taiwaneseToKana } from "../../scripts/taiwanese-kana.mts";
 import { radicalsByStrokes, radicalCharacters, residualStrokes, type RadicalIndex } from "../../core/radical-index.ts";
+import { KANA_ROWS, kanaFlick } from "../../core/data/kana.ts";
 const assets = fileURLToPath(new URL("../ime/assets/", import.meta.url));
 const index = JSON.parse(readFileSync(new URL("../../core/radical-index.json", import.meta.url),"utf8")) as RadicalIndex;
 const engine = new JapaneseLexicon(key => { try { return readFileSync(`${assets}/japanese-${key}.tsv`,"utf8"); } catch { return ""; } });
@@ -43,7 +44,7 @@ test("all seven nature categories convert dictionary readings and obey priority"
 test("foreign readings are opt-in per language, including after disabling on the same query", () => {
   for (const bad of [null,undefined,true,{},"ko",[true,42,"invalid"]]) assert.deepEqual(normalizeForeignReadings(bad),[]);
   assert.deepEqual(normalizeForeignReadings(["tw","ko","ko","unknown"]),["ko","tw"]);
-  for (const [q,language] of [["みょん","ko"],["しゅえ","zh"],["ぐおい","vi"],["りほ","tw"]] as const) {
+  for (const [q,language] of [["みょん","ko"],["xue","zh"],["ぐおい","vi"],["りほ","tw"]] as const) {
     const baseline = engine.search(q,DEFAULT_JAPANESE_ORDER);
     assert.ok(baseline.every(c=>!c.language));
     const enabled = engine.search(q,DEFAULT_JAPANESE_ORDER,[language]);
@@ -55,6 +56,31 @@ test("foreign readings are opt-in per language, including after disabling on the
   assert.equal(taiwaneseToKana("Tâi-gí"),"タイギ");
   assert.equal(taiwaneseToKana("lâng"),"ラン");
   assert.equal(taiwaneseToKana("unsupported!"),"");
+});
+test("Chinese is pinyin on QWERTY only: never from kana, ranked by frequency, ü typed as v", () => {
+  const all = normalizeForeignReadings(["ko","zh","vi","tw"]);
+  assert.deepEqual(searchLanguages(all,true),["zh"]);
+  assert.deepEqual(searchLanguages(all,false),["ko","vi","tw"]);
+  assert.deepEqual(searchLanguages([],true),[]);
+  // The flick pad's language list cannot reach Chinese, and no kana shard holds a Chinese row.
+  for (const q of ["しゅえ","に","ちゅん"]) assert.ok(engine.search(q,DEFAULT_JAPANESE_ORDER,["zh"]).every(c=>c.language!=="zh"),q);
+  for (const [q,text,original] of [["ni","你","nǐ"],["xue","学","xué"],["zhong","中","zhōng"],["hang","行","háng"],["nv","女","nǚ"],["men","们","men"]]) {
+    const top = engine.search(q,DEFAULT_JAPANESE_ORDER,["zh"])[0];
+    assert.deepEqual([top.text,top.original,top.language,top.kind],[text,original,"zh",0],q);
+  }
+  assert.ok(engine.search("lv",DEFAULT_JAPANESE_ORDER,["zh"]).slice(0,8).some(c=>c.text==="绿"));
+  assert.ok(engine.search("men",DEFAULT_JAPANESE_ORDER,["zh"]).slice(0,2).some(c=>c.text==="們"),"traditional follows simplified");
+  const sentence = engine.search("nihao",DEFAULT_JAPANESE_ORDER,["zh"]);
+  assert.deepEqual([sentence[0].text,sentence[0].consumed,sentence[0].kind],["你",2,2]);
+  assert.equal(engine.search("hao",DEFAULT_JAPANESE_ORDER,["zh"])[0].text,"好");
+  assert.ok(engine.search("ni",DEFAULT_JAPANESE_ORDER,[]).every(c=>!c.language),"pinyin stays opt-in");
+});
+test("flick や-key sends parentheses left/right; tapping cycles や（ゆ）よ", () => {
+  const ya = KANA_ROWS.flat().find(k=>k.label==="や")!;
+  assert.deepEqual([0,1,2,3,4].map(d=>kanaFlick(ya,d)),["や","（","ゆ","）","よ"]);
+  for (const [file,pattern] of [["../targets/keyboard/Kana.swift",/key\("や", "（", "ゆ", "）", "よ"\)/],["../ime/android/java/com/upsee/katachi/ime/Kana.kt",/row\("や", "（", "ゆ", "）", "よ"\)/]] as const) {
+    assert.match(readFileSync(new URL(file,import.meta.url),"utf8"),pattern,file);
+  }
 });
 test("rare names, places, kokuji, jukujikun and ketsuren remain searchable", () => {
   for (const [q,text,id] of [["たかなし","小鳥遊","name"],["わたぬき","四月一日","name"],["なかんだかり","仲村渠","place"],["つつじ","躑躅","jukujikun"],["ぴんぽん","乒乓","ketsuren"],["とうげ","峠","kokuji"],["ほし","★","symbol"]]) {
@@ -118,7 +144,7 @@ test("shared native shards match declared coverage; no malformed or unsorted row
       if (fields.length===4 && Array.from(text).length===1) singleCharacters.add(text);
       if (fields.length===6) { assert.ok(["ko","zh","vi","tw"].includes(language)); assert.ok(original); }
       assert.equal(reading.codePointAt(0)!.toString(16).padStart(4,"0"),key);
-      assert.match(reading,/^[ぁ-ゖー]+$/); assert.ok(text); assert.ok((+mask & ((1<<JAPANESE_CATEGORIES.length)-1))>0 && (+mask & ~(((1<<JAPANESE_CATEGORIES.length)-1) | KUN_READING_FLAG))===0); assert.ok(+cost>=0);
+      assert.match(reading,language==="zh" ? /^[a-z]+$/ : /^[ぁ-ゖー]+$/); assert.ok(text); assert.ok((+mask & ((1<<JAPANESE_CATEGORIES.length)-1))>0 && (+mask & ~(((1<<JAPANESE_CATEGORIES.length)-1) | KUN_READING_FLAG))===0); assert.ok(+cost>=0);
       assert.ok(previous<=reading); previous=reading; total++;
     }
   }
@@ -182,6 +208,7 @@ if (process.env.JAPANESE_PARITY_FIXTURE) {
     ["かんか","kanji",""],["かんてんじう","kanji",""],["きんかいちじつ","kanji",""],["きんかいっちょう","kanji",""],["ぼうこひょうか","kanji",""],["ちみもうりょう","kanji",""],["がいしゅういっしょく","kanji",""],["けいがい","kanji",""],["そご","kanji",""],["こらえる","kanji",""],["むしる","kanji",""],
     ['あやめ','plant',''],['せきえい','mineral',''],['あざらし','animal',''],['つばめ','bird',''],['とんぼ','insect',''],['さば','fish',''],['こんぶ','algae',''],['かわせみ','bird',''],
     ...["ko","zh","vi","tw"].flatMap(language=>[["みょん","common",language],["しゅえ","common",language],["ぐおい","common",language],["りほ","common",language]]),
+    ...["ni","nihao","xue","zhong","hang","lv","n","zzz"].flatMap(q=>[[q,"common","zh"],[q,"common",""]]),
     ["し","common","ko,zh,vi,tw"],["し","common",""]]) {
     const results = engine.search(q,first(id),normalizeForeignReadings(languages.split(",")));
     lines.push(["Q",q,id,String(results.length),languages].join("\t"));

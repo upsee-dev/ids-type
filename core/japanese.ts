@@ -32,6 +32,11 @@ export type ForeignReadingLanguage = typeof FOREIGN_READING_LANGUAGES[number]["i
 export function normalizeForeignReadings(value: unknown): ForeignReadingLanguage[] {
   return FOREIGN_READING_LANGUAGES.filter(l => Array.isArray(value) && value.includes(l.id)).map(l => l.id);
 }
+/** Chinese is typed as pinyin on QWERTY only (keys are toneless, ü = v); the kana flick pad never searches it. */
+export const PINYIN_LANGUAGE = "zh";
+export function searchLanguages(languages: readonly ForeignReadingLanguage[], pinyin: boolean): ForeignReadingLanguage[] {
+  return normalizeForeignReadings(languages).filter(l => (l === PINYIN_LANGUAGE) === pinyin);
+}
 export function foreignReadingLabel(language: string): string {
   return FOREIGN_READING_LANGUAGES.find(l => l.id === language)?.shortLabel ?? "";
 }

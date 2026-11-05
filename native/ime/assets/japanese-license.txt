@@ -237,7 +237,8 @@ https://creativecommons.org/licenses/by-sa/4.0/
 https://www.unicode.org/reports/tr38/
 https://www.unicode.org/license.txt
 
-外国語の読み: Unicode Unihan kMandarin / kHangul / kVietnamese (Unicode License v3)。
+外国語の読み: Unicode Unihan kMandarin / kXHC1983 / kHanyuPinlu / kHangul / kVietnamese (Unicode License v3)。
+中国語（普通話）は声調を省いた拼音（ü は v）で引き、kHanyuPinlu・kTGH・kUnihanCore2020・kSimplifiedVariant で候補を並べます。
 かなは検索用のカナ転写で、声調など一部の発音の区別を省略しています。原語の読みを保持しています。
 台湾語（閩南語）: iTaigi華台對照典 / iTaigi contributors、ChhoeTaigi資料庫 (CC0 1.0)。
 https://github.com/ChhoeTaigi/ChhoeTaigiDatabase

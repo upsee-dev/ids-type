@@ -218,6 +218,8 @@ def build_words():
         for k, bit in BITS.items():
             if mask & bit: counts[k] += 1
     foreign = (SRC/'foreign.tsv').read_text().splitlines()
+    # Chinese rows are keyed by toneless pinyin, so they land in Latin-letter shards
+    # (japanese-0061 … 007a) that the kana flick pad can never reach.
     for line in foreign:
         reading = line.split('\t', 1)[0]
         shards[f'{ord(reading[0]):04x}'].append(line + '\n')
@@ -229,7 +231,7 @@ def build_words():
     (SRC/'coverage.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n')
     print(info)
     license_text = '日本語拡張フリック辞書\n\nMozc dictionary / Google, IPAdic (NAIST), Okinawa dictionary\nhttps://github.com/google/mozc\n\n' + (SRC/'MOZC-LICENSE.txt').read_text() + '\n\n' + (SRC/'MOZC-DICTIONARY-README.txt').read_text() + '\n\nJMdict / JMnedict / KANJIDIC2: Copyright Jim Breen and the Electronic Dictionary Research and Development Group.\n熟語・四字熟語を含む語彙、熟字訓・義訓、人名・地名および単漢字の読みを抽出・分類しました。これらの派生辞書は CC BY-SA 4.0。\nhttps://www.edrdg.org/edrdg/licence.html\nhttps://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project\nhttps://creativecommons.org/licenses/by-sa/4.0/\n\n部首索引: Unicode Unihan (Unicode License v3)\nhttps://www.unicode.org/reports/tr38/\nhttps://www.unicode.org/license.txt\n'
-    license_text += '\n外国語の読み: Unicode Unihan kMandarin / kHangul / kVietnamese (Unicode License v3)。\nかなは検索用のカナ転写で、声調など一部の発音の区別を省略しています。原語の読みを保持しています。\n台湾語（閩南語）: iTaigi華台對照典 / iTaigi contributors、ChhoeTaigi資料庫 (CC0 1.0)。\nhttps://github.com/ChhoeTaigi/ChhoeTaigiDatabase\nhttps://creativecommons.org/publicdomain/zero/1.0/\n'
+    license_text += '\n外国語の読み: Unicode Unihan kMandarin / kXHC1983 / kHanyuPinlu / kHangul / kVietnamese (Unicode License v3)。\n中国語（普通話）は声調を省いた拼音（ü は v）で引き、kHanyuPinlu・kTGH・kUnihanCore2020・kSimplifiedVariant で候補を並べます。\nかなは検索用のカナ転写で、声調など一部の発音の区別を省略しています。原語の読みを保持しています。\n台湾語（閩南語）: iTaigi華台對照典 / iTaigi contributors、ChhoeTaigi資料庫 (CC0 1.0)。\nhttps://github.com/ChhoeTaigi/ChhoeTaigiDatabase\nhttps://creativecommons.org/publicdomain/zero/1.0/\n'
     license_text += '\n漢検一級までの語彙拡充: JIS第一・第二水準6,355字の単漢字候補を照合し、JMdictの漢字を含む語彙を頻度で切らず取り込みました。公式の級別配当・全出題語一覧の転載や網羅認定ではありません。\nhttps://www.kanken.or.jp/kanken/grades/overview/\n'
     license_text += '\n手動補足の読み（独立した2文献以上で確認したものを採用）\n'
     license_text += '自然分野の分類: JMdictの分野タグ・語義から植物、鉱物、動物、鳥類、虫類、魚類、藻類を分類。読み・表記の制限を尊重し、同じ綴りでも語義の違う別の読みへ分類を流用しません。\n'

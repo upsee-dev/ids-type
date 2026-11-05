@@ -168,7 +168,7 @@ final class FlickKanaView: UIView {
         return dy < 0 ? 2 : 4
     }
 
-    /// 向きに割り当てが無ければ中央の字（や行の左右など）
+    /// 向きに割り当てが無ければ中央の字
     fileprivate func char(_ key: Kana.Key, _ dir: Int) -> String {
         let c = dir < key.chars.count ? key.chars[dir] : ""
         return c.isEmpty ? key.chars[0] : c

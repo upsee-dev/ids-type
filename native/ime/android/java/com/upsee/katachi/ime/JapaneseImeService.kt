@@ -36,6 +36,7 @@ class JapaneseImeService : InputMethodService(), FlickKanaView.Host {
     private var order = JapaneseLexicon.ids
     private var languages = emptyList<String>()
     private var root: LinearLayout? = null
+    private lateinit var toolbar: LinearLayout
     private lateinit var content: LinearLayout
     private lateinit var composingLabel: TextView
     private var candidates: LinearLayout? = null
@@ -59,7 +60,10 @@ class JapaneseImeService : InputMethodService(), FlickKanaView.Host {
         super.onStartInput(attribute,restarting); reading = ""; sequence++; page = 0; order = store.japaneseOrder(); languages = store.foreignReadings()
         flick?.resetToggle(); if (root != null) refresh()
     }
-    override fun onStartInputView(info: EditorInfo?, restarting: Boolean) { super.onStartInputView(info,restarting); order = store.japaneseOrder(); languages = store.foreignReadings(); if (mode == "settings") buildContent() else refresh() }
+    override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
+        super.onStartInputView(info,restarting); order = store.japaneseOrder(); languages = store.foreignReadings(); buildToolbar()
+        if (mode == "pinyin" && !pinyinEnabled) { mode = "kana"; buildContent() } else if (mode == "settings") buildContent() else refresh()
+    }
     override fun onFinishInput() {
         currentInputConnection?.finishComposingText(); reading = ""; sequence++; flick?.resetToggle(); super.onFinishInput()
     }
@@ -78,11 +82,7 @@ class JapaneseImeService : InputMethodService(), FlickKanaView.Host {
             val bottom = if (android.os.Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom else @Suppress("DEPRECATION") insets.systemWindowInsetBottom
             v.setPadding(dp(4),dp(4),dp(4),dp(4)+bottom); insets
         }
-        keyboard.addView(row(listOf(
-            button("🌐") { currentInputConnection?.finishComposingText(); (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() },
-            button("かな") { mode = "kana"; buildContent() }, button("ABC/123") { mode = "ascii"; buildContent() },
-            button("部首索引") { mode = "radical"; buildContent() }, button("設定") { mode = "settings"; buildContent() }
-        )),LinearLayout.LayoutParams(-1,dp(36)))
+        toolbar = LinearLayout(this); keyboard.addView(toolbar,LinearLayout.LayoutParams(-1,dp(36))); buildToolbar()
         composingLabel = TextView(this).apply { textSize = 17f; setTextColor(textColor); isSingleLine = true }
         keyboard.addView(composingLabel,LinearLayout.LayoutParams(-1,dp(28)))
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; keyboard.addView(content,LinearLayout.LayoutParams(-1,0,1f))
@@ -94,6 +94,23 @@ class JapaneseImeService : InputMethodService(), FlickKanaView.Host {
         layoutParams = LinearLayout.LayoutParams(0,-1,1f).apply { setMargins(dp(2),dp(2),dp(2),dp(2)) }
     }
     private fun row(views: List<View>) = LinearLayout(this).apply { views.forEach { addView(it) } }
+    /** 中国語は「拼音」の QWERTY だけで打つ。中国語をオンにしたときだけ出す */
+    private val pinyinEnabled get() = JapaneseLexicon.pinyinLanguage in languages
+    private fun buildToolbar() {
+        if (root == null) return
+        toolbar.removeAllViews()
+        listOfNotNull(
+            button("🌐") { currentInputConnection?.finishComposingText(); (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() },
+            button("かな") { setMode("kana") }, button("ABC/123") { setMode("ascii") },
+            if (pinyinEnabled) button("拼音") { setMode("pinyin") } else null,
+            button("部首索引") { setMode("radical") }, button("設定") { setMode("settings") }
+        ).forEach { toolbar.addView(it) }
+    }
+    /** かなの読みを拼音で引かない（その逆も）。境をまたぐときは打ちかけをそのまま確定する */
+    private fun setMode(next: String) {
+        if ((mode == "pinyin") != (next == "pinyin") && reading.isNotEmpty()) literal("")
+        mode = next; buildContent()
+    }
     private fun compose() { currentInputConnection?.setComposingText(reading,1); refresh() }
     private fun literal(text: String) {
         val ic = currentInputConnection
@@ -129,11 +146,19 @@ class JapaneseImeService : InputMethodService(), FlickKanaView.Host {
                 } }),LinearLayout.LayoutParams(-1,0,1f))
             }
             content.addView(pad,LinearLayout.LayoutParams(-1,0,1f))
+        } else if (mode == "pinyin") {
+            // フリックの面は出さない。打った英字がそのまま拼音の読み（ü は v）
+            val pad = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            for (raw in listOf("qwertyuiop","asdfghjkl","zxcvbnm⌫")) {
+                pad.addView(row(raw.map { ch -> button(ch.toString()) { if (ch == '⌫') backspaceKana() else { reading += ch; compose() } } }),LinearLayout.LayoutParams(-1,0,1f))
+            }
+            content.addView(pad,LinearLayout.LayoutParams(-1,0,1f))
         } else {
             flick = FlickKanaView(this,textColor,Color.GRAY,cardColor,Color.LTGRAY,Color.rgb(223,220,255),"flick",this)
             content.addView(flick,LinearLayout.LayoutParams(-1,0,1f))
         }
-        content.addView(row(listOf(button("、") { literal("、") },button("。") { literal("。") },button("空白") { literal(" ") },button("かな確定") { literal("") },button("確定/改行") { enter() })),LinearLayout.LayoutParams(-1,dp(36)))
+        val comma = if (mode == "pinyin") "，" else "、"
+        content.addView(row(listOf(button(comma) { literal(comma) },button("。") { literal("。") },button("空白") { literal(" ") },button(if (mode == "pinyin") "確定" else "かな確定") { literal("") },button("確定/改行") { enter() })),LinearLayout.LayoutParams(-1,dp(36)))
         refresh()
     }
     private fun buildSettings() {
@@ -145,11 +170,11 @@ class JapaneseImeService : InputMethodService(), FlickKanaView.Host {
                 isChecked = id in languages; contentDescription = "${JapaneseLexicon.languageLabels[i]}の読みで入力"
                 setOnCheckedChangeListener { _, enabled ->
                     languages = JapaneseLexicon.languages(if (enabled) languages + id else languages.filter { it != id })
-                    store.saveForeignReadings(languages)
+                    store.saveForeignReadings(languages); buildToolbar()
                 }
             },LinearLayout.LayoutParams(-1,dp(44)))
         }
-        stack.addView(TextView(this).apply { text = "かなで入力。カナは発音の目安で声調は省略。候補に言語名と元の読みを表示します。"; textSize = 11f; setTextColor(textColor) })
+        stack.addView(TextView(this).apply { text = "韓国語・越南語・台湾語はかなのフリックで入力（カナは発音の目安で声調は省略）。中国語は「拼音」のQWERTYだけで入力し、声調は付けず ü は v。候補に言語名と元の読みを表示します。"; textSize = 11f; setTextColor(textColor) })
         stack.addView(TextView(this).apply { text = "候補の優先順位"; textSize = 13f; setTextColor(textColor) })
         for ((i,id) in order.withIndex()) {
             val line = LinearLayout(this)
@@ -165,17 +190,18 @@ class JapaneseImeService : InputMethodService(), FlickKanaView.Host {
     private fun refresh(resetPage: Boolean = true) {
         if (root == null) return
         if (resetPage) page = 0
-        val token = ++sequence; val q = reading; val p = page; val priority = order.toList(); val enabled = languages.toList()
-        composingLabel.text = if (q.isEmpty()) "日本語拡張フリック" else q
-        if (mode != "kana" && mode != "ascii") return
+        val pinyin = mode == "pinyin"; val prompt = if (pinyin) "拼音を入力" else "読みを入力"
+        val token = ++sequence; val q = reading; val p = page; val priority = order.toList(); val enabled = JapaneseLexicon.searchLanguages(languages,pinyin)
+        composingLabel.text = if (q.isNotEmpty()) q else if (pinyin) "拼音（QWERTY）" else "日本語拡張フリック"
+        if (mode != "kana" && mode != "ascii" && !pinyin) return
         candidates?.removeAllViews(); previous?.isEnabled = false; next?.isEnabled = false
-        countLabel?.text = if (q.isEmpty()) "読みを入力" else "検索中…"
+        countLabel?.text = if (q.isEmpty()) prompt else "検索中…"
         executor.execute {
             if (token != sequence) return@execute
             lexicon.search(q,priority,enabled); val total = lexicon.count; val items = lexicon.page(p*8,8)
             main.post {
                 if (token != sequence) return@post
-                countLabel?.text = if (total == 0) "読みを入力" else "${total}件 · ${p+1}/${(total+7)/8}"
+                countLabel?.text = if (total == 0) prompt else "${total}件 · ${p+1}/${(total+7)/8}"
                 previous?.isEnabled = p > 0; next?.isEnabled = (p+1)*8 < total
                 for (r in 0..1) {
                     val cells = (0..3).map { c ->

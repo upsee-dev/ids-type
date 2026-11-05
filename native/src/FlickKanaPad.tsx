@@ -282,19 +282,22 @@ export function RomajiPad({
   theme,
   onLetter,
   onBackspace,
+  rows = ROMAJI_ROWS,
 }: {
   theme: Theme;
   onLetter: (s: string) => void;
   onBackspace: () => void;
+  /** 拼音の面は「-」(長音)を持たない */
+  rows?: readonly string[];
 }) {
   return (
     <View style={styles.pad}>
-      {ROMAJI_ROWS.map((row, ri) => (
+      {rows.map((row, ri) => (
         <View key={ri} style={styles.row}>
           {[...row].map((c) => (
             <TapKey key={c} label={c} theme={theme} onPress={() => onLetter(c)} />
           ))}
-          {ri === ROMAJI_ROWS.length - 1 && (
+          {ri === rows.length - 1 && (
             <TapKey label={KANA_BACKSPACE} theme={theme} onPress={onBackspace} small />
           )}
         </View>

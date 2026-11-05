@@ -13,6 +13,9 @@ class JapaneseLexicon(private val load: (String) -> ByteArray) {
         val languageShortLabels = listOf("韓国語", "中国語", "越南語", "台湾語")
         const val languageKey = "katachi.foreignReadings.v1"
         fun languages(values: List<String>) = languageIDs.filter { it in values }
+        /** Chinese is typed as pinyin on QWERTY only (keys are toneless, ü = v); the kana flick pad never searches it. */
+        const val pinyinLanguage = "zh"
+        fun searchLanguages(values: List<String>, pinyin: Boolean) = languages(values).filter { (it == pinyinLanguage) == pinyin }
         fun languageLabel(id: String) = languageIDs.indexOf(id).let { if (it >= 0) languageShortLabels[it] else "" }
         const val orderKey = "katachi.japaneseOrder.v1"
         fun order(values: List<String>) = (values.filter { it in ids } + ids).distinct()

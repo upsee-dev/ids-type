@@ -96,7 +96,7 @@ export function Settings({
 
           <ScrollView contentContainerStyle={{ padding: 16, gap: 22 }}>
             <Section title="日本語拡張フリック：外国語の読み" theme={t}>
-              <Note theme={t}>初期設定はすべてオフです。オンにした言語の読みも、かなのフリックで入力できます。候補に言語名と元の読みを表示します。カナは発音の目安で、声調は省略します。</Note>
+              <Note theme={t}>初期設定はすべてオフです。韓国語・越南語・台湾語は、オンにするとかなのフリックで入力できます（カナは発音の目安で、声調は省略します）。中国語（普通話）は、オンにすると「拼音」に切り替えてQWERTYだけで入力します。声調は付けず、ü は v で打ちます。フリックでは入力できません。候補に言語名と元の読みを表示します。</Note>
               {FOREIGN_READING_LANGUAGES.map(language => <View key={language.id} style={{ flexDirection: "row", alignItems: "center", minHeight: 48 }}>
                 <Text style={{ flex: 1, color: t.text }}>{language.label}</Text>
                 <Switch accessibilityLabel={`${language.label}の読みで入力`} value={foreignReadings.includes(language.id)} onValueChange={enabled => {
