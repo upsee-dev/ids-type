@@ -462,6 +462,11 @@ Web は `.kanji` のフォントスタックの先頭に `unicode-range: U+E000-
 - **`android/` と `ios/` は prebuild の生成物**（.gitignore 済み）。ネイティブのソースは
   `native/ime/` と `native/targets/keyboard/` に置き、config plugin が毎回コピーする。
   こうしないと `expo prebuild --clean` のたびに消える
+- **アプリ本体は UIScene で起動する**（`native/plugins/withSceneLifecycle.js`）。iOS 27 SDK で
+  ビルドしたアプリは UIScene を採用していないと、iOS 27 の端末で起動した瞬間に UIKit に止められる
+  （1.0.12 がこれで開かずに落ちた）。Expo SDK 57 のテンプレートは AppDelegate で窓を作るので、
+  prebuild のたびに Info.plist の `UIApplicationSceneManifest` と `SceneDelegate` を足す。
+  起動のきっかけの URL（キーボードの「カメラ」）は SceneDelegate から `Linking.getInitialURL` へ渡している
 - **辞書は tsv**。2.7MB の JSON を起動のたびに構文解析するとキーボードが出るまで
   1〜2秒かかるため。日本語13,108字を先に読んで即検索可能にし、拡張漢字89,891字は
   後から読み足す2段構え

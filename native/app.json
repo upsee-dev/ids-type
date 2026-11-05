@@ -2,7 +2,7 @@
   "expo": {
     "name": "漢字カタチ入力",
     "slug": "ids-kanji-type",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "ids-kanji-type",
@@ -13,7 +13,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.upsee.idskanjitype",
       "appleTeamId": "W8P3V5NG4R",
-      "buildNumber": "21",
+      "buildNumber": "22",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -73,6 +73,7 @@
       ],
       "./plugins/withKatachiIme",
       "./plugins/withReleaseSigning",
+      "./plugins/withSceneLifecycle",
       "@react-native-vector-icons/ionicons",
       "@react-native-vector-icons/material-design-icons"
     ],
