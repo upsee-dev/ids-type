@@ -1,4 +1,4 @@
-import { normalizedReading, preferredExactKun } from "./reading-priority.ts";
+import { normalizedReading, preferredKunRank } from "./reading-priority.ts";
 
 /** Stable category IDs and bit positions shared by the generated dictionary and native IMEs. */
 export const JAPANESE_CATEGORIES = [
@@ -106,10 +106,18 @@ export class JapaneseLexicon {
       const prefix = q.slice(0, n);
       for (let i = lower(prefix); i < this.rows.length && this.rows[i].split("\t", 1)[0] === prefix; i++) add(this.rows[i], 2, n);
     }
-    out.sort((a, b) => Number(preferredExactKun(q,b.kind,b.mask,b.language)) - Number(preferredExactKun(q,a.kind,a.mask,a.language)) || a.kind - b.kind || (a.kind === 2 ? b.consumed - a.consumed : 0) || Number(!!a.language) - Number(!!b.language) || rank(a.mask) - rank(b.mask) || a.cost - b.cost || a.reading.length - b.reading.length);
+    const kun = (c: JapaneseCandidate) => preferredKunRank(q, c.kind, c.mask, c.language, c.reading.length);
+    // Exact 4+ kana kun first; 5+ kana kun that start with the 4+ kana input lead the predictive group.
+    out.sort((a, b) => Number(kun(a) !== 0) - Number(kun(b) !== 0) || a.kind - b.kind || kun(a) - kun(b) || (a.kind === 2 ? b.consumed - a.consumed : 0) || Number(!!a.language) - Number(!!b.language) || rank(a.mask) - rank(b.mask) || a.cost - b.cost || a.reading.length - b.reading.length);
     out.push({ reading: q, text: q, mask: 0, cost: 0, consumed: q.length, kind: 3, language: "", original: "" });
-    out.push({ reading: q, text: q.replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)), mask: 0, cost: 0, consumed: q.length, kind: 3, language: "", original: "" });
     const seen = new Set<string>();
-    return out.filter(c => { const id = `${c.consumed}\t${c.text}`; if (seen.has(id)) return false; seen.add(id); return true; });
+    const unique = out.filter(c => { const id = `${c.consumed}\t${c.text}`; if (seen.has(id)) return false; seen.add(id); return true; });
+    // The katakana spelling of the whole input always comes first (unless it equals the input, i.e. pinyin).
+    // A dictionary row with that spelling moves up and keeps its category.
+    const katakana = q.replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
+    if (katakana === q) return unique;
+    const at = unique.findIndex(c => c.consumed === q.length && c.text === katakana && !c.language);
+    const lead = at >= 0 ? unique.splice(at, 1)[0] : { reading: q, text: katakana, mask: 0, cost: 0, consumed: q.length, kind: 3, language: "", original: "" };
+    return [lead, ...unique];
   }
 }

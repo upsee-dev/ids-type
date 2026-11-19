@@ -883,7 +883,7 @@ class KeyboardView(context: Context, private val host: Host) :
 
     private fun buildStrokeChips() {
         strokeInner.removeAllViews()
-        val groups = listOf("unicode" to "Unicode部首索引", "favorites" to "お気に入り", "curve" to "曲線を含む") +
+        val groups = listOf("unicode" to "Unicode部首索引", "favorites" to "お気に入り") +
             Palettes.DIFFICULT.map { it.strokes to "${it.strokes}画" }
         for ((key, label) in groups) {
             val active = strokeGroup == key
@@ -1029,21 +1029,7 @@ class KeyboardView(context: Context, private val host: Host) :
             }
             return
         }
-        if (strokeGroup == "curve") {
-            // 丸みのある字の一覧。お気に入りと同じく、タップで部品・長押しでそのまま送る
-            val chars = Ids.tokens(Palettes.CURVE)
-            grid(chars.size, 8) { i ->
-                keyButton(chars[i], 20f) { host.insert(chars[i]) }.apply {
-                    setOnLongClickListener {
-                        host.select(chars[i])
-                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        true
-                    }
-                }
-            }
-            return
-        }
-        val parts = Ids.tokens(Palettes.DIFFICULT.first { it.strokes == strokeGroup }.parts)
+        val parts = Ids.tokens(Palettes.DIFFICULT.firstOrNull { it.strokes == strokeGroup }?.parts ?: "")
         grid(parts.size, 8) { i -> keyButton(parts[i], 20f) { host.insert(parts[i]) } }
     }
 

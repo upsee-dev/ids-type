@@ -182,6 +182,25 @@ def build_words():
         for reading in item['readings']: add(reading, item['text'], item['category'], 6000)
         accepted_pairs += len(item['readings'])
 
+    # 難読語の出題集（data-src/japanese/nandoku.tsv）。出典の辞書名は行ごとに保持する。
+    nandoku_pairs = 0
+    for line in (SRC/'nandoku.tsv').read_text().splitlines():
+        if not line or line.startswith('#'): continue
+        text, reading, category = line.split('\t')[:3]
+        assert category in BITS, line
+        assert add(reading, text, category, 6000) is not None, line
+        nandoku_pairs += 1
+
+    # 元素の中国語の字。台湾（繁体字）と中国（簡体字）を両方、日本語の元素名の読みで引ける。
+    element_pairs = 0
+    for line in (SRC/'elements.tsv').read_text().splitlines():
+        if not line or line.startswith('#'): continue
+        number, symbol, english, reading, taiwan, china = line.split('\t')
+        for ch in dict.fromkeys([taiwan, china]):
+            assert len(ch) == 1, line
+            add(reading, ch, 'kanji', 6000)
+            element_pairs += 1
+
     # The official first-grade scope uses JIS level 1/2 as a guide, not as an
     # exact grade list. Audit character availability without inventing grade labels.
     jis = jis_kanji()
@@ -227,13 +246,14 @@ def build_words():
     for key, lines in shards.items():
         text = ''.join(sorted(lines))
         (ASSETS/f'japanese-{key}.tsv').write_text(text)
-    info = dict(entries=len(rows), foreignEntries=len(foreign), categories=counts, jmdictPairs=jmdict_count, jmdictLexicalPairs=len(lexical_pairs), jmdictNewPairs=lexical_added, fourKanjiSpellingPairs=len(four_kanji_pairs), fullKunCharacterPairsAdded=bare_kun_added, jmnedictPairs=names_count, manualReadings=accepted_pairs, pendingManualReadings=pending_pairs, shards=len(shards))
+    info = dict(entries=len(rows), foreignEntries=len(foreign), categories=counts, jmdictPairs=jmdict_count, jmdictLexicalPairs=len(lexical_pairs), jmdictNewPairs=lexical_added, fourKanjiSpellingPairs=len(four_kanji_pairs), fullKunCharacterPairsAdded=bare_kun_added, jmnedictPairs=names_count, manualReadings=accepted_pairs, pendingManualReadings=pending_pairs, nandokuPairs=nandoku_pairs, elementPairs=element_pairs, shards=len(shards))
     (SRC/'coverage.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n')
     print(info)
     license_text = '日本語拡張フリック辞書\n\nMozc dictionary / Google, IPAdic (NAIST), Okinawa dictionary\nhttps://github.com/google/mozc\n\n' + (SRC/'MOZC-LICENSE.txt').read_text() + '\n\n' + (SRC/'MOZC-DICTIONARY-README.txt').read_text() + '\n\nJMdict / JMnedict / KANJIDIC2: Copyright Jim Breen and the Electronic Dictionary Research and Development Group.\n熟語・四字熟語を含む語彙、熟字訓・義訓、人名・地名および単漢字の読みを抽出・分類しました。これらの派生辞書は CC BY-SA 4.0。\nhttps://www.edrdg.org/edrdg/licence.html\nhttps://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project\nhttps://creativecommons.org/licenses/by-sa/4.0/\n\n部首索引: Unicode Unihan (Unicode License v3)\nhttps://www.unicode.org/reports/tr38/\nhttps://www.unicode.org/license.txt\n'
     license_text += '\n外国語の読み: Unicode Unihan kMandarin / kXHC1983 / kHanyuPinlu / kHangul / kVietnamese (Unicode License v3)。\n中国語（普通話）は声調を省いた拼音（ü は v）で引き、kHanyuPinlu・kTGH・kUnihanCore2020・kSimplifiedVariant で候補を並べます。\nかなは検索用のカナ転写で、声調など一部の発音の区別を省略しています。原語の読みを保持しています。\n台湾語（閩南語）: iTaigi華台對照典 / iTaigi contributors、ChhoeTaigi資料庫 (CC0 1.0)。\nhttps://github.com/ChhoeTaigi/ChhoeTaigiDatabase\nhttps://creativecommons.org/publicdomain/zero/1.0/\n'
     license_text += '\n漢検一級までの語彙拡充: JIS第一・第二水準6,355字の単漢字候補を照合し、JMdictの漢字を含む語彙を頻度で切らず取り込みました。公式の級別配当・全出題語一覧の転載や網羅認定ではありません。\nhttps://www.kanken.or.jp/kanken/grades/overview/\n'
     license_text += '\n手動補足の読み（独立した2文献以上で確認したものを採用）\n'
+    license_text += '難読語: 利用者が提供した難読語の出題集（各語に出典の辞書名を記載）から読みと表記を収録。\n元素: 台湾（教育部）と中国（全国科学技术名词审定委员会）の元素名の字を日本語の元素名の読みで収録。Unicode Unihan で照合。\n'
     license_text += '自然分野の分類: JMdictの分野タグ・語義から植物、鉱物、動物、鳥類、虫類、魚類、藻類を分類。読み・表記の制限を尊重し、同じ綴りでも語義の違う別の読みへ分類を流用しません。\n'
     for item in extra:
         if item['status'] != 'accepted': continue

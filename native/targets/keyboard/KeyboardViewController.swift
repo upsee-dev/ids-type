@@ -804,7 +804,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
 
     private func buildStrokeChips() {
         strokeRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let groups = [("unicode", "Unicode部首索引"), ("favorites", "お気に入り"), ("curve", "曲線を含む")]
+        let groups = [("unicode", "Unicode部首索引"), ("favorites", "お気に入り")]
             + Palettes.difficult.map { ($0.strokes, "\($0.strokes)画") }
         for (key, label) in groups {
             let active = strokeGroup == key
@@ -998,20 +998,6 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
                 return
             }
             rows(favs.map { ch in
-                let b = key(ch, size: 20) { [weak self] in self?.insert(ch) }
-                b.accessibilityValue = ch
-                b.addGestureRecognizer(
-                    UILongPressGestureRecognizer(
-                        target: self, action: #selector(onFavoritePartLongPress(_:)),
-                    ),
-                )
-                return b
-            }, cols: 8, into: grid)
-            return
-        }
-        if strokeGroup == "curve" {
-            // 丸みのある字の一覧。お気に入りと同じく、タップで部品・長押しでそのまま送る
-            rows(Palettes.curve.map(String.init).map { ch in
                 let b = key(ch, size: 20) { [weak self] in self?.insert(ch) }
                 b.accessibilityValue = ch
                 b.addGestureRecognizer(

@@ -8,7 +8,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import {
-  CURVE_KANJI,
   DIFFICULT_COMPONENTS,
   kanaCycle,
   OPERATORS,
@@ -257,7 +256,6 @@ export function KatachiKeyboard({
  * 部分タブ。先頭は**お気に入り**——これまで★に入れてきた字をそのまま並べ、
  * 画数チップを選ぶと zi.tools の「難輸入部件」全541件をその画数ぶんだけ出す。
  * 541件を一度に並べると探せないので、zi.tools と同じく画数で区切っている。
- * 「曲線を含む」は丸・渦・かなのような漢字らしくない丸みを持つ字の一覧(CURVE_KANJI)。
  *
  * 先頭が固定の部品表(RADICAL_PALETTE)ではなくお気に入りなのは、この道具で
  * 何度も出す字は人によって違うため。お気に入りに入れた字は**部品としても打てる**
@@ -278,13 +276,11 @@ function RadicalTab({
   const [group, setGroup] = useState<string>("favorites");
   const parts = useMemo(() => {
     if (group === "favorites") return favorites;
-    if (group === "curve") return [...CURVE_KANJI];
     return [...(DIFFICULT_COMPONENTS.find(g => g.strokes === group)?.parts ?? "")];
   }, [group, favorites]);
 
   const chips = [
     { key: "favorites", label: "お気に入り" },
-    { key: "curve", label: "曲線を含む" },
     ...DIFFICULT_COMPONENTS.map(g => ({ key: g.strokes, label: `${g.strokes}画` })),
   ];
 

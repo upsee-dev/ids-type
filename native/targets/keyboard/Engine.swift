@@ -410,13 +410,14 @@ final class Engine {
         }
         sortPageHits(&hits, strokes: strokes)
         if kana.count >= 4 {
-            let groups = Dictionary(grouping: hits) { hit in
+            // 完全一致(0) → 5字以上の訓の先頭一致(1) → 残り。段の中は元の順を保つ
+            let groups = Dictionary(grouping: hits) { hit -> Int in
                 let i = hit & 0xF_FFFF
                 let kun = dict.readings(at: i).components(separatedBy: "\t").dropFirst().joined(separator: " ")
                 let source = dict.refKind(at: i)
-                return Kana.matchesLongKun(kana, kun, dict.ref(at: i), allowReference: source != 0 && source != 5)
+                return Kana.longKunRank(kana, kun, dict.ref(at: i), allowReference: source != 0 && source != 5)
             }
-            hits = (groups[true] ?? []) + (groups[false] ?? [])
+            hits = (groups[0] ?? []) + (groups[1] ?? []) + (groups[2] ?? [])
         }
         let page = hits.dropFirst(offset).prefix(limit).map { dict.char(at: $0 & 0xF_FFFF) }
         return (page, hits.count)

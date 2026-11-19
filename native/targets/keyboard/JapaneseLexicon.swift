@@ -34,7 +34,7 @@ final class JapaneseLexicon {
         return "かな"
     }
     struct Candidate { let reading: String; let text: String; let mask: Int; let consumed: Int; let kind: Int; let language: String; let original: String }
-    private struct Hit { let row: Int; let kind: Int; let consumed: Int; let rank: Int; let cost: Int; let length: Int; let foreign: Int; let preferredKun: Bool }
+    private struct Hit { let row: Int; let kind: Int; let consumed: Int; let rank: Int; let cost: Int; let length: Int; let foreign: Int; let preferredKun: Int }
     private var blob = Data()
     private var offsets: [Int32] = []
     private var shard = ""
@@ -42,6 +42,8 @@ final class JapaneseLexicon {
     private var query = ""
     private var lastOrder: [String] = []
     private var lastLanguages: [String] = []
+    private var leading: [String] = []
+    private var leadHit: Hit?
     private var fallbacks: [String] = []
     private let load: (String) -> Data
     init(load: @escaping (String) -> Data = { key in
@@ -61,7 +63,14 @@ final class JapaneseLexicon {
         while lo < hi { let mid = (lo+hi)/2; if reading(mid) < text { lo = mid+1 } else { hi = mid } }
         return lo
     }
-    var count: Int { query.isEmpty ? 0 : hits.count + fallbacks.count }
+    private var leadCount: Int { leading.count + (leadHit == nil ? 0 : 1) }
+    var count: Int { query.isEmpty ? 0 : leadCount + hits.count + fallbacks.count }
+    /// 0 = 4字以上の訓・熟字訓の完全一致、1 = 5字以上の訓の先頭が4字以上の入力と一致、2 = それ以外。core/reading-priority.ts と同じ
+    private func kunRank(_ kind: Int, _ mask: Int, _ language: String, _ readingLength: Int) -> Int {
+        if query.count < 4 || !language.isEmpty || mask & ((1 << 24) | (1 << 6)) == 0 { return 2 }
+        if kind == 0 { return 0 }
+        return kind == 1 && readingLength >= 5 ? 1 : 2
+    }
     /// Call search/page on a serial queue. UI receives only its small page of immutable values.
     func search(_ input: String, order values: [String], languages enabled: [String] = []) {
         let normalized = Kana.toHiragana(input.precomposedStringWithCanonicalMapping)
@@ -69,7 +78,7 @@ final class JapaneseLexicon {
         let allowed = Self.languages(enabled)
         if normalized == query && priority == lastOrder && allowed == lastLanguages { return }
         lastLanguages = allowed
-        query = normalized; lastOrder = priority; fallbacks = []
+        query = normalized; lastOrder = priority; leading = []; leadHit = nil; fallbacks = []
         hits.removeAll(keepingCapacity: true)
         guard let first = query.unicodeScalars.first else { return }
         let key = String(format: "%04x", first.value)
@@ -84,7 +93,7 @@ final class JapaneseLexicon {
             let language = f.count == 6 ? f[4] : ""
             if !language.isEmpty && !allowed.contains(language) { return }
             let rank = priority.firstIndex { id in mask & (1 << Self.ids.firstIndex(of: id)!) != 0 } ?? priority.count
-            hits.append(Hit(row: row, kind: kind, consumed: consumed, rank: rank, cost: cost, length: f[0].count, foreign: language.isEmpty ? 0 : 1, preferredKun: query.count >= 4 && kind == 0 && language.isEmpty && mask & ((1 << 24) | (1 << 6)) != 0))
+            hits.append(Hit(row: row, kind: kind, consumed: consumed, rank: rank, cost: cost, length: f[0].count, foreign: language.isEmpty ? 0 : 1, preferredKun: kunRank(kind, mask, language, f[0].count)))
         }
         let rowCount = max(0, offsets.count-1), length = query.count
         var i = lower(query)
@@ -100,8 +109,10 @@ final class JapaneseLexicon {
             }
         }
         hits.sort { a,b in
-            if a.preferredKun != b.preferredKun { return a.preferredKun }
+            // 4字以上の訓の完全一致 → 種類(完全一致・予測・先頭部分) → 予測の中では5字以上の訓の先頭一致を先に
+            if (a.preferredKun == 0) != (b.preferredKun == 0) { return a.preferredKun == 0 }
             if a.kind != b.kind { return a.kind < b.kind }
+            if a.preferredKun != b.preferredKun { return a.preferredKun < b.preferredKun }
             if a.kind == 2 && a.consumed != b.consumed { return a.consumed > b.consumed }
             if a.foreign != b.foreign { return a.foreign < b.foreign }
             if a.rank != b.rank { return a.rank < b.rank }
@@ -115,19 +126,32 @@ final class JapaneseLexicon {
             let f = fields(hit.row)
             return seen.insert(Data("\(hit.consumed)\t\(f[1])".utf8)).inserted
         }
+        fallbacks = [query].filter { seen.insert(Data("\(query.count)\t\($0)".utf8)).inserted }
+        // 入力全体のカタカナ表記を常に先頭へ（拼音のように変わらないときは出さない）。
+        // 辞書に同じ表記があればその行を先頭へ移し、分類を保つ
         let katakana = String(String.UnicodeScalarView(query.unicodeScalars.map { scalar in
             scalar.value >= 0x3041 && scalar.value <= 0x3096 ? Unicode.Scalar(scalar.value+0x60)! : scalar
         }))
-        fallbacks = [query,katakana].filter { seen.insert(Data("\(query.count)\t\($0)".utf8)).inserted }
+        if katakana != query {
+            let length = query.count
+            if let at = hits.firstIndex(where: { $0.consumed == length && $0.foreign == 0 && fields($0.row)[1] == katakana }) {
+                leadHit = hits.remove(at: at)
+            } else {
+                leading = [katakana]
+            }
+        }
     }
     func page(offset: Int, limit: Int = 12) -> [Candidate] {
         guard !query.isEmpty, offset >= 0, limit > 0, offset < count else { return [] }
         return (offset..<min(count, offset+limit)).map { n in
-            if n >= hits.count {
-                let text = fallbacks[n-hits.count]
+            if n < leadCount, leadHit == nil {
+                return Candidate(reading: query, text: leading[n], mask: 0, consumed: query.count, kind: 3, language: "", original: "")
+            }
+            if n - leadCount >= hits.count {
+                let text = fallbacks[n-leadCount-hits.count]
                 return Candidate(reading: query, text: text, mask: 0, consumed: query.count, kind: 3, language: "", original: "")
             }
-            let hit = hits[n], f = fields(hit.row)
+            let hit = n < leadCount ? leadHit! : hits[n-leadCount], f = fields(hit.row)
             return Candidate(reading: f[0], text: f[1], mask: Int(f[2]) ?? 0, consumed: hit.consumed, kind: hit.kind, language: f.count == 6 ? f[4] : "", original: f.count == 6 ? f[5] : "")
         }
     }

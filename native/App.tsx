@@ -242,8 +242,6 @@ function Screen() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [mode, setMode] = useState("empty");
-  /** 「曲線を含む」の絞り込み。分解のどこかに丸みのある画を持つ字だけ残す */
-  const [curvesOnly, setCurvesOnly] = useState(false);
   const [output, setOutput] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -297,7 +295,7 @@ function Screen() {
   // 打ち直したり並び順を変えたりしたら1ページめに戻す
   useEffect(() => {
     setPage(0);
-  }, [query, sortMode, curvesOnly]);
+  }, [query, sortMode]);
 
   useEffect(() => {
     if (!engine) return;
@@ -307,7 +305,6 @@ function Screen() {
         CAND_PAGE,
         sortMode,
         page * CAND_PAGE,
-        curvesOnly,
       );
       setResults(found.results);
       setTotal(found.total);
@@ -319,7 +316,7 @@ function Screen() {
       wasEmpty.current = nowEmpty;
     }, 120);
     return () => clearTimeout(id);
-  }, [engine, query, sortMode, page, curvesOnly]);
+  }, [engine, query, sortMode, page]);
 
   const pageCount = Math.max(1, Math.ceil(total / CAND_PAGE));
 
@@ -621,26 +618,6 @@ function Screen() {
                   (page + 1) * CAND_PAGE,
                 ).toLocaleString()}件目`}
             </Text>
-            {/* 曲線の絞り込み。部品では言い表しにくい「丸みのある画」を持つ字だけに
-                減らせる(どの画を曲線と見るかは core/data/palettes.ts の CURVE_STROKES) */}
-            <Pressable
-              onPressIn={() => haptic("toggle")}
-              onPress={() => setCurvesOnly(v => !v)}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: curvesOnly }}
-              accessibilityLabel="曲線を含む字だけに絞る"
-              style={[
-                s.chip,
-                {
-                  borderColor: curvesOnly ? t.accent : t.border,
-                  backgroundColor: curvesOnly ? t.accentBg : "transparent",
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 11, color: curvesOnly ? t.accent : t.sub }}>
-                曲線を含む
-              </Text>
-            </Pressable>
           </View>
         )}
 
@@ -659,9 +636,7 @@ function Screen() {
               <Text style={[s.notice, { color: t.sub }]}>
                 {mode === "code"
                   ? "該当なし。符号位置は U+ のあとに4〜6桁の16進で打ちます（例: U+4E00）。"
-                  : curvesOnly
-                    ? "該当なし。「曲線を含む」を外すと出るかもしれません。"
-                    : "該当なし。部品を減らすか、別の分解で試してみてください。"}
+                  : "該当なし。部品を減らすか、別の分解で試してみてください。"}
               </Text>
             ) : null
           }

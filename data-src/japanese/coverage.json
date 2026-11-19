@@ -1,14 +1,14 @@
 {
-  "entries": 1770673,
+  "entries": 1771272,
   "foreignEntries": 77706,
   "categories": {
     "common": 803249,
     "symbol": 4858,
-    "kanji": 368776,
+    "kanji": 368976,
     "name": 530624,
     "place": 240234,
+    "jukujikun": 989,
     "plant": 2464,
-    "jukujikun": 516,
     "animal": 2503,
     "fish": 1114,
     "bird": 1199,
@@ -26,5 +26,7 @@
   "jmnedictPairs": 672571,
   "manualReadings": 3,
   "pendingManualReadings": 2,
+  "nandokuPairs": 491,
+  "elementPairs": 214,
   "shards": 109
 }

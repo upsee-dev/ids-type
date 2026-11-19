@@ -75,16 +75,29 @@ object Kana {
         return sb.toString()
     }
 
-    /** Whole kun readings including okurigana; exclude on, nanori and foreign transcriptions. */
-    fun matchesLongKun(query: String, kun: String, reference: String = "", allowReference: Boolean = false): Boolean {
+    /**
+     * 0 = 訓読み全体(送り仮名込み)が4字以上の入力と一致、1 = 5字以上の訓読みの先頭が一致、2 = どちらでもない。
+     * 音・名乗り・外国語の書き写しは見ない。core/reading-priority.ts の longKunRank と同じ。
+     */
+    fun longKunRank(query: String, kun: String, reference: String = "", allowReference: Boolean = false): Int {
         val q = toHiragana(java.text.Normalizer.normalize(query, java.text.Normalizer.Form.NFC))
-        if (q.length < 4 || q.any { it !in 'ぁ'..'ゖ' && it != 'ー' }) return false
-        fun has(value: String) = value.split(Regex("\\s+")).any { token ->
-            token.isNotEmpty() && token.all { it in 'ぁ'..'ゖ' || it in "ー.-" } &&
-                java.text.Normalizer.normalize(token.replace(".", "").replace("-", ""), java.text.Normalizer.Form.NFC) == q
+        if (q.length < 4 || q.any { it !in 'ぁ'..'ゖ' && it != 'ー' }) return 2
+        var best = 2
+        fun scan(value: String) {
+            for (token in value.split(Regex("\\s+"))) {
+                if (token.isEmpty() || !token.all { it in 'ぁ'..'ゖ' || it in "ー.-" }) continue
+                val r = java.text.Normalizer.normalize(token.replace(".", "").replace("-", ""), java.text.Normalizer.Form.NFC)
+                if (r == q) best = 0 else if (best > 1 && r.length >= 5 && r.startsWith(q)) best = 1
+            }
         }
-        return has(kun) || (allowReference && has(reference))
+        scan(kun)
+        if (allowReference) scan(reference)
+        return best
     }
+
+    /** Whole kun readings including okurigana; exclude on, nanori and foreign transcriptions. */
+    fun matchesLongKun(query: String, kun: String, reference: String = "", allowReference: Boolean = false): Boolean =
+        longKunRank(query, kun, reference, allowReference) == 0
 
     /**
      * ローマ字をかなに直す。表は Romaji.TABLE(core/data/romaji.ts から生成)。

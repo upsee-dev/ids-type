@@ -16,7 +16,7 @@ import type {
   Result,
 } from "./data/types.ts";
 import { isJapaneseRef } from "./data/types.ts";
-import { matchesLongKun, normalizedReading } from "./reading-priority.ts";
+import { longKunRank, normalizedReading } from "./reading-priority.ts";
 
 /**
  * 候補の並び順。設定で選べる。
@@ -627,14 +627,16 @@ export class Engine {
    * 一覧の絞り込み。query は入力欄と同じ書き方(LR木木 / 木 / ?)に加えて、
    * かな(読み)と U+XXXX・16進(コードポイント。U+2B81 のような打ちかけは前方一致)も
    * 受け付ける。query なしで strokes だけ渡すと、その画数の字を読みと同じ並びで返す。
-   * 4文字以上の訓読みの完全一致を先頭にし、その中と残りは従来の順を保つ。
+   * 4文字以上の訓読みの完全一致を先頭にし、次に5文字以上の訓読みの先頭が4文字以上の
+   * 読みと一致した字を置く。それぞれの中と残りは従来の順を保つ。
    * 30画以上の絞り込みでは、完全一致の段ごとに画数順になる。
    */
   list(q: ListQuery = {}): ListPage {
     const { block, jaOnly = false, offset = 0, limit = 200, strokes = 0 } = q;
     const query = (q.query ?? "").trim();
 
-    const preferredKun = new Set<string>();
+    // 0 = 4字以上の訓読みの完全一致、1 = 5字以上の訓読みの先頭が4字以上の読みと一致
+    const preferredKun = new Map<string, number>();
     let pool: string[];
     let mode = "all";
     if (query) {
@@ -665,7 +667,8 @@ export class Engine {
         const hit: { ch: string; key: number }[] = [];
         for (const [ch, meta] of this.chars) {
           if (!this.readingRank(meta, kana, kata)) continue;
-          if (matchesLongKun(kana, meta.kun, meta.ref, isJapaneseRef(meta.refKind))) preferredKun.add(ch);
+          const kunRank = longKunRank(kana, meta.kun, meta.ref, isJapaneseRef(meta.refKind));
+          if (kunRank < 2) preferredKun.set(ch, kunRank);
           const tier = meta.grade ? 0 : meta.ext ? 2 : 1;
           hit.push({ ch, key: tier * AGE_STEP + ageKey(ch) });
         }
@@ -709,7 +712,7 @@ export class Engine {
     }
 
     // Apply before pagination, above category/age and the 30+ stroke ordering.
-    if (preferredKun.size) filtered.sort((a, b) => Number(preferredKun.has(b)) - Number(preferredKun.has(a)));
+    if (preferredKun.size) filtered.sort((a, b) => (preferredKun.get(a) ?? 2) - (preferredKun.get(b) ?? 2));
 
     return {
       total: filtered.length,

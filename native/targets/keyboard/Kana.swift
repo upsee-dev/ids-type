@@ -78,17 +78,27 @@ enum Kana {
         return out
     }
 
-    /// Full kun reading (okurigana included), at least four kana. Never nanori/on/foreign.
-    static func matchesLongKun(_ query: String, _ kun: String, _ reference: String = "", allowReference: Bool = false) -> Bool {
+    /// 0 = 訓読み全体(送り仮名込み)が4字以上の入力と一致、1 = 5字以上の訓読みの先頭が一致、2 = どちらでもない。
+    /// 音・名乗り・外国語の書き写しは見ない。core/reading-priority.ts の longKunRank と同じ。
+    static func longKunRank(_ query: String, _ kun: String, _ reference: String = "", allowReference: Bool = false) -> Int {
         let q = toHiragana(query.precomposedStringWithCanonicalMapping)
-        guard q.count >= 4, q.unicodeScalars.allSatisfy({ (0x3041...0x3096).contains($0.value) || $0.value == 0x30FC }) else { return false }
-        func has(_ value: String) -> Bool {
-            value.split(whereSeparator: { $0.isWhitespace }).contains { token in
-                token.unicodeScalars.allSatisfy { (0x3041...0x3096).contains($0.value) || [0x30FC, 0x2E, 0x2D].contains($0.value) }
-                    && token.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: "-", with: "").precomposedStringWithCanonicalMapping == q
+        guard q.count >= 4, q.unicodeScalars.allSatisfy({ (0x3041...0x3096).contains($0.value) || $0.value == 0x30FC }) else { return 2 }
+        var best = 2
+        func scan(_ value: String) {
+            for token in value.split(whereSeparator: { $0.isWhitespace }) {
+                guard token.unicodeScalars.allSatisfy({ (0x3041...0x3096).contains($0.value) || [0x30FC, 0x2E, 0x2D].contains($0.value) }) else { continue }
+                let r = token.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: "-", with: "").precomposedStringWithCanonicalMapping
+                if r == q { best = 0 } else if best > 1 && r.count >= 5 && r.hasPrefix(q) { best = 1 }
             }
         }
-        return has(kun) || (allowReference && has(reference))
+        scan(kun)
+        if allowReference { scan(reference) }
+        return best
+    }
+
+    /// Full kun reading (okurigana included), at least four kana. Never nanori/on/foreign.
+    static func matchesLongKun(_ query: String, _ kun: String, _ reference: String = "", allowReference: Bool = false) -> Bool {
+        longKunRank(query, kun, reference, allowReference: allowReference) == 0
     }
 
     /// ローマ字をかなに直す。表は Romaji.table(core/data/romaji.ts から生成)。

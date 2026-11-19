@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { JapaneseLexicon, JAPANESE_CATEGORIES, DEFAULT_JAPANESE_ORDER, normalizeJapaneseOrder, moveCategory, normalizeForeignReadings, searchLanguages } from "../../core/japanese.ts";
-import { KUN_READING_FLAG, matchesLongKun } from "../../core/reading-priority.ts";
+import { JapaneseLexicon, japaneseReading, JAPANESE_CATEGORIES, DEFAULT_JAPANESE_ORDER, normalizeJapaneseOrder, moveCategory, normalizeForeignReadings, searchLanguages } from "../../core/japanese.ts";
+import { KUN_READING_FLAG, matchesLongKun, longKunRank } from "../../core/reading-priority.ts";
 import { taiwaneseToKana } from "../../scripts/taiwanese-kana.mts";
 import { radicalsByStrokes, radicalCharacters, residualStrokes, type RadicalIndex } from "../../core/radical-index.ts";
 import { KANA_ROWS, kanaFlick } from "../../core/data/kana.ts";
@@ -11,6 +11,8 @@ const assets = fileURLToPath(new URL("../ime/assets/", import.meta.url));
 const index = JSON.parse(readFileSync(new URL("../../core/radical-index.json", import.meta.url),"utf8")) as RadicalIndex;
 const engine = new JapaneseLexicon(key => { try { return readFileSync(`${assets}/japanese-${key}.tsv`,"utf8"); } catch { return ""; } });
 const first = (id: string) => normalizeJapaneseOrder([id]);
+/** The katakana spelling of the input always leads; ranking assertions look at the dictionary rows after it. */
+const words = (results: ReturnType<typeof engine.search>) => results.length && results[0].consumed === results[0].reading.length && /^[ァ-ヶー]+$/.test(results[0].text) ? results.slice(1) : results;
 
 test("priority preferences recover unknown/duplicate/missing IDs without hiding a category", () => {
   assert.deepEqual(normalizeJapaneseOrder(["place","invalid","place",4]),["place",...DEFAULT_JAPANESE_ORDER.filter(v=>v!=="place")]);
@@ -27,7 +29,7 @@ test("all seven nature categories convert dictionary readings and obey priority"
     const bit=1<<DEFAULT_JAPANESE_ORDER.indexOf(id as typeof DEFAULT_JAPANESE_ORDER[number]);
     const results=engine.search(q,first(id));
     assert.ok(results.some(c=>c.text===text && c.kind===0 && (c.mask&bit)),`${id}: ${q} → ${text}`);
-    assert.ok(results[0].mask&bit,`${id}: moving the category first changes ranking`);
+    assert.ok(words(results)[0].mask&bit,`${id}: moving the category first changes ranking`);
   }
   const bit=(id: string)=>1<<DEFAULT_JAPANESE_ORDER.indexOf(id as typeof DEFAULT_JAPANESE_ORDER[number]);
   const kingfisher=engine.search('かわせみ',first('bird')).find(c=>c.text==='翡翠' && c.kind===0)!;
@@ -86,7 +88,7 @@ test("rare names, places, kokuji, jukujikun and ketsuren remain searchable", () 
   for (const [q,text,id] of [["たかなし","小鳥遊","name"],["わたぬき","四月一日","name"],["なかんだかり","仲村渠","place"],["つつじ","躑躅","jukujikun"],["ぴんぽん","乒乓","ketsuren"],["とうげ","峠","kokuji"],["ほし","★","symbol"]]) {
     const results = engine.search(q,first(id));
     assert.ok(results.some(c=>c.text===text && c.kind===0),`${q} → ${text}`);
-    assert.ok(results[0].mask & (1 << DEFAULT_JAPANESE_ORDER.indexOf(id as typeof DEFAULT_JAPANESE_ORDER[number])),`${id} must be first`);
+    assert.ok(words(results)[0].mask & (1 << DEFAULT_JAPANESE_ORDER.indexOf(id as typeof DEFAULT_JAPANESE_ORDER[number])),`${id} must be first`);
   }
 });
 test("manual readings require multiple publications; pinpon works with all foreign languages off", () => {
@@ -112,7 +114,8 @@ test("katakana, pagination, composition consumption and missing readings", () =>
   const part = sentence.find(c=>c.text==="小鳥遊" && c.consumed===4);
   assert.ok(part); assert.equal("たかなしさん".slice(part.consumed),"さん");
   assert.deepEqual(engine.search("",DEFAULT_JAPANESE_ORDER),[]);
-  assert.equal(engine.search("ゔゔゔゔ",DEFAULT_JAPANESE_ORDER).at(-1)?.text,"ヴヴヴヴ");
+  const missing = engine.search("ゔゔゔゔ",DEFAULT_JAPANESE_ORDER);
+  assert.equal(missing[0].text,"ヴヴヴヴ"); assert.equal(missing.at(-1)?.text,"ゔゔゔゔ");
 });
 test("Unicode index follows every radical, exact residuals and secondary memberships", () => {
   assert.deepEqual(Array.from({length:17},(_,n)=>radicalsByStrokes(n+1)).flat(),Array.from({length:214},(_,n)=>n+1));
@@ -192,19 +195,70 @@ test("four-kana exact kun precedes categories; short, partial, on and foreign do
   ].map(r=>r.join("\t")).sort().join("\n")+"\n";
   const lex = new JapaneseLexicon(()=>rows);
   const full = lex.search("こころざす",first("name"),["ko"]);
-  assert.deepEqual(full.slice(0,3).map(c=>c.text),["熟字訓","志す","人名"]);
-  assert.equal(lex.search("こころ",first("name"))[0].text,"短名");
-  assert.equal(lex.search("こころざすよね",first("name"))[0].text,"予測");
+  assert.deepEqual(full.slice(0,4).map(c=>c.text),["ココロザス","熟字訓","志す","人名"]);
+  assert.equal(words(lex.search("こころ",first("name")))[0].text,"短名");
+  assert.equal(words(lex.search("こころざすよね",first("name")))[0].text,"予測");
   for (const [q,text] of [["こころざす","志す"],["うけたまわる","承る"],["いきおい","勢"]]) {
-    const c = engine.search(q,first("name"))[0];
+    const c = words(engine.search(q,first("name")))[0];
     assert.equal(c.text,text); assert.equal(c.kind,0); assert.ok(c.mask & KUN_READING_FLAG);
   }
+});
+
+test("the katakana spelling of the input is always the first candidate (not for pinyin)", () => {
+  for (const q of ["すいそ","し","たかなしさん","チャルメラ","ゔゔゔゔ"]) {
+    const top = engine.search(q,DEFAULT_JAPANESE_ORDER)[0];
+    assert.deepEqual([top.text,top.consumed],[japaneseReading(q).replace(/[ぁ-ゖ]/g,c=>String.fromCharCode(c.charCodeAt(0)+0x60)),japaneseReading(q).length],q);
+  }
+  // A dictionary row with the same katakana spelling is not repeated.
+  assert.equal(engine.search("ちゃるめら",DEFAULT_JAPANESE_ORDER).filter(c=>c.text==="チャルメラ" && c.consumed===5).length,1);
+  assert.notEqual(engine.search("nihao",DEFAULT_JAPANESE_ORDER,["zh"])[0].kind,3);
+  const dandelion = engine.search("たんぽぽ",first("plant"))[0];
+  assert.equal(dandelion.text,"タンポポ"); assert.ok(dandelion.mask & (1<<DEFAULT_JAPANESE_ORDER.indexOf("plant")),"the dictionary row keeps its category");
+});
+test("5+ kana kun that start with a 4+ kana input lead the predictive candidates; exact matches stay ahead", () => {
+  assert.equal(longKunRank("うけたま","うけたまわ.る"),1);
+  assert.equal(longKunRank("うけたまわる","うけたまわ.る"),0);
+  assert.equal(longKunRank("うけた","うけたまわ.る"),2,"three kana are not enough");
+  assert.equal(longKunRank("こころ","こころ"),2);
+  assert.equal(longKunRank("こころざ","こころざ.す"),1);
+  assert.equal(longKunRank("いずくん","","いずくんぞ",false),2,"reference readings need permission");
+  const rows = [
+    ["かんがえ","考え",1,5000],["かんがえる","考える",KUN_READING_FLAG|128,9000],["かんがえかた","考え方",1,1],
+    ["かんがえる","名前",2,1],
+  ].map(r=>r.join("\t")).sort().join("\n")+"\n";
+  const lex = new JapaneseLexicon(()=>rows);
+  assert.deepEqual(lex.search("かんがえ",DEFAULT_JAPANESE_ORDER).map(c=>c.text).slice(0,4),["カンガエ","考え","考える","考え方"]);
+  assert.deepEqual(lex.search("かんが",DEFAULT_JAPANESE_ORDER).map(c=>c.text).slice(0,2),["カンガ","考え方"],"three kana keep category/cost order");
+  for (const [q,text] of [["うけたま","承る"],["いのちみ","殤し"],["よもすが","終夜"],["こころざ","志す"]]) {
+    assert.ok(words(engine.search(q,DEFAULT_JAPANESE_ORDER)).slice(0,3).some(c=>c.text===text && c.kind===1),q);
+  }
+});
+test("every word from the 難読語 list and every element (Taiwan and mainland forms) converts", () => {
+  for (const line of readFileSync(new URL("../../data-src/japanese/nandoku.tsv",import.meta.url),"utf8").split("\n")) {
+    if (!line || line.startsWith("#")) continue;
+    const [text,reading,category] = line.split("\t");
+    const bit = 1<<DEFAULT_JAPANESE_ORDER.indexOf(category as typeof DEFAULT_JAPANESE_ORDER[number]);
+    assert.ok(engine.search(reading,first(category)).some(c=>c.text===text && c.kind===0 && (c.mask&bit)),`${reading} → ${text}`);
+  }
+  let elements = 0;
+  for (const line of readFileSync(new URL("../../data-src/japanese/elements.tsv",import.meta.url),"utf8").split("\n")) {
+    if (!line || line.startsWith("#")) continue;
+    const [number,,,reading,taiwan,china] = line.split("\t");
+    const results = engine.search(reading,DEFAULT_JAPANESE_ORDER);
+    for (const ch of [taiwan,china]) assert.ok(results.some(c=>c.text===ch && c.kind===0),`${number} ${reading} → ${ch}`);
+    elements++;
+  }
+  assert.equal(elements,118);
+  const hydrogen = engine.search("すいそ",DEFAULT_JAPANESE_ORDER).map(c=>c.text);
+  assert.ok(hydrogen.includes("氫") && hydrogen.includes("氢"));
+  const silicon = engine.search("けいそ",DEFAULT_JAPANESE_ORDER).map(c=>c.text);
+  assert.ok(silicon.includes("矽") && silicon.includes("硅"),"Taiwan 矽 and mainland 硅 differ");
 });
 
 // The same fixture is consumed by the Swift and Kotlin executable tests below.
 if (process.env.JAPANESE_PARITY_FIXTURE) {
   const lines: string[] = [];
-  for (const [q,id,languages] of [["こころざす","name",""],["うけたまわる","name",""],["いきおい","name",""],["おもんぱかる","place",""],["こころざ","name",""],["こころざすよ","name",""],["ココロザス","name",""],["たかなし","name",""],["わたぬき","name",""],["なかんだかり","place",""],["つつじ","jukujikun",""],["ぴんぽん","ketsuren",""],["よろよろ","ketsuren",""],["よろめく","ketsuren",""],["ほし","symbol",""],["し","common",""],["たかなしさん","name",""],["ゔゔゔゔ","common",""],["","common",""],
+  for (const [q,id,languages] of [["こころざす","name",""],["うけたまわる","name",""],["いきおい","name",""],["おもんぱかる","place",""],["こころざ","name",""],["こころざすよ","name",""],["うけたま","name",""],["いのちみ","common",""],["よもすが","common",""],["すいそ","common",""],["けいそ","common",""],["かんがえ","common",""],["ちゃるめら","common",""],["ココロザス","name",""],["たかなし","name",""],["わたぬき","name",""],["なかんだかり","place",""],["つつじ","jukujikun",""],["ぴんぽん","ketsuren",""],["よろよろ","ketsuren",""],["よろめく","ketsuren",""],["ほし","symbol",""],["し","common",""],["たかなしさん","name",""],["ゔゔゔゔ","common",""],["","common",""],
     ["かんか","kanji",""],["かんてんじう","kanji",""],["きんかいちじつ","kanji",""],["きんかいっちょう","kanji",""],["ぼうこひょうか","kanji",""],["ちみもうりょう","kanji",""],["がいしゅういっしょく","kanji",""],["けいがい","kanji",""],["そご","kanji",""],["こらえる","kanji",""],["むしる","kanji",""],
     ['あやめ','plant',''],['せきえい','mineral',''],['あざらし','animal',''],['つばめ','bird',''],['とんぼ','insect',''],['さば','fish',''],['こんぶ','algae',''],['かわせみ','bird',''],
     ...["ko","zh","vi","tw"].flatMap(language=>[["みょん","common",language],["しゅえ","common",language],["ぐおい","common",language],["りほ","common",language]]),

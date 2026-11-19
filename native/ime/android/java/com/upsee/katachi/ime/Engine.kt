@@ -392,12 +392,13 @@ class Engine(private val dict: Dict) {
         }
         sortPageHits(hits, strokes)
         if (kana.length >= 4) {
-            val (exact, rest) = hits.partition { hit ->
+            // 完全一致(0) → 5字以上の訓の先頭一致(1) → 残り。段の中は元の順(安定ソート)
+            val ranked = hits.sortedBy { hit ->
                 val i = (hit and 0xFFFFF).toInt()
                 val source = dict.refKindAt(i)
-                Kana.matchesLongKun(kana, dict.kunAt(i), dict.refAt(i), source.isNotEmpty() && !source.startsWith("i"))
+                Kana.longKunRank(kana, dict.kunAt(i), dict.refAt(i), source.isNotEmpty() && !source.startsWith("i"))
             }
-            hits.clear(); hits.addAll(exact); hits.addAll(rest)
+            hits.clear(); hits.addAll(ranked)
         }
         val page = hits.drop(offset).take(limit).map { dict.chars[(it and 0xFFFFF).toInt()] }
         return Page(page, hits.size)
